@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useViewportMode } from '../hooks/useViewportMode';
 import { ActiveConnection, BoardGrid, FloatingScore, GridPos, TileCell } from '../types/game';
 import { PokemonTile } from './PokemonTile';
 
@@ -10,6 +11,7 @@ interface GameBoardProps {
   invalidPair: [GridPos, GridPos] | null;
   floatingScores: FloatingScore[];
   isPaused: boolean;
+  mobileZoomed?: boolean;
   onSelectTile: (r: number, c: number) => void;
   onResume: () => void;
 }
@@ -19,15 +21,21 @@ const STADIUM_BG = '/src/assets/images/mon_stadium_turf_1795064520201.jpg';
 function toSvgCoord(
   pos: GridPos,
   rows: number,
-  cols: number
+  cols: number,
+  transposed: boolean
 ): { x: number; y: number } {
-  let x = pos.c + 1;
-  if (pos.c < 0) x = 0.25;
-  else if (pos.c >= cols) x = cols + 0.75;
+  const vr = transposed ? pos.c : pos.r;
+  const vc = transposed ? pos.r : pos.c;
+  const vRows = transposed ? cols : rows;
+  const vCols = transposed ? rows : cols;
 
-  let y = pos.r + 1;
-  if (pos.r < 0) y = 0.25;
-  else if (pos.r >= rows) y = rows + 0.75;
+  let x = vc + 1;
+  if (vc < 0) x = 0.25;
+  else if (vc >= vCols) x = vCols + 0.75;
+
+  let y = vr + 1;
+  if (vr < 0) y = 0.25;
+  else if (vr >= vRows) y = vRows + 0.75;
 
   return { x, y };
 }
@@ -40,58 +48,91 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   invalidPair,
   floatingScores,
   isPaused,
+  mobileZoomed = false,
   onSelectTile,
   onResume,
 }) => {
   const [stadiumErr, setStadiumErr] = useState(false);
+  const { isMobile, isPortraitMobile } = useViewportMode();
 
   const rows = board.length || 10;
   const cols = rows > 0 && board[0] ? board[0].length : 20;
-  const outerW = cols + 1;
-  const outerH = rows + 1;
+
+  // On portrait phones, transpose visual layout (cols x rows -> rows x cols)
+  // so 20x10 becomes 10x20 and fills the vertical mobile screen cleanly!
+  const transposed = isPortraitMobile;
+  const visualRows = transposed ? cols : rows;
+  const visualCols = transposed ? rows : cols;
+
+  const outerW = visualCols + 1;
+  const outerH = visualRows + 1;
   const isDense = cols >= 26 || rows >= 14;
 
   const pathPoints = activeConnection
     ? activeConnection.path
         .map((pt) => {
-          const { x, y } = toSvgCoord(pt, rows, cols);
+          const { x, y } = toSvgCoord(pt, rows, cols, transposed);
           return `${x},${y}`;
         })
         .join(' ')
     : '';
 
-  const tilesList: { tile: TileCell; r: number; c: number }[] = [];
+  const tilesList: { tile: TileCell; r: number; c: number; vr: number; vc: number }[] = [];
   if (!isPaused) {
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const cell = board[r]?.[c];
         if (cell) {
-          tilesList.push({ tile: cell, r, c });
+          tilesList.push({
+            tile: cell,
+            r,
+            c,
+            vr: transposed ? c : r,
+            vc: transposed ? r : c,
+          });
         }
       }
     }
   }
 
-  const tileWidthPct = 100 / cols;
-  const tileHeightPct = 100 / rows;
+  const tileWidthPct = 100 / visualCols;
+  const tileHeightPct = 100 / visualRows;
   const strokeScale = isDense ? 1.15 : 1;
 
-  return (
-    <div className="relative flex items-center justify-center w-full h-full">
-      {/* Pokémon Stadium Battle Arena Frame */}
-      <div
-        style={{
-          width: `min(calc(100vw - 24px), calc((100vh - 122px) * ${outerW} / ${outerH}))`,
+  // Responsive sizing: full-fit viewport math tailored for mobile vs desktop web
+  const baseWidthExpr = isMobile
+    ? `min(calc(100vw - 12px), calc((100dvh - 118px) * ${outerW} / ${outerH}))`
+    : `min(calc(100vw - 24px), calc((100dvh - 122px) * ${outerW} / ${outerH}))`;
+
+  const boardStyle: React.CSSProperties =
+    isMobile && mobileZoomed
+      ? {
+          width: `max(calc((100vw - 12px) * 1.55), calc(${baseWidthExpr} * 1.55))`,
           aspectRatio: `${outerW} / ${outerH}`,
-        }}
-        className="relative rounded-2xl bg-[#111827] p-[3px] shadow-[0_20px_55px_rgba(0,0,0,0.75)] border-2 border-[#DC2626] overflow-hidden"
+        }
+      : {
+          width: baseWidthExpr,
+          aspectRatio: `${outerW} / ${outerH}`,
+        };
+
+  return (
+    <div
+      className={`relative w-full h-full flex ${
+        isMobile && mobileZoomed
+          ? 'overflow-auto items-start justify-start p-1'
+          : 'items-center justify-center overflow-hidden'
+      }`}
+    >
+      {/* Battle Arena Frame */}
+      <div
+        style={boardStyle}
+        className="relative shrink-0 rounded-xl sm:rounded-2xl bg-[#111827] p-[2px] sm:p-[3px] shadow-[0_20px_55px_rgba(0,0,0,0.75)] border-2 border-[#DC2626] overflow-hidden"
       >
-        <div className="relative w-full h-full rounded-[13px] bg-[#14532D] overflow-hidden">
-          {/* Generated Pokémon Battle Stadium Turf Artwork */}
+        <div className="relative w-full h-full rounded-[10px] sm:rounded-[13px] bg-[#14532D] overflow-hidden">
           {!stadiumErr ? (
             <img
               src={STADIUM_BG}
-              alt="Sân đấu Pokémon"
+              alt="Sân đấu thú cưng"
               referrerPolicy="no-referrer"
               onError={() => setStadiumErr(true)}
               className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none opacity-85"
@@ -108,12 +149,12 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             style={{
               left: `${(0.5 / outerW) * 100}%`,
               top: `${(0.5 / outerH) * 100}%`,
-              width: `${(cols / outerW) * 100}%`,
-              height: `${(rows / outerH) * 100}%`,
+              width: `${(visualCols / outerW) * 100}%`,
+              height: `${(visualRows / outerH) * 100}%`,
             }}
             className="absolute"
           >
-            {tilesList.map(({ tile, r, c }) => {
+            {tilesList.map(({ tile, r, c, vr, vc }) => {
               const isSelected = selected?.r === r && selected?.c === c;
               const isHinted =
                 (hintPair?.a.r === r && hintPair?.a.c === c) ||
@@ -131,7 +172,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                   style={{
                     width: `${tileWidthPct}%`,
                     height: `${tileHeightPct}%`,
-                    transform: `translate3d(${c * 100}%, ${r * 100}%, 0)`,
+                    transform: `translate3d(${vc * 100}%, ${vr * 100}%, 0)`,
                     transition: 'transform 240ms cubic-bezier(0.22, 1, 0.36, 1)',
                   }}
                   className={`absolute top-0 left-0 ${isSelected || isMatching ? 'z-20' : 'z-10'}`}
@@ -176,7 +217,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                 strokeLinejoin="round"
               />
               {activeConnection.path.map((pt, i) => {
-                const { x, y } = toSvgCoord(pt, rows, cols);
+                const { x, y } = toSvgCoord(pt, rows, cols, transposed);
                 return (
                   <circle
                     key={i}
@@ -195,8 +236,10 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           {/* Floating Score Popups */}
           {!isPaused &&
             floatingScores.map((fs) => {
-              const leftPct = ((fs.c + 1) / outerW) * 100;
-              const topPct = ((fs.r + 1) / outerH) * 100;
+              const vr = transposed ? fs.c : fs.r;
+              const vc = transposed ? fs.r : fs.c;
+              const leftPct = ((vc + 1) / outerW) * 100;
+              const topPct = ((vr + 1) / outerH) * 100;
               return (
                 <div
                   key={fs.id}
@@ -221,7 +264,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               <button
                 type="button"
                 onClick={onResume}
-                className="px-6 py-2.5 rounded-lg bg-[#FACC15] hover:bg-yellow-300 text-slate-950 font-bold text-sm transition-colors cursor-pointer shadow-[0_3px_0_#CA8A04]"
+                className="min-h-[44px] px-6 py-2.5 rounded-xl bg-[#FACC15] hover:bg-yellow-300 text-slate-950 font-bold text-sm transition-colors cursor-pointer shadow-[0_3px_0_#CA8A04]"
               >
                 Tiếp tục đấu
               </button>

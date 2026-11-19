@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Eye, EyeOff, Lock, Play, Star } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Lock, Play, Star, UserCircle2 } from 'lucide-react';
 import { CHAPTER_NAMES, formatDuration, getLevelConfig, MAX_LEVEL } from '../data/levels';
 import { CloudSyncStatus } from '../firebase';
 import { SaveData } from '../types/game';
 import { RememberedAccount } from '../utils/localAccountCache';
 import { AccountBar } from './AccountBar';
+import { MobileAccountSheet, MobileBottomNav } from './MobileBottomNav';
 import { PokeballIcon } from './PokeballIcon';
 
 interface LevelSelectViewProps {
@@ -19,6 +20,7 @@ interface LevelSelectViewProps {
   onSignOut: () => void;
   onSelectLevel: (level: number) => void;
   onTogglePreviewMode: () => void;
+  onToggleSound: () => void;
   onBack: () => void;
 }
 
@@ -41,12 +43,14 @@ export const LevelSelectView: React.FC<LevelSelectViewProps> = ({
   onSignOut,
   onSelectLevel,
   onTogglePreviewMode,
+  onToggleSound,
   onBack,
 }) => {
   const defaultChapter = Math.min(10, Math.ceil(saveData.highestUnlockedLevel / 20));
   const [activeChapter, setActiveChapter] = useState<number>(defaultChapter);
   const [jumpInput, setJumpInput] = useState<string>('200');
   const [lockedNotice, setLockedNotice] = useState<string | null>(null);
+  const [accountSheetOpen, setAccountSheetOpen] = useState(false);
 
   const startLevel = (activeChapter - 1) * 20 + 1;
   const levelsInChapter = Array.from({ length: 20 }, (_, idx) => startLevel + idx);
@@ -72,9 +76,38 @@ export const LevelSelectView: React.FC<LevelSelectViewProps> = ({
 
   return (
     <div className="min-h-screen bg-[#111827] text-slate-100 flex flex-col">
-      {/* Crimson Header */}
-      <header className="w-full bg-[#B91C1C] border-b-4 border-[#0F172A] shadow-md">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+      {/* Mobile Compact Header (< md) */}
+      <header className="md:hidden sticky top-0 z-30 w-full bg-[#B91C1C] border-b-2 border-[#0F172A] shadow-md px-3 h-13 flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Quay về trang chính"
+          className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-red-50 hover:text-white cursor-pointer shrink-0"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+
+        <div className="flex items-center gap-1.5 min-w-0">
+          <PokeballIcon variant={getBallVariant(activeChapter)} className="w-5 h-5 shrink-0" />
+          <h1 className="font-display text-base font-extrabold text-white truncate">
+            Bản đồ 200 cấp
+          </h1>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setAccountSheetOpen(true)}
+          aria-label="Mở hồ sơ tài khoản"
+          className="min-h-[40px] px-2.5 rounded-lg bg-[#991B1B] border border-red-950/50 flex items-center gap-1.5 text-xs font-mono-num font-bold text-[#FACC15] shrink-0 cursor-pointer"
+        >
+          <span>{saveData.highestUnlockedLevel}/200</span>
+          <UserCircle2 className="w-4 h-4 text-white" />
+        </button>
+      </header>
+
+      {/* Desktop Web Crimson Header (md+) */}
+      <header className="hidden md:block w-full bg-[#B91C1C] border-b-4 border-[#0F172A] shadow-md">
+        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
           <button
             type="button"
             onClick={onBack}
@@ -86,13 +119,13 @@ export const LevelSelectView: React.FC<LevelSelectViewProps> = ({
 
           <div className="flex items-center gap-2 min-w-0">
             <PokeballIcon variant={getBallVariant(activeChapter)} className="w-6 h-6 shrink-0" />
-            <h1 className="font-display text-base sm:text-xl font-extrabold text-white whitespace-nowrap truncate">
+            <h1 className="font-display text-xl font-extrabold text-white whitespace-nowrap truncate">
               Bản đồ 200 Đấu Trường
             </h1>
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
-            <span className="hidden md:inline text-xs sm:text-sm font-mono-num text-red-100 whitespace-nowrap">
+            <span className="text-sm font-mono-num text-red-100 whitespace-nowrap">
               Đã mở: {saveData.highestUnlockedLevel}/200
             </span>
             <AccountBar
@@ -109,7 +142,7 @@ export const LevelSelectView: React.FC<LevelSelectViewProps> = ({
         </div>
       </header>
 
-      <main className="flex-1 w-full max-w-6xl mx-auto px-6 py-6 flex flex-col gap-6">
+      <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 pt-4 pb-24 md:py-6 flex flex-col gap-5 md:gap-6">
         {/* Creator Preview Toolbar (only visible when Preview Mode is enabled) */}
         {isPreviewMode && (
           <div className="rounded-xl bg-[#1E293B] border border-[#FACC15]/70 p-4 flex flex-wrap items-center justify-between gap-4">
@@ -128,7 +161,7 @@ export const LevelSelectView: React.FC<LevelSelectViewProps> = ({
                   key={preset}
                   type="button"
                   onClick={() => onSelectLevel(preset)}
-                  className="px-2.5 py-1.5 rounded-md bg-[#0F172A] hover:bg-slate-800 border border-slate-700 text-xs font-mono-num font-semibold text-slate-200 cursor-pointer"
+                  className="min-h-[38px] px-2.5 py-1.5 rounded-md bg-[#0F172A] hover:bg-slate-800 border border-slate-700 text-xs font-mono-num font-semibold text-slate-200 cursor-pointer"
                 >
                   Cấp {preset}
                 </button>
@@ -140,11 +173,11 @@ export const LevelSelectView: React.FC<LevelSelectViewProps> = ({
                 value={jumpInput}
                 onChange={(e) => setJumpInput(e.target.value)}
                 aria-label="Nhập cấp muốn xem trước"
-                className="w-20 px-2.5 py-1.5 rounded-md bg-[#0F172A] border border-slate-600 text-xs font-mono-num text-white focus:outline-none focus:border-[#FACC15]"
+                className="w-20 min-h-[38px] px-2.5 py-1.5 rounded-md bg-[#0F172A] border border-slate-600 text-xs font-mono-num text-white focus:outline-none focus:border-[#FACC15]"
               />
               <button
                 type="submit"
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-[#FACC15] hover:bg-yellow-300 text-slate-950 text-xs font-bold cursor-pointer"
+                className="min-h-[38px] inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-[#FACC15] hover:bg-yellow-300 text-slate-950 text-xs font-bold cursor-pointer"
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
                 Xem màn
@@ -153,8 +186,8 @@ export const LevelSelectView: React.FC<LevelSelectViewProps> = ({
           </div>
         )}
 
-        {/* Chapter Tabs */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-2">
+        {/* Chapter Tabs: Swipeable horizontal scroller on Mobile, 10-col grid on Desktop */}
+        <div className="flex md:grid md:grid-cols-5 lg:grid-cols-10 gap-2 overflow-x-auto no-scrollbar snap-x pb-1 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0">
           {CHAPTER_NAMES.map((_, idx) => {
             const ch = idx + 1;
             const from = idx * 20 + 1;
@@ -166,13 +199,13 @@ export const LevelSelectView: React.FC<LevelSelectViewProps> = ({
                 type="button"
                 onClick={() => setActiveChapter(ch)}
                 className={[
-                  'px-3 py-2.5 rounded-lg border text-left transition-colors cursor-pointer',
+                  'shrink-0 min-w-[96px] md:min-w-0 snap-start min-h-[48px] px-3 py-2 rounded-xl md:rounded-lg border text-left transition-colors cursor-pointer',
                   isActive
                     ? 'bg-[#DC2626] border-[#FACC15] text-white shadow-[0_2px_0_#991B1B]'
                     : 'bg-[#1E293B] border-slate-700/80 text-slate-300 hover:border-slate-500 hover:text-white',
                 ].join(' ')}
               >
-                <div className="font-mono-num text-xs font-bold">
+                <div className="font-mono-num text-xs font-bold whitespace-nowrap">
                   {from}–{to}
                 </div>
                 <div
@@ -188,14 +221,14 @@ export const LevelSelectView: React.FC<LevelSelectViewProps> = ({
         </div>
 
         {/* Chapter Description */}
-        <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-800">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
           <div className="flex items-center gap-3">
-            <PokeballIcon variant={getBallVariant(activeChapter)} className="w-8 h-8 shrink-0" />
+            <PokeballIcon variant={getBallVariant(activeChapter)} className="w-7 h-7 sm:w-8 sm:h-8 shrink-0" />
             <div>
-              <h2 className="font-display text-xl font-bold text-white">
+              <h2 className="font-display text-lg sm:text-xl font-bold text-white">
                 Chương {activeChapter}: {CHAPTER_NAMES[activeChapter - 1]}
               </h2>
-              <p className="text-sm text-slate-400 mt-0.5">
+              <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
                 {sampleConfig.gravityDescription}
               </p>
             </div>
@@ -208,13 +241,13 @@ export const LevelSelectView: React.FC<LevelSelectViewProps> = ({
         </div>
 
         {lockedNotice && !isPreviewMode && (
-          <div className="rounded-lg bg-rose-950/50 border border-rose-700/60 px-4 py-2.5 text-xs sm:text-sm text-rose-200">
+          <div className="rounded-xl bg-rose-950/50 border border-rose-700/60 px-4 py-2.5 text-xs sm:text-sm text-rose-200">
             {lockedNotice}
           </div>
         )}
 
-        {/* 20 Level Cards Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3.5">
+        {/* 20 Level Cards Grid (2 cols on mobile, 4–5 cols on tablet/desktop) */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2.5 sm:gap-3.5">
           {levelsInChapter.map((lv) => {
             const cfg = getLevelConfig(lv);
             const prog = saveData.levels[lv];
@@ -227,14 +260,14 @@ export const LevelSelectView: React.FC<LevelSelectViewProps> = ({
                 type="button"
                 onClick={() => handleCardClick(lv, isUnlocked)}
                 className={[
-                  'relative rounded-xl border p-4 text-left transition-all flex flex-col justify-between gap-3',
+                  'relative min-h-[108px] rounded-2xl md:rounded-xl border p-3.5 sm:p-4 text-left transition-all flex flex-col justify-between gap-2.5',
                   canEnter
-                    ? 'bg-[#1E293B] border-slate-700 hover:border-[#FACC15] hover:bg-[#263449] cursor-pointer shadow-[0_3px_0_#0F172A]'
+                    ? 'bg-[#1E293B] border-slate-700 hover:border-[#FACC15] hover:bg-[#263449] active:scale-[0.98] cursor-pointer shadow-[0_3px_0_#0F172A]'
                     : 'bg-[#0F172A] border-slate-800/70 opacity-60 cursor-not-allowed',
                 ].join(' ')}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-display text-lg font-bold text-white font-mono-num">
+                  <span className="font-display text-base sm:text-lg font-bold text-white font-mono-num">
                     Cấp {lv}
                   </span>
                   {!isUnlocked && !isPreviewMode ? (
@@ -257,11 +290,11 @@ export const LevelSelectView: React.FC<LevelSelectViewProps> = ({
                   ) : null}
                 </div>
 
-                <div className="flex flex-col gap-1 text-xs text-slate-400">
-                  <div className="flex items-center justify-between font-mono-num">
+                <div className="flex flex-col gap-1 text-[11px] sm:text-xs text-slate-400">
+                  <div className="flex items-center justify-between font-mono-num gap-1">
                     <span>Số cặp</span>
                     <span className="text-emerald-300 font-semibold">
-                      {cfg.pairsCount} cặp ({cfg.cols}×{cfg.rows})
+                      {cfg.pairsCount} ({cfg.cols}×{cfg.rows})
                     </span>
                   </div>
                   <div className="flex items-center justify-between font-mono-num">
@@ -271,7 +304,7 @@ export const LevelSelectView: React.FC<LevelSelectViewProps> = ({
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="shrink-0">Chuyển động</span>
+                    <span className="shrink-0">Di chuyển</span>
                     <span className="text-yellow-300/90 truncate text-right">
                       {cfg.gravityLabel}
                     </span>
@@ -283,14 +316,14 @@ export const LevelSelectView: React.FC<LevelSelectViewProps> = ({
         </div>
 
         {/* Discreet Creator Preview Mode Toggle Footer */}
-        <footer className="mt-4 pt-5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
+        <footer className="mt-2 pt-5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
           <span>
             Quy tắc: Người chơi phải hoàn thành cấp hiện tại để mở khóa cấp kế tiếp.
           </span>
           <button
             type="button"
             onClick={onTogglePreviewMode}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-700 bg-[#1E293B] hover:border-slate-500 text-slate-300 hover:text-white transition-colors cursor-pointer"
+            className="min-h-[40px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-[#1E293B] hover:border-slate-500 text-slate-300 hover:text-white transition-colors cursor-pointer"
           >
             {isPreviewMode ? (
               <>
@@ -306,6 +339,31 @@ export const LevelSelectView: React.FC<LevelSelectViewProps> = ({
           </button>
         </footer>
       </main>
+
+      <MobileBottomNav
+        activeTab={accountSheetOpen ? 'ACCOUNT' : 'LEVELS'}
+        onGoHome={() => {
+          setAccountSheetOpen(false);
+          onBack();
+        }}
+        onGoLevels={() => setAccountSheetOpen(false)}
+        onOpenAccountSheet={() => setAccountSheetOpen(true)}
+      />
+
+      <MobileAccountSheet
+        open={accountSheetOpen}
+        onClose={() => setAccountSheetOpen(false)}
+        account={activeAccount}
+        hasLiveCloudAuth={hasLiveCloudAuth}
+        authLoading={authLoading}
+        syncStatus={syncStatus}
+        soundEnabled={saveData.soundEnabled}
+        highestUnlockedLevel={saveData.highestUnlockedLevel}
+        totalScore={saveData.totalScore}
+        onSignIn={onSignIn}
+        onSignOut={onSignOut}
+        onToggleSound={onToggleSound}
+      />
     </div>
   );
 };
