@@ -1,0 +1,234 @@
+import React, { useState } from 'react';
+import { ActiveConnection, BoardGrid, FloatingScore, GridPos, TileCell } from '../types/game';
+import { PokemonTile } from './PokemonTile';
+
+interface GameBoardProps {
+  board: BoardGrid;
+  selected: GridPos | null;
+  hintPair: { a: GridPos; b: GridPos } | null;
+  activeConnection: ActiveConnection | null;
+  invalidPair: [GridPos, GridPos] | null;
+  floatingScores: FloatingScore[];
+  isPaused: boolean;
+  onSelectTile: (r: number, c: number) => void;
+  onResume: () => void;
+}
+
+const STADIUM_BG = '/src/assets/images/mon_stadium_turf_1795064520201.jpg';
+
+function toSvgCoord(
+  pos: GridPos,
+  rows: number,
+  cols: number
+): { x: number; y: number } {
+  let x = pos.c + 1;
+  if (pos.c < 0) x = 0.25;
+  else if (pos.c >= cols) x = cols + 0.75;
+
+  let y = pos.r + 1;
+  if (pos.r < 0) y = 0.25;
+  else if (pos.r >= rows) y = rows + 0.75;
+
+  return { x, y };
+}
+
+export const GameBoard: React.FC<GameBoardProps> = ({
+  board,
+  selected,
+  hintPair,
+  activeConnection,
+  invalidPair,
+  floatingScores,
+  isPaused,
+  onSelectTile,
+  onResume,
+}) => {
+  const [stadiumErr, setStadiumErr] = useState(false);
+
+  const rows = board.length || 10;
+  const cols = rows > 0 && board[0] ? board[0].length : 20;
+  const outerW = cols + 1;
+  const outerH = rows + 1;
+  const isDense = cols >= 26 || rows >= 14;
+
+  const pathPoints = activeConnection
+    ? activeConnection.path
+        .map((pt) => {
+          const { x, y } = toSvgCoord(pt, rows, cols);
+          return `${x},${y}`;
+        })
+        .join(' ')
+    : '';
+
+  const tilesList: { tile: TileCell; r: number; c: number }[] = [];
+  if (!isPaused) {
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const cell = board[r]?.[c];
+        if (cell) {
+          tilesList.push({ tile: cell, r, c });
+        }
+      }
+    }
+  }
+
+  const tileWidthPct = 100 / cols;
+  const tileHeightPct = 100 / rows;
+  const strokeScale = isDense ? 1.15 : 1;
+
+  return (
+    <div className="relative flex items-center justify-center w-full h-full">
+      {/* Pokémon Stadium Battle Arena Frame */}
+      <div
+        style={{
+          width: `min(calc(100vw - 24px), calc((100vh - 122px) * ${outerW} / ${outerH}))`,
+          aspectRatio: `${outerW} / ${outerH}`,
+        }}
+        className="relative rounded-2xl bg-[#111827] p-[3px] shadow-[0_20px_55px_rgba(0,0,0,0.75)] border-2 border-[#DC2626] overflow-hidden"
+      >
+        <div className="relative w-full h-full rounded-[13px] bg-[#14532D] overflow-hidden">
+          {/* Generated Pokémon Battle Stadium Turf Artwork */}
+          {!stadiumErr ? (
+            <img
+              src={STADIUM_BG}
+              alt="Sân đấu Pokémon"
+              referrerPolicy="no-referrer"
+              onError={() => setStadiumErr(true)}
+              className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none opacity-85"
+            />
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-b from-[#14532D] via-[#166534] to-[#0F3D22]" />
+          )}
+
+          {/* Balanced scrim so tiles stay super crisp over the grass turf */}
+          <div className="absolute inset-0 bg-[#062112]/35 pointer-events-none" />
+
+          {/* Dynamic Inner Playfield Container */}
+          <div
+            style={{
+              left: `${(0.5 / outerW) * 100}%`,
+              top: `${(0.5 / outerH) * 100}%`,
+              width: `${(cols / outerW) * 100}%`,
+              height: `${(rows / outerH) * 100}%`,
+            }}
+            className="absolute"
+          >
+            {tilesList.map(({ tile, r, c }) => {
+              const isSelected = selected?.r === r && selected?.c === c;
+              const isHinted =
+                (hintPair?.a.r === r && hintPair?.a.c === c) ||
+                (hintPair?.b.r === r && hintPair?.b.c === c);
+              const isMatching =
+                (activeConnection?.a.r === r && activeConnection?.a.c === c) ||
+                (activeConnection?.b.r === r && activeConnection?.b.c === c);
+              const isInvalid =
+                (invalidPair?.[0].r === r && invalidPair?.[0].c === c) ||
+                (invalidPair?.[1].r === r && invalidPair?.[1].c === c);
+
+              return (
+                <div
+                  key={tile.id}
+                  style={{
+                    width: `${tileWidthPct}%`,
+                    height: `${tileHeightPct}%`,
+                    transform: `translate3d(${c * 100}%, ${r * 100}%, 0)`,
+                    transition: 'transform 240ms cubic-bezier(0.22, 1, 0.36, 1)',
+                  }}
+                  className={`absolute top-0 left-0 ${isSelected || isMatching ? 'z-20' : 'z-10'}`}
+                >
+                  <PokemonTile
+                    tile={tile}
+                    r={r}
+                    c={c}
+                    dense={isDense}
+                    isSelected={isSelected}
+                    isHinted={isHinted}
+                    isMatching={isMatching}
+                    isInvalid={isInvalid}
+                    onSelect={onSelectTile}
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          {/* SVG Electric Connection Beam Overlay */}
+          {activeConnection && !isPaused && (
+            <svg
+              viewBox={`0 0 ${outerW} ${outerH}`}
+              className="absolute inset-0 w-full h-full pointer-events-none z-30"
+              preserveAspectRatio="none"
+            >
+              <polyline
+                points={pathPoints}
+                fill="none"
+                stroke="rgba(250, 204, 21, 0.5)"
+                strokeWidth={0.38 * strokeScale}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <polyline
+                points={pathPoints}
+                fill="none"
+                stroke="#FACC15"
+                strokeWidth={0.16 * strokeScale}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              {activeConnection.path.map((pt, i) => {
+                const { x, y } = toSvgCoord(pt, rows, cols);
+                return (
+                  <circle
+                    key={i}
+                    cx={x}
+                    cy={y}
+                    r={(i === 0 || i === activeConnection.path.length - 1 ? 0.24 : 0.13) * strokeScale}
+                    fill="#FEF08A"
+                    stroke="#DC2626"
+                    strokeWidth={0.05 * strokeScale}
+                  />
+                );
+              })}
+            </svg>
+          )}
+
+          {/* Floating Score Popups */}
+          {!isPaused &&
+            floatingScores.map((fs) => {
+              const leftPct = ((fs.c + 1) / outerW) * 100;
+              const topPct = ((fs.r + 1) / outerH) * 100;
+              return (
+                <div
+                  key={fs.id}
+                  style={{ left: `${leftPct}%`, top: `${topPct}%` }}
+                  className="absolute z-40 pointer-events-none animate-float-score font-mono-num text-xs sm:text-sm font-bold text-yellow-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] whitespace-nowrap"
+                >
+                  {fs.text}
+                  {fs.combo > 1 ? ` x${fs.combo}` : ''}
+                </div>
+              );
+            })}
+
+          {/* Pause Veil Overlay */}
+          {isPaused && (
+            <div className="absolute inset-0 z-40 bg-[#0F172A]/95 backdrop-blur-sm flex flex-col items-center justify-center gap-4 p-6 text-center">
+              <h2 className="font-display text-2xl sm:text-3xl font-bold text-white tracking-tight">
+                Trò chơi đang tạm dừng
+              </h2>
+              <p className="text-sm text-slate-300 max-w-sm">
+                Đồng hồ đếm ngược đã tạm dừng. Nhấn tiếp tục khi bạn sẵn sàng quay lại sân đấu.
+              </p>
+              <button
+                type="button"
+                onClick={onResume}
+                className="px-6 py-2.5 rounded-lg bg-[#FACC15] hover:bg-yellow-300 text-slate-950 font-bold text-sm transition-colors cursor-pointer shadow-[0_3px_0_#CA8A04]"
+              >
+                Tiếp tục đấu
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};

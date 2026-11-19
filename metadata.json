@@ -1,0 +1,6 @@
+{
+  "name": "ChibiMon 200 — Ghép Cặp Thú Cưng",
+  "description": "Game ghép cặp thú cưng nguyên tố gồm 200 cấp độ tăng dần từ 100 đến 400 cặp mỗi vòng, thời gian giảm dần từ 10 phút xuống 5 phút.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
