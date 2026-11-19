@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Snowflake } from 'lucide-react';
 import { getPokemonSpecies, PokemonArtwork } from '../data/pokemonSprites';
 import { TileCell } from '../types/game';
@@ -10,20 +10,55 @@ interface PokemonTileProps {
   dense?: boolean;
   isSelected: boolean;
   isHinted: boolean;
-  isMatching: boolean;
   isInvalid: boolean;
   onSelect: (r: number, c: number) => void;
 }
 
 export const PokemonTile: React.FC<PokemonTileProps> = React.memo(
-  ({ tile, r, c, dense = false, isSelected, isHinted, isMatching, isInvalid, onSelect }) => {
+  ({ tile, r, c, dense = false, isSelected, isHinted, isInvalid, onSelect }) => {
     const species = getPokemonSpecies(tile.speciesId);
+    const pointerStartRef = useRef<{ id: number; x: number; y: number } | null>(null);
+    const skipNextClickRef = useRef<boolean>(false);
+
+    const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      pointerStartRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
+    };
+
+    const handlePointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+      const start = pointerStartRef.current;
+      pointerStartRef.current = null;
+      if (!start || start.id !== e.pointerId) return;
+      const dist = Math.hypot(e.clientX - start.x, e.clientY - start.y);
+      if (dist <= 12) {
+        skipNextClickRef.current = true;
+        window.setTimeout(() => {
+          skipNextClickRef.current = false;
+        }, 350);
+        onSelect(r, c);
+      }
+    };
+
+    const handlePointerCancel = () => {
+      pointerStartRef.current = null;
+    };
+
+    const handleClick = () => {
+      if (skipNextClickRef.current) {
+        skipNextClickRef.current = false;
+        return;
+      }
+      onSelect(r, c);
+    };
 
     return (
       <div className={`w-full h-full ${dense ? 'p-[0.5px]' : 'p-[0.5px] sm:p-[1.5px]'}`}>
         <button
           type="button"
-          onClick={() => onSelect(r, c)}
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          onClick={handleClick}
           aria-label={`${species.name} (${species.type})${tile.frozen ? ' - Đang đóng băng' : ''} - Hàng ${r + 1} Cột ${c + 1}`}
           aria-pressed={isSelected}
           style={{
@@ -37,22 +72,21 @@ export const PokemonTile: React.FC<PokemonTileProps> = React.memo(
                   : species.borderTint,
           }}
           className={[
-            'relative w-full h-full min-w-0 min-h-0 leading-none border transition-transform duration-150 ease-out select-none flex flex-col items-center justify-center overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400',
+            'relative w-full h-full min-w-0 min-h-0 leading-none border select-none flex flex-col items-center justify-center overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400',
             dense
               ? 'rounded-[3px] sm:rounded-[5px] p-0'
               : 'rounded-[4px] sm:rounded-[7px] sm:border-[1.5px] p-0 sm:p-[1px]',
             tile.frozen
               ? 'cursor-not-allowed shadow-[inset_0_0_0_1.5px_rgba(56,189,248,0.45),0_1.5px_0_#0284C7]'
               : dense
-                ? 'cursor-pointer shadow-[0_1.5px_0_rgba(15,23,42,0.45)] lg:hover:-translate-y-[1px] active:scale-95'
-                : 'cursor-pointer shadow-[0_2px_0_rgba(15,23,42,0.45)] lg:hover:-translate-y-[1px] active:scale-95',
+                ? 'cursor-pointer shadow-[0_1.5px_0_rgba(15,23,42,0.45)] active:brightness-95'
+                : 'cursor-pointer shadow-[0_2px_0_rgba(15,23,42,0.45)] active:brightness-95',
             isSelected
-              ? 'ring-2 ring-yellow-400 scale-[1.04] shadow-[0_4px_14px_rgba(220,38,38,0.75)] z-20'
+              ? 'ring-2 ring-yellow-400 shadow-[0_0_12px_rgba(250,204,21,0.85)] z-20'
               : '',
             isHinted && !isSelected
               ? 'ring-2 ring-emerald-400 shadow-[0_0_14px_rgba(16,185,129,0.85)] animate-pulse z-20'
               : '',
-            isMatching ? 'animate-pop-match pointer-events-none z-30' : '',
             isInvalid ? 'animate-shake-invalid ring-2 ring-rose-500' : '',
           ].join(' ')}
         >
@@ -63,7 +97,7 @@ export const PokemonTile: React.FC<PokemonTileProps> = React.memo(
           />
 
           {/* Pure white inner canvas with maximized creature artwork */}
-          <div className="relative z-10 w-full h-full flex items-center justify-center overflow-hidden">
+          <div className="relative z-10 w-full h-full flex items-center justify-center overflow-hidden pointer-events-none">
             <PokemonArtwork
               speciesId={tile.speciesId}
               className={`w-[96%] h-[96%] scale-[1.08] ${

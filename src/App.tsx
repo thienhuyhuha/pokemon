@@ -47,6 +47,7 @@ import {
   GameState,
   GridPos,
   LevelConfig,
+  PoppingTile,
   SaveData,
 } from './types/game';
 import {
@@ -151,7 +152,8 @@ export default function App() {
   const [board, setBoard] = useState<BoardGrid>([]);
   const [selected, setSelected] = useState<GridPos | null>(null);
   const [hintPair, setHintPair] = useState<{ a: GridPos; b: GridPos } | null>(null);
-  const [activeConnection, setActiveConnection] = useState<ActiveConnection | null>(null);
+  const [activeConnections, setActiveConnections] = useState<ActiveConnection[]>([]);
+  const [poppingTiles, setPoppingTiles] = useState<PoppingTile[]>([]);
   const [invalidPair, setInvalidPair] = useState<[GridPos, GridPos] | null>(null);
   const [floatingScores, setFloatingScores] = useState<FloatingScore[]>([]);
 
@@ -184,8 +186,7 @@ export default function App() {
   const mergeSyncedUidRef = useRef<string | null>(null);
 
   const lastMatchAtRef = useRef<number>(0);
-  const matchLockedRef = useRef<boolean>(false);
-  const matchTimerRef = useRef<number | null>(null);
+  const effectTimersRef = useRef<Set<number>>(new Set());
   const toastTimerRef = useRef<number | null>(null);
   const invalidTimerRef = useRef<number | null>(null);
 
@@ -242,15 +243,12 @@ export default function App() {
   }, []);
 
   const clearPendingTimers = useCallback(() => {
-    if (matchTimerRef.current) {
-      window.clearTimeout(matchTimerRef.current);
-      matchTimerRef.current = null;
-    }
+    effectTimersRef.current.forEach((id) => window.clearTimeout(id));
+    effectTimersRef.current.clear();
     if (invalidTimerRef.current) {
       window.clearTimeout(invalidTimerRef.current);
       invalidTimerRef.current = null;
     }
-    matchLockedRef.current = false;
   }, []);
 
   useEffect(() => {
@@ -519,7 +517,8 @@ export default function App() {
       setBoard(checked.board);
       setSelected(null);
       setHintPair(null);
-      setActiveConnection(null);
+      setActiveConnections([]);
+      setPoppingTiles([]);
       setInvalidPair(null);
       setFloatingScores([]);
       setTimeRemaining(cfg.timeLimitSeconds);
@@ -599,7 +598,7 @@ export default function App() {
   }, []);
 
   const handleHint = useCallback(() => {
-    if (gameState !== 'PLAYING' || matchLockedRef.current) return;
+    if (gameState !== 'PLAYING') return;
     if (hintsLeft <= 0) {
       showToast('Đã hết lượt gợi ý trong màn này');
       return;
@@ -621,7 +620,7 @@ export default function App() {
   }, [gameState, hintsLeft, showToast]);
 
   const handleShuffle = useCallback(() => {
-    if (gameState !== 'PLAYING' || matchLockedRef.current) return;
+    if (gameState !== 'PLAYING') return;
     if (shufflesLeft <= 0) {
       showToast('Đã hết lượt đảo bàn trong màn này');
       return;
@@ -638,7 +637,7 @@ export default function App() {
 
   const handleSelectTile = useCallback(
     (r: number, c: number) => {
-      if (gameStateRef.current !== 'PLAYING' || matchLockedRef.current) return;
+      if (gameStateRef.current !== 'PLAYING') return;
       const currentBoard = boardRef.current;
       const clickedTile = currentBoard[r]?.[c];
       if (!clickedTile) return;
@@ -647,7 +646,7 @@ export default function App() {
         sound.playMismatch();
         setInvalidPair([{ r, c }, { r, c }]);
         if (invalidTimerRef.current) window.clearTimeout(invalidTimerRef.current);
-        invalidTimerRef.current = window.setTimeout(() => setInvalidPair(null), 260);
+        invalidTimerRef.current = window.setTimeout(() => setInvalidPair(null), 240);
         showToast('Ô đang đóng băng — Hãy ghép cặp sát bên để làm tan băng');
         return;
       }
@@ -679,7 +678,7 @@ export default function App() {
         sound.playMismatch();
         setInvalidPair([firstPos, { r, c }]);
         if (invalidTimerRef.current) window.clearTimeout(invalidTimerRef.current);
-        invalidTimerRef.current = window.setTimeout(() => setInvalidPair(null), 260);
+        invalidTimerRef.current = window.setTimeout(() => setInvalidPair(null), 240);
         selectedRef.current = { r, c };
         setSelected({ r, c });
         return;
@@ -690,21 +689,21 @@ export default function App() {
         sound.playMismatch();
         setInvalidPair([firstPos, { r, c }]);
         if (invalidTimerRef.current) window.clearTimeout(invalidTimerRef.current);
-        invalidTimerRef.current = window.setTimeout(() => setInvalidPair(null), 260);
+        invalidTimerRef.current = window.setTimeout(() => setInvalidPair(null), 240);
         selectedRef.current = { r, c };
         setSelected({ r, c });
         return;
       }
 
-      // Valid Match!
+      // Valid Match! Resolve synchronously with 0ms lock so rapid consecutive taps never drop or mismatch
       const now = Date.now();
+      const matchId = `${now}-${firstPos.r}-${firstPos.c}-${r}-${c}-${Math.random().toString(36).slice(2, 6)}`;
       const isCombo = now - lastMatchAtRef.current <= 4500;
       const nextCombo = isCombo ? Math.min(10, comboRef.current + 1) : 1;
       lastMatchAtRef.current = now;
       const pointsEarned = 100 + (nextCombo - 1) * 35;
 
       sound.playMatch(nextCombo);
-      matchLockedRef.current = true;
       selectedRef.current = null;
       comboRef.current = nextCombo;
       const nextScore = scoreRef.current + pointsEarned;
@@ -714,109 +713,132 @@ export default function App() {
 
       setSelected(null);
       setHintPair(null);
+      setInvalidPair(null);
       setCombo(nextCombo);
       setScore(nextScore);
       setPairsMatched(nextMatchedCount);
 
-      setActiveConnection({
-        path,
-        a: firstPos,
-        b: { r, c },
-        speciesId: clickedTile.speciesId,
-      });
+      // Show electric connection beam & popping tile ghosts purely visually (non-blocking)
+      setActiveConnections((prev) => [
+        ...prev.slice(-3),
+        {
+          id: matchId,
+          path,
+          a: firstPos,
+          b: { r, c },
+          speciesId: clickedTile.speciesId,
+        },
+      ]);
 
-      const floatId = `${now}-${r}-${c}`;
+      setPoppingTiles((prev) => [
+        ...prev.slice(-6),
+        { id: `${matchId}-a`, tile: firstTile, r: firstPos.r, c: firstPos.c },
+        { id: `${matchId}-b`, tile: clickedTile, r, c },
+      ]);
+
       setFloatingScores((prev) => [
         ...prev.slice(-4),
-        { id: floatId, r, c, text: `+${pointsEarned}`, combo: nextCombo },
+        { id: matchId, r, c, text: `+${pointsEarned}`, combo: nextCombo },
       ]);
-      window.setTimeout(() => {
-        setFloatingScores((prev) => prev.filter((item) => item.id !== floatId));
-      }, 650);
 
-      matchTimerRef.current = window.setTimeout(() => {
-        setActiveConnection(null);
-        const cfg = levelConfigRef.current;
-
-        let next = cloneBoard(boardRef.current);
-        next = thawAdjacentFrozen(next, firstPos, { r, c });
-        next[firstPos.r][firstPos.c] = null;
-        next[r][c] = null;
-
-        const shifted = applyGravity(
-          next,
-          cfg.gravityMode,
-          nextMatchedCount,
-          firstPos,
-          { r, c }
+      const beamTimer = window.setTimeout(() => {
+        effectTimersRef.current.delete(beamTimer);
+        setActiveConnections((prev) => prev.filter((item) => item.id !== matchId));
+        setPoppingTiles((prev) =>
+          prev.filter((item) => item.id !== `${matchId}-a` && item.id !== `${matchId}-b`)
         );
-        next = shifted.board;
-        setLastShiftLabel(getDirectionLabel(shifted.direction));
+      }, 190);
+      effectTimersRef.current.add(beamTimer);
 
-        const remaining = countRemainingTiles(next);
-        if (remaining === 0) {
-          boardRef.current = next;
-          setBoard(next);
-          sound.playWin();
-          const curTime = timeRemainingRef.current;
-          const ratio = curTime / cfg.timeLimitSeconds;
-          const stars = ratio >= 0.4 ? 3 : ratio >= 0.2 ? 2 : 1;
-          const timeBonus = curTime * 15;
-          const finalRoundScore = scoreRef.current + timeBonus;
+      const floatTimer = window.setTimeout(() => {
+        effectTimersRef.current.delete(floatTimer);
+        setFloatingScores((prev) => prev.filter((item) => item.id !== matchId));
+      }, 650);
+      effectTimersRef.current.add(floatTimer);
 
-          scoreRef.current = finalRoundScore;
-          setScore(finalRoundScore);
-          setEarnedStars(stars);
-          gameStateRef.current = 'ROUND_SUMMARY';
+      // Update board immediately so the very next tap operates on live coordinates
+      const cfg = levelConfigRef.current;
+      let next = cloneBoard(currentBoard);
+      next = thawAdjacentFrozen(next, firstPos, { r, c });
+      next[firstPos.r][firstPos.c] = null;
+      next[r][c] = null;
+
+      const shifted = applyGravity(
+        next,
+        cfg.gravityMode,
+        nextMatchedCount,
+        firstPos,
+        { r, c }
+      );
+      next = shifted.board;
+      setLastShiftLabel(getDirectionLabel(shifted.direction));
+
+      const remaining = countRemainingTiles(next);
+      if (remaining === 0) {
+        boardRef.current = next;
+        setBoard(next);
+        sound.playWin();
+        const curTime = timeRemainingRef.current;
+        const ratio = curTime / cfg.timeLimitSeconds;
+        const stars = ratio >= 0.4 ? 3 : ratio >= 0.2 ? 2 : 1;
+        const timeBonus = curTime * 15;
+        const finalRoundScore = scoreRef.current + timeBonus;
+
+        scoreRef.current = finalRoundScore;
+        setScore(finalRoundScore);
+        setEarnedStars(stars);
+        gameStateRef.current = 'ROUND_SUMMARY';
+
+        const winTimer = window.setTimeout(() => {
+          effectTimersRef.current.delete(winTimer);
           setGameState('ROUND_SUMMARY');
+        }, 200);
+        effectTimersRef.current.add(winTimer);
 
-          // Only save progression if this level was legitimately unlocked
-          const nextSave = computeWinSaveData(
-            saveDataRef.current,
-            cfg.level,
-            finalRoundScore,
-            stars,
-            curTime
-          );
-          if (nextSave) {
-            setSaveData(nextSave);
-            const activeUser = userRef.current;
-            const activeUid = activeUser?.uid ?? rememberedAccountRef.current?.uid ?? null;
-            if (activeUid) {
-              savePlayerLocalSave(activeUid, nextSave);
-            }
-            if (activeUser) {
-              const isOfflineNow = typeof navigator !== 'undefined' && !navigator.onLine;
-              setSyncStatus(isOfflineNow ? 'remembered' : 'syncing');
-              void savePlayerProgressToCloud(activeUser.uid, nextSave)
-                .then(() => setSyncStatus('synced'))
-                .catch((err: unknown) => {
-                  if (typeof navigator !== 'undefined' && !navigator.onLine) {
-                    setSyncStatus('remembered');
-                    return;
-                  }
-                  setSyncStatus('error');
-                  if (err instanceof Error && err.message.includes('Quota exceeded')) {
-                    showToast('Đã đạt giới hạn lưu trữ miễn phí hôm nay.');
-                    return;
-                  }
-                  setFatalError(err instanceof Error ? err : new Error(String(err)));
-                });
-            }
+        // Only save progression if this level was legitimately unlocked
+        const nextSave = computeWinSaveData(
+          saveDataRef.current,
+          cfg.level,
+          finalRoundScore,
+          stars,
+          curTime
+        );
+        if (nextSave) {
+          setSaveData(nextSave);
+          const activeUser = userRef.current;
+          const activeUid = activeUser?.uid ?? rememberedAccountRef.current?.uid ?? null;
+          if (activeUid) {
+            savePlayerLocalSave(activeUid, nextSave);
           }
-        } else {
-          const recovery = ensurePlayableBoard(next);
-          next = recovery.board;
-          boardRef.current = next;
-          setBoard(next);
-          if (recovery.adjusted && recovery.reason) {
-            sound.playShuffle();
-            showToast(recovery.reason);
+          if (activeUser) {
+            const isOfflineNow = typeof navigator !== 'undefined' && !navigator.onLine;
+            setSyncStatus(isOfflineNow ? 'remembered' : 'syncing');
+            void savePlayerProgressToCloud(activeUser.uid, nextSave)
+              .then(() => setSyncStatus('synced'))
+              .catch((err: unknown) => {
+                if (typeof navigator !== 'undefined' && !navigator.onLine) {
+                  setSyncStatus('remembered');
+                  return;
+                }
+                setSyncStatus('error');
+                if (err instanceof Error && err.message.includes('Quota exceeded')) {
+                  showToast('Đã đạt giới hạn lưu trữ miễn phí hôm nay.');
+                  return;
+                }
+                setFatalError(err instanceof Error ? err : new Error(String(err)));
+              });
           }
         }
-
-        matchLockedRef.current = false;
-      }, 160);
+      } else {
+        const recovery = ensurePlayableBoard(next);
+        next = recovery.board;
+        boardRef.current = next;
+        setBoard(next);
+        if (recovery.adjusted && recovery.reason) {
+          sound.playShuffle();
+          showToast(recovery.reason);
+        }
+      }
     },
     [showToast]
   );
@@ -969,7 +991,8 @@ export default function App() {
               board={board}
               selected={selected}
               hintPair={hintPair}
-              activeConnection={activeConnection}
+              activeConnections={activeConnections}
+              poppingTiles={poppingTiles}
               invalidPair={invalidPair}
               floatingScores={floatingScores}
               isPaused={gameState === 'PAUSED'}
@@ -1261,7 +1284,8 @@ export default function App() {
               board={board}
               selected={selected}
               hintPair={hintPair}
-              activeConnection={activeConnection}
+              activeConnections={activeConnections}
+              poppingTiles={poppingTiles}
               invalidPair={invalidPair}
               floatingScores={floatingScores}
               isPaused={gameState === 'PAUSED'}

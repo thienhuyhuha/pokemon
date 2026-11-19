@@ -1,12 +1,21 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
-import { ActiveConnection, BoardGrid, FloatingScore, GridPos, TileCell } from '../types/game';
+import { PokemonArtwork, getPokemonSpecies } from '../data/pokemonSprites';
+import {
+  ActiveConnection,
+  BoardGrid,
+  FloatingScore,
+  GridPos,
+  PoppingTile,
+  TileCell,
+} from '../types/game';
 import { PokemonTile } from './PokemonTile';
 
 interface GameBoardProps {
   board: BoardGrid;
   selected: GridPos | null;
   hintPair: { a: GridPos; b: GridPos } | null;
-  activeConnection: ActiveConnection | null;
+  activeConnections: ActiveConnection[];
+  poppingTiles: PoppingTile[];
   invalidPair: [GridPos, GridPos] | null;
   floatingScores: FloatingScore[];
   isPaused: boolean;
@@ -35,7 +44,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   board,
   selected,
   hintPair,
-  activeConnection,
+  activeConnections,
+  poppingTiles,
   invalidPair,
   floatingScores,
   isPaused,
@@ -104,15 +114,6 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   const zoomFactor = isCompactLandscape && mobileZoomed ? 1.5 : 1;
   const boardW = Math.round(fitW * zoomFactor);
   const boardH = Math.round(fitH * zoomFactor);
-
-  const pathPoints = activeConnection
-    ? activeConnection.path
-        .map((pt) => {
-          const { x, y } = toSvgCoord(pt, rows, cols);
-          return `${x},${y}`;
-        })
-        .join(' ')
-    : '';
 
   const tilesList: { tile: TileCell; r: number; c: number }[] = [];
   if (!isPaused) {
@@ -183,9 +184,6 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               const isHinted =
                 (hintPair?.a.r === r && hintPair?.a.c === c) ||
                 (hintPair?.b.r === r && hintPair?.b.c === c);
-              const isMatching =
-                (activeConnection?.a.r === r && activeConnection?.a.c === c) ||
-                (activeConnection?.b.r === r && activeConnection?.b.c === c);
               const isInvalid =
                 (invalidPair?.[0].r === r && invalidPair?.[0].c === c) ||
                 (invalidPair?.[1].r === r && invalidPair?.[1].c === c);
@@ -197,9 +195,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                     width: `${tileWidthPct}%`,
                     height: `${tileHeightPct}%`,
                     transform: `translate3d(${c * 100}%, ${r * 100}%, 0)`,
-                    transition: 'transform 180ms cubic-bezier(0.22, 1, 0.36, 1)',
+                    transition: 'transform 140ms cubic-bezier(0.22, 1, 0.36, 1)',
                   }}
-                  className={`absolute top-0 left-0 ${isSelected || isMatching ? 'z-20' : 'z-10'}`}
+                  className={`absolute top-0 left-0 ${isSelected ? 'z-20' : 'z-10'}`}
                 >
                   <PokemonTile
                     tile={tile}
@@ -208,50 +206,90 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                     dense={isDense}
                     isSelected={isSelected}
                     isHinted={isHinted}
-                    isMatching={isMatching}
                     isInvalid={isInvalid}
                     onSelect={onSelectTile}
                   />
                 </div>
               );
             })}
+
+            {/* Non-blocking visual pop effects for recently matched tiles */}
+            {!isPaused &&
+              poppingTiles.map(({ id, tile, r, c }) => {
+                const sp = getPokemonSpecies(tile.speciesId);
+                return (
+                  <div
+                    key={id}
+                    style={{
+                      width: `${tileWidthPct}%`,
+                      height: `${tileHeightPct}%`,
+                      transform: `translate3d(${c * 100}%, ${r * 100}%, 0)`,
+                    }}
+                    className="absolute top-0 left-0 z-30 pointer-events-none"
+                  >
+                    <div className="w-full h-full p-[0.5px]">
+                      <div
+                        style={{ borderColor: sp.borderTint }}
+                        className="w-full h-full rounded-[4px] bg-white border flex items-center justify-center overflow-hidden animate-pop-match"
+                      >
+                        <PokemonArtwork
+                          speciesId={tile.speciesId}
+                          className="w-[96%] h-[96%] scale-[1.08]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
           </div>
 
-          {/* SVG Electric Connection Beam Overlay */}
-          {activeConnection && !isPaused && (
+          {/* SVG Electric Connection Beam Overlay (supports rapid consecutive beams) */}
+          {activeConnections.length > 0 && !isPaused && (
             <svg
               viewBox={`0 0 ${outerW} ${outerH}`}
               className="absolute inset-0 w-full h-full pointer-events-none z-30"
               preserveAspectRatio="none"
             >
-              <polyline
-                points={pathPoints}
-                fill="none"
-                stroke="rgba(250, 204, 21, 0.5)"
-                strokeWidth={0.34 * strokeScale}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <polyline
-                points={pathPoints}
-                fill="none"
-                stroke="#FACC15"
-                strokeWidth={0.14 * strokeScale}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              {activeConnection.path.map((pt, i) => {
-                const { x, y } = toSvgCoord(pt, rows, cols);
+              {activeConnections.map((conn) => {
+                const pts = conn.path
+                  .map((pt) => {
+                    const { x, y } = toSvgCoord(pt, rows, cols);
+                    return `${x},${y}`;
+                  })
+                  .join(' ');
                 return (
-                  <circle
-                    key={i}
-                    cx={x}
-                    cy={y}
-                    r={(i === 0 || i === activeConnection.path.length - 1 ? 0.22 : 0.12) * strokeScale}
-                    fill="#FEF08A"
-                    stroke="#DC2626"
-                    strokeWidth={0.05 * strokeScale}
-                  />
+                  <g key={conn.id}>
+                    <polyline
+                      points={pts}
+                      fill="none"
+                      stroke="rgba(250, 204, 21, 0.5)"
+                      strokeWidth={0.34 * strokeScale}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <polyline
+                      points={pts}
+                      fill="none"
+                      stroke="#FACC15"
+                      strokeWidth={0.14 * strokeScale}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    {conn.path.map((pt, i) => {
+                      const { x, y } = toSvgCoord(pt, rows, cols);
+                      return (
+                        <circle
+                          key={i}
+                          cx={x}
+                          cy={y}
+                          r={(i === 0 || i === conn.path.length - 1 ? 0.22 : 0.12) * strokeScale}
+                          fill="#FEF08A"
+                          stroke="#DC2626"
+                          strokeWidth={0.05 * strokeScale}
+                        />
+                      );
+                    })}
+                  </g>
                 );
               })}
             </svg>

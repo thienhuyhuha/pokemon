@@ -77,10 +77,18 @@ export interface SaveData {
 }
 
 export interface ActiveConnection {
+  id: string;
   path: GridPos[];
   a: GridPos;
   b: GridPos;
   speciesId: number;
+}
+
+export interface PoppingTile {
+  id: string;
+  tile: TileCell;
+  r: number;
+  c: number;
 }
 
 export interface FloatingScore {
