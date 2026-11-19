@@ -8,6 +8,7 @@ import {
   Home,
   LogIn,
   LogOut,
+  Music,
   RefreshCw,
   UserCircle2,
   Volume2,
@@ -88,11 +89,13 @@ interface MobileAccountSheetProps {
   authLoading: boolean;
   syncStatus: CloudSyncStatus;
   soundEnabled: boolean;
+  bgmEnabled: boolean;
   highestUnlockedLevel: number;
   totalScore: number;
   onSignIn: (forceSelectAccount?: boolean) => void;
   onSignOut: () => void;
   onToggleSound: () => void;
+  onToggleBgm: () => void;
 }
 
 export const MobileAccountSheet: React.FC<MobileAccountSheetProps> = ({
@@ -103,11 +106,13 @@ export const MobileAccountSheet: React.FC<MobileAccountSheetProps> = ({
   authLoading,
   syncStatus,
   soundEnabled,
+  bgmEnabled,
   highestUnlockedLevel,
   totalScore,
   onSignIn,
   onSignOut,
   onToggleSound,
+  onToggleBgm,
 }) => {
   const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
 
@@ -249,23 +254,39 @@ export const MobileAccountSheet: React.FC<MobileAccountSheetProps> = ({
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={onToggleSound}
-            className="w-full min-h-[46px] px-4 rounded-xl bg-[#0F172A] border border-slate-700 text-slate-100 font-semibold text-sm flex items-center justify-between cursor-pointer"
-          >
-            <span className="flex items-center gap-2">
-              {soundEnabled ? (
-                <Volume2 className="w-4 h-4 text-emerald-400" />
-              ) : (
-                <VolumeX className="w-4 h-4 text-slate-400" />
-              )}
-              Âm thanh hiệu ứng
-            </span>
-            <span className={soundEnabled ? 'text-emerald-400' : 'text-slate-400'}>
-              {soundEnabled ? 'Đang bật' : 'Đang tắt'}
-            </span>
-          </button>
+          <div className="grid grid-cols-2 gap-2.5">
+            <button
+              type="button"
+              onClick={onToggleBgm}
+              className="min-h-[46px] px-3 rounded-xl bg-[#0F172A] border border-slate-700 text-slate-100 font-semibold text-xs flex items-center justify-between gap-1.5 cursor-pointer"
+            >
+              <span className="flex items-center gap-1.5">
+                <Music className={`w-4 h-4 ${bgmEnabled && soundEnabled ? 'text-[#FACC15]' : 'text-slate-400'}`} />
+                Nhạc nền
+              </span>
+              <span className={bgmEnabled && soundEnabled ? 'text-[#FACC15]' : 'text-slate-400'}>
+                {bgmEnabled && soundEnabled ? 'Bật' : 'Tắt'}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onToggleSound}
+              className="min-h-[46px] px-3 rounded-xl bg-[#0F172A] border border-slate-700 text-slate-100 font-semibold text-xs flex items-center justify-between gap-1.5 cursor-pointer"
+            >
+              <span className="flex items-center gap-1.5">
+                {soundEnabled ? (
+                  <Volume2 className="w-4 h-4 text-emerald-400" />
+                ) : (
+                  <VolumeX className="w-4 h-4 text-slate-400" />
+                )}
+                Âm thanh
+              </span>
+              <span className={soundEnabled ? 'text-emerald-400' : 'text-slate-400'}>
+                {soundEnabled ? 'Bật' : 'Tắt'}
+              </span>
+            </button>
+          </div>
 
           {!isInstalled && isInstallable && (
             <button

@@ -6,6 +6,7 @@ import {
   Lightbulb,
   Maximize2,
   Minimize2,
+  Music,
   Pause,
   Play,
   RotateCcw,
@@ -140,9 +141,10 @@ export default function App() {
     const loaded = remembered
       ? (loadPlayerLocalSave(remembered.uid) ?? loadGuestSaveData())
       : loadGuestSaveData();
-    sound.enabled = loaded.soundEnabled;
+    sound.setEnabled(loaded.soundEnabled);
     return loaded;
   });
+  const [bgmEnabled, setBgmEnabled] = useState<boolean>(() => sound.bgmEnabled);
 
   // Creator/Admin preview mode (session-only; regular players must unlock sequentially)
   const [isPreviewMode, setIsPreviewMode] = useState<boolean>(false);
@@ -258,6 +260,30 @@ export default function App() {
     };
   }, [clearPendingTimers]);
 
+  // Unlock Web Audio on first user interaction so BGM & SFX play reliably
+  useEffect(() => {
+    const handleUnlock = () => {
+      sound.unlock();
+    };
+    window.addEventListener('pointerdown', handleUnlock, { passive: true });
+    window.addEventListener('keydown', handleUnlock, { passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', handleUnlock);
+      window.removeEventListener('keydown', handleUnlock);
+    };
+  }, []);
+
+  // Keep background music mode synced with game state and remaining time
+  useEffect(() => {
+    if (gameState === 'TITLE_MENU' || gameState === 'LEVEL_SELECT') {
+      sound.setBgmState('menu', false);
+    } else if (gameState === 'PLAYING') {
+      sound.setBgmState('battle', timeRemaining <= 30);
+    } else {
+      sound.setBgmState('off', false);
+    }
+  }, [gameState, timeRemaining]);
+
   // Persist current player's progress locally on their machine
   useEffect(() => {
     const activeUid = user?.uid ?? rememberedAccount?.uid ?? null;
@@ -285,13 +311,13 @@ export default function App() {
           setRememberedAccountState(remembered);
           setSyncStatus('remembered');
           const cached = loadPlayerLocalSave(remembered.uid) ?? DEFAULT_SAVE;
-          sound.enabled = cached.soundEnabled;
+          sound.setEnabled(cached.soundEnabled);
           setSaveData(cached);
         } else {
           setRememberedAccountState(null);
           setSyncStatus('local');
           const guest = loadGuestSaveData();
-          sound.enabled = guest.soundEnabled;
+          sound.setEnabled(guest.soundEnabled);
           setSaveData(guest);
         }
         return;
@@ -310,7 +336,7 @@ export default function App() {
 
       const cached = loadPlayerLocalSave(nextUser.uid);
       if (cached) {
-        sound.enabled = cached.soundEnabled;
+        sound.setEnabled(cached.soundEnabled);
         setSaveData(cached);
       }
     });
@@ -346,7 +372,7 @@ export default function App() {
           const localCached = loadPlayerLocalSave(user.uid);
           const { merged, cloudNeedsUpdate } = mergeSaveData(cloudSave, localCached);
 
-          sound.enabled = merged.soundEnabled;
+          sound.setEnabled(merged.soundEnabled);
           setSaveData(merged);
           savePlayerLocalSave(user.uid, merged);
 
@@ -408,7 +434,7 @@ export default function App() {
             }
             savePlayerLocalSave(user.uid, initialSave);
             identitySyncedUidRef.current = user.uid;
-            sound.enabled = initialSave.soundEnabled;
+            sound.setEnabled(initialSave.soundEnabled);
             setSaveData(initialSave);
             setSyncStatus('synced');
           })
@@ -484,7 +510,7 @@ export default function App() {
     try {
       await signOutPlayer();
       const guest = loadGuestSaveData();
-      sound.enabled = guest.soundEnabled;
+      sound.setEnabled(guest.soundEnabled);
       setSaveData(guest);
       setSyncStatus('local');
       setGameState('TITLE_MENU');
@@ -499,6 +525,7 @@ export default function App() {
       if (!isPreviewMode && levelNum > saveData.highestUnlockedLevel) {
         return;
       }
+      sound.unlock();
       void enterGameFullscreenAndLandscape();
       clearPendingTimers();
       const cfg = getLevelConfig(levelNum);
@@ -574,8 +601,9 @@ export default function App() {
   }, [gameState]);
 
   const handleToggleSound = useCallback(() => {
+    sound.unlock();
     const nextSound = !saveDataRef.current.soundEnabled;
-    sound.enabled = nextSound;
+    sound.setEnabled(nextSound);
     setSaveData((prev) => ({ ...prev, soundEnabled: nextSound }));
 
     if (user) {
@@ -592,6 +620,15 @@ export default function App() {
         });
     }
   }, [user, showToast]);
+
+  const handleToggleBgm = useCallback(() => {
+    sound.unlock();
+    setBgmEnabled((prev) => {
+      const next = !prev;
+      sound.setBgmEnabled(next);
+      return next;
+    });
+  }, []);
 
   const handleTogglePreviewMode = useCallback(() => {
     setIsPreviewMode((prev) => !prev);
@@ -883,11 +920,13 @@ export default function App() {
         authLoading={authLoading}
         syncStatus={syncStatus}
         authError={authError}
+        bgmEnabled={bgmEnabled}
         onSignIn={handleSignIn}
         onSignOut={handleSignOut}
         onStartCurrentLevel={() => startLevel(saveData.highestUnlockedLevel)}
         onOpenLevelSelect={() => setGameState('LEVEL_SELECT')}
         onToggleSound={handleToggleSound}
+        onToggleBgm={handleToggleBgm}
       />
     );
   }
@@ -902,11 +941,13 @@ export default function App() {
         authLoading={authLoading}
         syncStatus={syncStatus}
         isPreviewMode={isPreviewMode}
+        bgmEnabled={bgmEnabled}
         onSignIn={handleSignIn}
         onSignOut={handleSignOut}
         onSelectLevel={(lv) => startLevel(lv)}
         onTogglePreviewMode={handleTogglePreviewMode}
         onToggleSound={handleToggleSound}
+        onToggleBgm={handleToggleBgm}
         onBack={() => setGameState('TITLE_MENU')}
       />
     );
@@ -1010,7 +1051,7 @@ export default function App() {
           </main>
 
           {/* Right Ultra-Slim Thumb Action Rail (44px) */}
-          <aside className="w-11 shrink-0 bg-[#0F172A] border-l border-slate-800 py-1 px-1 flex flex-col items-stretch justify-between gap-1 select-none">
+          <aside className="w-11 shrink-0 bg-[#0F172A] border-l border-slate-800 py-1 px-1 flex flex-col items-stretch justify-between gap-0.5 select-none">
             <button
               type="button"
               onClick={() => setGameState((s) => (s === 'PLAYING' ? 'PAUSED' : 'PLAYING'))}
@@ -1067,6 +1108,20 @@ export default function App() {
               className="flex-1 min-h-0 rounded-lg bg-[#1E293B] border border-slate-700/80 flex items-center justify-center text-slate-200 cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleToggleBgm}
+              title={bgmEnabled ? 'Tắt nhạc nền' : 'Bật nhạc nền'}
+              aria-label={bgmEnabled ? 'Tắt nhạc nền' : 'Bật nhạc nền'}
+              className={`flex-1 min-h-0 rounded-lg border flex items-center justify-center cursor-pointer ${
+                bgmEnabled && saveData.soundEnabled
+                  ? 'bg-[#1E293B] border-amber-400/50 text-[#FACC15]'
+                  : 'bg-[#1E293B] border-slate-700/80 text-slate-400 opacity-75'
+              }`}
+            >
+              <Music className="w-3.5 h-3.5" />
             </button>
 
             <button
@@ -1244,7 +1299,22 @@ export default function App() {
 
                 <button
                   type="button"
+                  onClick={handleToggleBgm}
+                  title={bgmEnabled ? 'Tắt nhạc nền' : 'Bật nhạc nền'}
+                  aria-label={bgmEnabled ? 'Tắt nhạc nền' : 'Bật nhạc nền'}
+                  className={`p-2 rounded-lg border transition-colors cursor-pointer shrink-0 ${
+                    bgmEnabled && saveData.soundEnabled
+                      ? 'border-[#0F172A] bg-[#1E293B] hover:bg-[#334155] text-[#FACC15]'
+                      : 'border-[#0F172A] bg-[#1E293B] hover:bg-[#334155] text-slate-400'
+                  }`}
+                >
+                  <Music className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
                   onClick={handleToggleSound}
+                  title={saveData.soundEnabled ? 'Tắt âm thanh' : 'Bật âm thanh'}
                   aria-label={saveData.soundEnabled ? 'Tắt âm thanh' : 'Bật âm thanh'}
                   className="p-2 rounded-lg border border-[#0F172A] bg-[#1E293B] hover:bg-[#334155] text-white transition-colors cursor-pointer shrink-0"
                 >

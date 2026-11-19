@@ -21,6 +21,8 @@ interface LevelSelectViewProps {
   onSelectLevel: (level: number) => void;
   onTogglePreviewMode: () => void;
   onToggleSound: () => void;
+  bgmEnabled: boolean;
+  onToggleBgm: () => void;
   onBack: () => void;
 }
 
@@ -44,6 +46,8 @@ export const LevelSelectView: React.FC<LevelSelectViewProps> = ({
   onSelectLevel,
   onTogglePreviewMode,
   onToggleSound,
+  bgmEnabled,
+  onToggleBgm,
   onBack,
 }) => {
   const defaultChapter = Math.min(10, Math.ceil(saveData.highestUnlockedLevel / 20));
@@ -358,11 +362,13 @@ export const LevelSelectView: React.FC<LevelSelectViewProps> = ({
         authLoading={authLoading}
         syncStatus={syncStatus}
         soundEnabled={saveData.soundEnabled}
+        bgmEnabled={bgmEnabled}
         highestUnlockedLevel={saveData.highestUnlockedLevel}
         totalScore={saveData.totalScore}
         onSignIn={onSignIn}
         onSignOut={onSignOut}
         onToggleSound={onToggleSound}
+        onToggleBgm={onToggleBgm}
       />
     </div>
   );

@@ -8,6 +8,7 @@ import {
   Clock,
   Layers,
   Cloud,
+  Music,
   UserCircle2,
 } from 'lucide-react';
 import { formatDuration, getLevelConfig, MAX_LEVEL } from '../data/levels';
@@ -33,6 +34,8 @@ interface TitleScreenProps {
   onStartCurrentLevel: () => void;
   onOpenLevelSelect: () => void;
   onToggleSound: () => void;
+  bgmEnabled: boolean;
+  onToggleBgm: () => void;
 }
 
 const WORLD_BANNER_URL = '/src/assets/images/pokemon_hero_world_1795064302567.jpg';
@@ -50,6 +53,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
   onStartCurrentLevel,
   onOpenLevelSelect,
   onToggleSound,
+  bgmEnabled,
+  onToggleBgm,
 }) => {
   const [imgError, setImgError] = useState(false);
   const [accountSheetOpen, setAccountSheetOpen] = useState(false);
@@ -129,6 +134,19 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
               onSignIn={onSignIn}
               onSignOut={onSignOut}
             />
+            <button
+              type="button"
+              onClick={onToggleBgm}
+              title={bgmEnabled ? 'Tắt nhạc nền' : 'Bật nhạc nền'}
+              aria-label={bgmEnabled ? 'Tắt nhạc nền' : 'Bật nhạc nền'}
+              className={`p-2 rounded-lg border border-red-900 transition-colors cursor-pointer shrink-0 ${
+                bgmEnabled && saveData.soundEnabled
+                  ? 'bg-[#B91C1C] text-[#FACC15] hover:bg-[#991B1B]'
+                  : 'bg-[#991B1B]/60 text-red-200/50 hover:text-white'
+              }`}
+            >
+              <Music className="w-4 h-4" />
+            </button>
             <button
               type="button"
               onClick={onToggleSound}
@@ -363,11 +381,13 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
         authLoading={authLoading}
         syncStatus={syncStatus}
         soundEnabled={saveData.soundEnabled}
+        bgmEnabled={bgmEnabled}
         highestUnlockedLevel={saveData.highestUnlockedLevel}
         totalScore={saveData.totalScore}
         onSignIn={onSignIn}
         onSignOut={onSignOut}
         onToggleSound={onToggleSound}
+        onToggleBgm={onToggleBgm}
       />
     </div>
   );
