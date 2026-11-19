@@ -1,12 +1,22 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Eye, EyeOff, Lock, Play, Star } from 'lucide-react';
 import { CHAPTER_NAMES, formatDuration, getLevelConfig, MAX_LEVEL } from '../data/levels';
+import { CloudSyncStatus } from '../firebase';
 import { SaveData } from '../types/game';
+import { RememberedAccount } from '../utils/localAccountCache';
+import { AccountBar } from './AccountBar';
 import { PokeballIcon } from './PokeballIcon';
 
 interface LevelSelectViewProps {
   saveData: SaveData;
+  activeAccount: RememberedAccount | null;
+  hasLiveCloudAuth: boolean;
+  authReady: boolean;
+  authLoading: boolean;
+  syncStatus: CloudSyncStatus;
   isPreviewMode: boolean;
+  onSignIn: (forceSelectAccount?: boolean) => void;
+  onSignOut: () => void;
   onSelectLevel: (level: number) => void;
   onTogglePreviewMode: () => void;
   onBack: () => void;
@@ -21,7 +31,14 @@ function getBallVariant(chapter: number): 'poke' | 'great' | 'ultra' | 'master' 
 
 export const LevelSelectView: React.FC<LevelSelectViewProps> = ({
   saveData,
+  activeAccount,
+  hasLiveCloudAuth,
+  authReady,
+  authLoading,
+  syncStatus,
   isPreviewMode,
+  onSignIn,
+  onSignOut,
   onSelectLevel,
   onTogglePreviewMode,
   onBack,
@@ -55,9 +72,9 @@ export const LevelSelectView: React.FC<LevelSelectViewProps> = ({
 
   return (
     <div className="min-h-screen bg-[#111827] text-slate-100 flex flex-col">
-      {/* Pokédex Crimson Header */}
+      {/* Crimson Header */}
       <header className="w-full bg-[#B91C1C] border-b-4 border-[#0F172A] shadow-md">
-        <div className="max-w-6xl mx-auto px-6 py-3.5 flex items-center justify-between gap-4">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <button
             type="button"
             onClick={onBack}
@@ -67,15 +84,27 @@ export const LevelSelectView: React.FC<LevelSelectViewProps> = ({
             Trang chính
           </button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <PokeballIcon variant={getBallVariant(activeChapter)} className="w-6 h-6 shrink-0" />
-            <h1 className="font-display text-lg sm:text-xl font-extrabold text-white whitespace-nowrap">
+            <h1 className="font-display text-base sm:text-xl font-extrabold text-white whitespace-nowrap truncate">
               Bản đồ 200 Đấu Trường
             </h1>
           </div>
 
-          <div className="text-xs sm:text-sm font-mono-num text-red-100 whitespace-nowrap shrink-0">
-            Đã mở: {saveData.highestUnlockedLevel}/200
+          <div className="flex items-center gap-3 shrink-0">
+            <span className="hidden md:inline text-xs sm:text-sm font-mono-num text-red-100 whitespace-nowrap">
+              Đã mở: {saveData.highestUnlockedLevel}/200
+            </span>
+            <AccountBar
+              account={activeAccount}
+              hasLiveCloudAuth={hasLiveCloudAuth}
+              authReady={authReady}
+              authLoading={authLoading}
+              syncStatus={syncStatus}
+              onSignIn={onSignIn}
+              onSignOut={onSignOut}
+              compact
+            />
           </div>
         </div>
       </header>

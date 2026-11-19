@@ -1,0 +1,278 @@
+import { initializeApp } from 'firebase/app';
+import {
+  browserLocalPersistence,
+  getAuth,
+  GoogleAuthProvider,
+  indexedDBLocalPersistence,
+  setPersistence,
+  signInWithPopup,
+  signOut,
+  User,
+} from 'firebase/auth';
+import {
+  doc,
+  getDocFromServer,
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+} from 'firebase/firestore';
+import firebaseConfig from '../firebase-applet-config.json';
+import { MAX_LEVEL } from './data/levels';
+import { LevelProgress, SaveData } from './types/game';
+
+const app = initializeApp(firebaseConfig);
+
+function createFirestoreInstance() {
+  try {
+    return initializeFirestore(
+      app,
+      {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager(),
+        }),
+      },
+      firebaseConfig.firestoreDatabaseId
+    );
+  } catch {
+    return getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  }
+}
+
+export const db = createFirestoreInstance();
+export const auth = getAuth(app);
+
+void setPersistence(auth, indexedDBLocalPersistence).catch(() => {
+  void setPersistence(auth, browserLocalPersistence).catch(() => {
+    // Fallback to default SDK persistence
+  });
+});
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+export function handleFirestoreError(
+  error: unknown,
+  operationType: OperationType,
+  path: string | null
+): never {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo:
+        auth.currentUser?.providerData?.map((provider) => ({
+          providerId: provider.providerId,
+          email: provider.email,
+        })) || [],
+    },
+    operationType,
+    path,
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error('Please check your Firebase configuration.');
+    }
+  }
+}
+
+void testConnection();
+
+export type CloudSyncStatus = 'local' | 'remembered' | 'syncing' | 'synced' | 'error';
+
+const VALID_UID_REGEX = /^[a-zA-Z0-9_-]+$/;
+
+function sanitizeDisplayName(name: string | null | undefined): string {
+  const trimmed = (name ?? '').trim();
+  if (!trimmed) return 'Người chơi';
+  return trimmed.slice(0, 80);
+}
+
+function sanitizeEmail(email: string | null | undefined): string {
+  const trimmed = (email ?? '').trim();
+  if (trimmed.length >= 3) return trimmed.slice(0, 160);
+  return 'player@chibimon.app';
+}
+
+function sanitizePhotoURL(url: string | null | undefined): string {
+  const trimmed = (url ?? '').trim();
+  return trimmed.slice(0, 500);
+}
+
+function clampInt(val: number, min: number, max: number): number {
+  if (!Number.isFinite(val)) return min;
+  return Math.max(min, Math.min(max, Math.floor(val)));
+}
+
+export function sanitizeLevelsMap(
+  rawLevels: Record<number | string, LevelProgress> | undefined
+): Record<string, LevelProgress> {
+  const out: Record<string, LevelProgress> = {};
+  if (!rawLevels || typeof rawLevels !== 'object') return out;
+
+  const entries = Object.entries(rawLevels)
+    .filter(([key]) => {
+      const n = Number(key);
+      return Number.isInteger(n) && n >= 1 && n <= MAX_LEVEL;
+    })
+    .slice(0, MAX_LEVEL);
+
+  for (const [key, val] of entries) {
+    if (!val || typeof val !== 'object') continue;
+    out[String(Number(key))] = {
+      completed: Boolean(val.completed),
+      stars: clampInt(Number(val.stars ?? 0), 0, 3),
+      bestScore: clampInt(Number(val.bestScore ?? 0), 0, 500000000),
+      bestTimeRemaining: clampInt(Number(val.bestTimeRemaining ?? 0), 0, 3600),
+    };
+  }
+  return out;
+}
+
+export function normalizeLevelsFromCloud(raw: unknown): Record<number, LevelProgress> {
+  const result: Record<number, LevelProgress> = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return result;
+
+  for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+    const levelNum = Number(key);
+    if (!Number.isInteger(levelNum) || levelNum < 1 || levelNum > MAX_LEVEL) continue;
+    if (!val || typeof val !== 'object') continue;
+    const item = val as Record<string, unknown>;
+    result[levelNum] = {
+      completed: Boolean(item.completed),
+      stars: clampInt(Number(item.stars ?? 0), 0, 3),
+      bestScore: clampInt(Number(item.bestScore ?? 0), 0, 500000000),
+      bestTimeRemaining: clampInt(Number(item.bestTimeRemaining ?? 0), 0, 3600),
+    };
+  }
+  return result;
+}
+
+export async function signInWithGoogle(forceSelectAccount = false): Promise<User> {
+  try {
+    await setPersistence(auth, indexedDBLocalPersistence);
+  } catch {
+    try {
+      await setPersistence(auth, browserLocalPersistence);
+    } catch {
+      // Keep default SDK persistence
+    }
+  }
+  const provider = new GoogleAuthProvider();
+  if (forceSelectAccount) {
+    provider.setCustomParameters({ prompt: 'select_account' });
+  }
+  const credential = await signInWithPopup(auth, provider);
+  return credential.user;
+}
+
+export async function signOutPlayer(): Promise<void> {
+  await signOut(auth);
+}
+
+export async function createPlayerProfile(user: User, initialSave: SaveData): Promise<void> {
+  if (!VALID_UID_REGEX.test(user.uid) || user.uid.length > 128) {
+    throw new Error('Invalid user UID format');
+  }
+  const path = `users/${user.uid}`;
+  const docRef = doc(db, 'users', user.uid);
+
+  const payload = {
+    uid: user.uid,
+    displayName: sanitizeDisplayName(user.displayName),
+    email: sanitizeEmail(user.email),
+    photoURL: sanitizePhotoURL(user.photoURL),
+    highestUnlockedLevel: clampInt(initialSave.highestUnlockedLevel, 1, MAX_LEVEL),
+    totalScore: clampInt(initialSave.totalScore, 0, 500000000),
+    soundEnabled: Boolean(initialSave.soundEnabled),
+    levels: sanitizeLevelsMap(initialSave.levels),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+
+  try {
+    await setDoc(docRef, payload);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function syncPlayerIdentity(user: User): Promise<void> {
+  const path = `users/${user.uid}`;
+  const docRef = doc(db, 'users', user.uid);
+  try {
+    await updateDoc(docRef, {
+      displayName: sanitizeDisplayName(user.displayName),
+      email: sanitizeEmail(user.email),
+      photoURL: sanitizePhotoURL(user.photoURL),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function savePlayerProgressToCloud(uid: string, nextSave: SaveData): Promise<void> {
+  const path = `users/${uid}`;
+  const docRef = doc(db, 'users', uid);
+  try {
+    await updateDoc(docRef, {
+      highestUnlockedLevel: clampInt(nextSave.highestUnlockedLevel, 1, MAX_LEVEL),
+      totalScore: clampInt(nextSave.totalScore, 0, 500000000),
+      levels: sanitizeLevelsMap(nextSave.levels),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function savePlayerSoundToCloud(uid: string, soundEnabled: boolean): Promise<void> {
+  const path = `users/${uid}`;
+  const docRef = doc(db, 'users', uid);
+  try {
+    await updateDoc(docRef, {
+      soundEnabled: Boolean(soundEnabled),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}

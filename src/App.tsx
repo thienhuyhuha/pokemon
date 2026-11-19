@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { doc, onSnapshot } from 'firebase/firestore';
 import {
   ArrowLeft,
   Lightbulb,
@@ -20,6 +22,20 @@ import {
   MAX_LEVEL,
 } from './data/levels';
 import {
+  auth,
+  CloudSyncStatus,
+  createPlayerProfile,
+  db,
+  handleFirestoreError,
+  normalizeLevelsFromCloud,
+  OperationType,
+  savePlayerProgressToCloud,
+  savePlayerSoundToCloud,
+  signInWithGoogle,
+  signOutPlayer,
+  syncPlayerIdentity,
+} from './firebase';
+import {
   ActiveConnection,
   BoardGrid,
   FloatingScore,
@@ -28,6 +44,19 @@ import {
   LevelConfig,
   SaveData,
 } from './types/game';
+import {
+  clearGuestSaveData,
+  clearRememberedAccount,
+  DEFAULT_SAVE,
+  getRememberedAccount,
+  loadGuestSaveData,
+  loadPlayerLocalSave,
+  mergeSaveData,
+  RememberedAccount,
+  saveGuestSaveData,
+  savePlayerLocalSave,
+  setRememberedAccount,
+} from './utils/localAccountCache';
 import {
   applyGravity,
   cloneBoard,
@@ -42,37 +71,64 @@ import {
 } from './utils/pathfinding';
 import { sound } from './utils/sound';
 
-const STORAGE_KEY = 'pokeconnect_200_save_v2';
-
-const DEFAULT_SAVE: SaveData = {
-  highestUnlockedLevel: 1,
-  totalScore: 0,
-  soundEnabled: true,
-  levels: {},
-};
-
-function loadSaveData(): SaveData {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_SAVE;
-    const parsed = JSON.parse(raw) as Partial<SaveData>;
-    return {
-      highestUnlockedLevel: Math.max(
-        1,
-        Math.min(MAX_LEVEL, parsed.highestUnlockedLevel ?? 1)
-      ),
-      totalScore: parsed.totalScore ?? 0,
-      soundEnabled: parsed.soundEnabled ?? true,
-      levels: parsed.levels ?? {},
-    };
-  } catch {
-    return DEFAULT_SAVE;
+function computeWinSaveData(
+  prevSave: SaveData,
+  level: number,
+  finalRoundScore: number,
+  stars: number,
+  timeRemaining: number
+): SaveData | null {
+  if (level > prevSave.highestUnlockedLevel) {
+    return null;
   }
+  const prevLv = prevSave.levels[level];
+  const bestScore = Math.max(prevLv?.bestScore ?? 0, finalRoundScore);
+  const bestStars = Math.max(prevLv?.stars ?? 0, stars);
+  const bestTimeRemaining = Math.max(
+    prevLv?.bestTimeRemaining ?? 0,
+    timeRemaining
+  );
+  const scoreDelta = prevLv
+    ? Math.max(0, finalRoundScore - prevLv.bestScore)
+    : finalRoundScore;
+
+  return {
+    ...prevSave,
+    highestUnlockedLevel: Math.min(
+      MAX_LEVEL,
+      Math.max(prevSave.highestUnlockedLevel, level + 1)
+    ),
+    totalScore: prevSave.totalScore + scoreDelta,
+    levels: {
+      ...prevSave.levels,
+      [level]: {
+        completed: true,
+        stars: bestStars,
+        bestScore,
+        bestTimeRemaining,
+      },
+    },
+  };
 }
 
 export default function App() {
+  const [rememberedAccount, setRememberedAccountState] = useState<RememberedAccount | null>(() =>
+    getRememberedAccount()
+  );
+  const [user, setUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState<boolean>(false);
+  const [authLoading, setAuthLoading] = useState<boolean>(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<CloudSyncStatus>(() =>
+    getRememberedAccount() ? 'remembered' : 'local'
+  );
+  const [fatalError, setFatalError] = useState<Error | null>(null);
+
   const [saveData, setSaveData] = useState<SaveData>(() => {
-    const loaded = loadSaveData();
+    const remembered = getRememberedAccount();
+    const loaded = remembered
+      ? (loadPlayerLocalSave(remembered.uid) ?? loadGuestSaveData())
+      : loadGuestSaveData();
     sound.enabled = loaded.soundEnabled;
     return loaded;
   });
@@ -99,6 +155,12 @@ export default function App() {
   const [lastShiftLabel, setLastShiftLabel] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  const saveDataRef = useRef<SaveData>(saveData);
+  const boardRef = useRef<BoardGrid>(board);
+  const creatingProfileUidRef = useRef<string | null>(null);
+  const identitySyncedUidRef = useRef<string | null>(null);
+  const mergeSyncedUidRef = useRef<string | null>(null);
+
   const lastMatchAtRef = useRef<number>(0);
   const matchLockedRef = useRef<boolean>(false);
   const matchTimerRef = useRef<number | null>(null);
@@ -106,19 +168,19 @@ export default function App() {
   const invalidTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(saveData));
-    } catch {
-      // Ignore storage quota errors
-    }
+    saveDataRef.current = saveData;
   }, [saveData]);
+
+  useEffect(() => {
+    boardRef.current = board;
+  }, [board]);
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
     toastTimerRef.current = window.setTimeout(() => {
       setToastMessage(null);
-    }, 2600);
+    }, 3000);
   }, []);
 
   const clearPendingTimers = useCallback(() => {
@@ -139,6 +201,241 @@ export default function App() {
       if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
     };
   }, [clearPendingTimers]);
+
+  // Persist current player's progress locally on their machine
+  useEffect(() => {
+    const activeUid = user?.uid ?? rememberedAccount?.uid ?? null;
+    if (activeUid) {
+      savePlayerLocalSave(activeUid, saveData);
+      return;
+    }
+    if (!authReady) return;
+    saveGuestSaveData(saveData);
+  }, [authReady, user, rememberedAccount, saveData]);
+
+  // Listen for Firebase Auth state changes
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (nextUser) => {
+      setUser(nextUser);
+      setAuthReady(true);
+
+      if (!nextUser) {
+        creatingProfileUidRef.current = null;
+        identitySyncedUidRef.current = null;
+        mergeSyncedUidRef.current = null;
+
+        const remembered = getRememberedAccount();
+        if (remembered) {
+          setRememberedAccountState(remembered);
+          setSyncStatus('remembered');
+          const cached = loadPlayerLocalSave(remembered.uid) ?? DEFAULT_SAVE;
+          sound.enabled = cached.soundEnabled;
+          setSaveData(cached);
+        } else {
+          setRememberedAccountState(null);
+          setSyncStatus('local');
+          const guest = loadGuestSaveData();
+          sound.enabled = guest.soundEnabled;
+          setSaveData(guest);
+        }
+        return;
+      }
+
+      const acct: RememberedAccount = {
+        uid: nextUser.uid,
+        displayName: nextUser.displayName?.trim().slice(0, 80) || 'Người chơi',
+        email: nextUser.email?.trim().slice(0, 160) || '',
+        photoURL: nextUser.photoURL?.trim().slice(0, 500) || '',
+      };
+      setRememberedAccount(acct);
+      setRememberedAccountState(acct);
+      setAuthError(null);
+      setSyncStatus('syncing');
+
+      const cached = loadPlayerLocalSave(nextUser.uid);
+      if (cached) {
+        sound.enabled = cached.soundEnabled;
+        setSaveData(cached);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // Attach Firestore real-time listener for the authenticated player
+  useEffect(() => {
+    if (!authReady || !user) return;
+
+    const path = `users/${user.uid}`;
+    const docRef = doc(db, 'users', user.uid);
+    let active = true;
+
+    const unsubscribe = onSnapshot(
+      docRef,
+      (snap) => {
+        if (!active) return;
+
+        if (snap.exists()) {
+          const data = snap.data();
+          const cloudSave: SaveData = {
+            highestUnlockedLevel: Math.max(
+              1,
+              Math.min(MAX_LEVEL, Number(data.highestUnlockedLevel) || 1)
+            ),
+            totalScore: Math.max(0, Number(data.totalScore) || 0),
+            soundEnabled:
+              typeof data.soundEnabled === 'boolean' ? data.soundEnabled : true,
+            levels: normalizeLevelsFromCloud(data.levels),
+          };
+
+          const localCached = loadPlayerLocalSave(user.uid);
+          const { merged, cloudNeedsUpdate } = mergeSaveData(cloudSave, localCached);
+
+          sound.enabled = merged.soundEnabled;
+          setSaveData(merged);
+          savePlayerLocalSave(user.uid, merged);
+
+          if (cloudNeedsUpdate && mergeSyncedUidRef.current !== user.uid) {
+            mergeSyncedUidRef.current = user.uid;
+            setSyncStatus('syncing');
+            void savePlayerProgressToCloud(user.uid, merged)
+              .then(() => {
+                if (active) setSyncStatus('synced');
+              })
+              .catch((err: unknown) => {
+                if (!active) return;
+                setSyncStatus('error');
+                if (err instanceof Error && err.message.includes('Quota exceeded')) {
+                  showToast('Đã đạt giới hạn lưu trữ miễn phí hôm nay.');
+                  return;
+                }
+                setFatalError(err instanceof Error ? err : new Error(String(err)));
+              });
+          } else {
+            setSyncStatus('synced');
+          }
+
+          if (identitySyncedUidRef.current !== user.uid) {
+            identitySyncedUidRef.current = user.uid;
+            const needsIdentityUpdate =
+              data.displayName !== (user.displayName?.trim().slice(0, 80) || 'Người chơi') ||
+              data.email !== (user.email?.trim().slice(0, 160) || 'player@chibimon.app') ||
+              data.photoURL !== (user.photoURL?.trim().slice(0, 500) || '');
+            if (needsIdentityUpdate) {
+              void syncPlayerIdentity(user).catch((err: unknown) => {
+                setSyncStatus('error');
+                if (err instanceof Error && err.message.includes('Quota exceeded')) {
+                  showToast('Đã đạt giới hạn đọc/ghi miễn phí hôm nay, dữ liệu sẽ thử lại sau.');
+                  return;
+                }
+                setFatalError(err instanceof Error ? err : new Error(String(err)));
+              });
+            }
+          }
+          return;
+        }
+
+        // First login for this Google account: create player profile
+        if (creatingProfileUidRef.current === user.uid) return;
+        creatingProfileUidRef.current = user.uid;
+
+        const existingLocal = loadPlayerLocalSave(user.uid);
+        const guest = loadGuestSaveData();
+        const hasGuestProgress =
+          guest.highestUnlockedLevel > 1 || Object.keys(guest.levels).length > 0;
+        const initialSave = existingLocal ?? (hasGuestProgress ? guest : DEFAULT_SAVE);
+
+        void createPlayerProfile(user, initialSave)
+          .then(() => {
+            if (!active) return;
+            if (!existingLocal && hasGuestProgress) {
+              clearGuestSaveData();
+            }
+            savePlayerLocalSave(user.uid, initialSave);
+            identitySyncedUidRef.current = user.uid;
+            sound.enabled = initialSave.soundEnabled;
+            setSaveData(initialSave);
+            setSyncStatus('synced');
+          })
+          .catch((err: unknown) => {
+            if (!active) return;
+            creatingProfileUidRef.current = null;
+            setSyncStatus('error');
+            if (err instanceof Error && err.message.includes('Quota exceeded')) {
+              showToast('Đã đạt giới hạn lưu trữ miễn phí hôm nay.');
+              return;
+            }
+            setFatalError(err instanceof Error ? err : new Error(String(err)));
+          });
+      },
+      (error) => {
+        if (!active) return;
+        setSyncStatus('error');
+        if (error.message.includes('Quota exceeded')) {
+          showToast('Đã đạt giới hạn đọc/ghi miễn phí hôm nay.');
+          return;
+        }
+        try {
+          handleFirestoreError(error, OperationType.GET, path);
+        } catch (wrapped) {
+          setFatalError(wrapped instanceof Error ? wrapped : new Error(String(wrapped)));
+        }
+      }
+    );
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [authReady, user, showToast]);
+
+  const handleSignIn = useCallback(
+    async (forceSelectAccount = false) => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        setAuthError(
+          'Bạn đang ở chế độ Offline. Hãy kết nối mạng để đăng nhập/đồng bộ Google — bạn vẫn có thể chơi offline ngay lúc này!'
+        );
+        return;
+      }
+      setAuthLoading(true);
+      setAuthError(null);
+      try {
+        clearPendingTimers();
+        await signInWithGoogle(forceSelectAccount);
+        setGameState((prev) => (prev === 'PLAYING' || prev === 'PAUSED' ? 'TITLE_MENU' : prev));
+      } catch (err: unknown) {
+        const code = (err as { code?: string })?.code ?? '';
+        if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+          setAuthError('Bạn đã đóng cửa sổ đăng nhập Google.');
+        } else if (code === 'auth/popup-blocked') {
+          setAuthError('Trình duyệt đã chặn cửa sổ đăng nhập. Vui lòng cho phép popup và thử lại.');
+        } else if (code === 'auth/network-request-failed') {
+          setAuthError('Không có kết nối mạng. Bạn vẫn có thể tiếp tục chơi chế độ Offline.');
+        } else {
+          setAuthError('Không thể đăng nhập lúc này. Vui lòng thử lại sau.');
+        }
+      } finally {
+        setAuthLoading(false);
+      }
+    },
+    [clearPendingTimers]
+  );
+
+  const handleSignOut = useCallback(async () => {
+    clearPendingTimers();
+    setAuthError(null);
+    clearRememberedAccount();
+    setRememberedAccountState(null);
+    try {
+      await signOutPlayer();
+      const guest = loadGuestSaveData();
+      sound.enabled = guest.soundEnabled;
+      setSaveData(guest);
+      setSyncStatus('local');
+      setGameState('TITLE_MENU');
+    } catch {
+      showToast('Không thể đăng xuất lúc này, vui lòng thử lại.');
+    }
+  }, [clearPendingTimers, showToast]);
 
   const startLevel = useCallback(
     (levelNum: number) => {
@@ -195,12 +492,24 @@ export default function App() {
   }, [gameState]);
 
   const handleToggleSound = useCallback(() => {
-    setSaveData((prev) => {
-      const nextSound = !prev.soundEnabled;
-      sound.enabled = nextSound;
-      return { ...prev, soundEnabled: nextSound };
-    });
-  }, []);
+    const nextSound = !saveDataRef.current.soundEnabled;
+    sound.enabled = nextSound;
+    setSaveData((prev) => ({ ...prev, soundEnabled: nextSound }));
+
+    if (user) {
+      setSyncStatus('syncing');
+      void savePlayerSoundToCloud(user.uid, nextSound)
+        .then(() => setSyncStatus('synced'))
+        .catch((err: unknown) => {
+          setSyncStatus('error');
+          if (err instanceof Error && err.message.includes('Quota exceeded')) {
+            showToast('Đã đạt giới hạn lưu trữ miễn phí hôm nay.');
+            return;
+          }
+          setFatalError(err instanceof Error ? err : new Error(String(err)));
+        });
+    }
+  }, [user, showToast]);
 
   const handleTogglePreviewMode = useCallback(() => {
     setIsPreviewMode((prev) => !prev);
@@ -327,79 +636,76 @@ export default function App() {
       matchTimerRef.current = window.setTimeout(() => {
         setActiveConnection(null);
 
-        setBoard((prevBoard) => {
-          let next = cloneBoard(prevBoard);
-          next = thawAdjacentFrozen(next, firstPos, { r, c });
-          next[firstPos.r][firstPos.c] = null;
-          next[r][c] = null;
+        let next = cloneBoard(boardRef.current);
+        next = thawAdjacentFrozen(next, firstPos, { r, c });
+        next[firstPos.r][firstPos.c] = null;
+        next[r][c] = null;
 
-          const shifted = applyGravity(
-            next,
-            levelConfig.gravityMode,
-            nextMatchedCount,
-            firstPos,
-            { r, c }
+        const shifted = applyGravity(
+          next,
+          levelConfig.gravityMode,
+          nextMatchedCount,
+          firstPos,
+          { r, c }
+        );
+        next = shifted.board;
+        setLastShiftLabel(getDirectionLabel(shifted.direction));
+
+        const remaining = countRemainingTiles(next);
+        if (remaining === 0) {
+          setBoard(next);
+          sound.playWin();
+          const ratio = timeRemaining / levelConfig.timeLimitSeconds;
+          const stars = ratio >= 0.4 ? 3 : ratio >= 0.2 ? 2 : 1;
+          const timeBonus = timeRemaining * 15;
+          const finalRoundScore = score + pointsEarned + timeBonus;
+
+          setScore(finalRoundScore);
+          setEarnedStars(stars);
+          setGameState('ROUND_SUMMARY');
+
+          // Only save progression if this level was legitimately unlocked
+          const nextSave = computeWinSaveData(
+            saveDataRef.current,
+            levelConfig.level,
+            finalRoundScore,
+            stars,
+            timeRemaining
           );
-          next = shifted.board;
-          setLastShiftLabel(getDirectionLabel(shifted.direction));
-
-          const remaining = countRemainingTiles(next);
-          if (remaining === 0) {
-            sound.playWin();
-            const ratio = timeRemaining / levelConfig.timeLimitSeconds;
-            const stars = ratio >= 0.4 ? 3 : ratio >= 0.2 ? 2 : 1;
-            const timeBonus = timeRemaining * 15;
-            const finalRoundScore = score + pointsEarned + timeBonus;
-
-            setScore(finalRoundScore);
-            setEarnedStars(stars);
-            setGameState('ROUND_SUMMARY');
-
-            // Only save progression if this level was legitimately unlocked
-            setSaveData((prevSave) => {
-              if (levelConfig.level > prevSave.highestUnlockedLevel) {
-                return prevSave;
-              }
-              const prevLv = prevSave.levels[levelConfig.level];
-              const bestScore = Math.max(prevLv?.bestScore ?? 0, finalRoundScore);
-              const bestStars = Math.max(prevLv?.stars ?? 0, stars);
-              const bestTimeRemaining = Math.max(
-                prevLv?.bestTimeRemaining ?? 0,
-                timeRemaining
-              );
-              const scoreDelta = prevLv
-                ? Math.max(0, finalRoundScore - prevLv.bestScore)
-                : finalRoundScore;
-
-              return {
-                ...prevSave,
-                highestUnlockedLevel: Math.min(
-                  MAX_LEVEL,
-                  Math.max(prevSave.highestUnlockedLevel, levelConfig.level + 1)
-                ),
-                totalScore: prevSave.totalScore + scoreDelta,
-                levels: {
-                  ...prevSave.levels,
-                  [levelConfig.level]: {
-                    completed: true,
-                    stars: bestStars,
-                    bestScore,
-                    bestTimeRemaining,
-                  },
-                },
-              };
-            });
-          } else {
-            const recovery = ensurePlayableBoard(next);
-            next = recovery.board;
-            if (recovery.adjusted && recovery.reason) {
-              sound.playShuffle();
-              showToast(recovery.reason);
+          if (nextSave) {
+            setSaveData(nextSave);
+            const activeUid = user?.uid ?? rememberedAccount?.uid ?? null;
+            if (activeUid) {
+              savePlayerLocalSave(activeUid, nextSave);
+            }
+            if (user) {
+              const isOfflineNow = typeof navigator !== 'undefined' && !navigator.onLine;
+              setSyncStatus(isOfflineNow ? 'remembered' : 'syncing');
+              void savePlayerProgressToCloud(user.uid, nextSave)
+                .then(() => setSyncStatus('synced'))
+                .catch((err: unknown) => {
+                  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+                    setSyncStatus('remembered');
+                    return;
+                  }
+                  setSyncStatus('error');
+                  if (err instanceof Error && err.message.includes('Quota exceeded')) {
+                    showToast('Đã đạt giới hạn lưu trữ miễn phí hôm nay.');
+                    return;
+                  }
+                  setFatalError(err instanceof Error ? err : new Error(String(err)));
+                });
             }
           }
-
-          return next;
-        });
+        } else {
+          const recovery = ensurePlayableBoard(next);
+          next = recovery.board;
+          setBoard(next);
+          if (recovery.adjusted && recovery.reason) {
+            sound.playShuffle();
+            showToast(recovery.reason);
+          }
+        }
 
         matchLockedRef.current = false;
       }, 190);
@@ -412,10 +718,12 @@ export default function App() {
       levelConfig.level,
       levelConfig.timeLimitSeconds,
       pairsMatched,
+      rememberedAccount,
       score,
       selected,
       showToast,
       timeRemaining,
+      user,
     ]
   );
 
@@ -436,10 +744,31 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [gameState, handleHint, handleShuffle]);
 
+  if (fatalError) {
+    throw fatalError;
+  }
+
+  const activeAccount: RememberedAccount | null = user
+    ? {
+        uid: user.uid,
+        displayName: user.displayName?.trim().slice(0, 80) || 'Người chơi',
+        email: user.email?.trim().slice(0, 160) || '',
+        photoURL: user.photoURL?.trim().slice(0, 500) || '',
+      }
+    : rememberedAccount;
+
   if (gameState === 'TITLE_MENU') {
     return (
       <TitleScreen
         saveData={saveData}
+        activeAccount={activeAccount}
+        hasLiveCloudAuth={Boolean(user)}
+        authReady={authReady}
+        authLoading={authLoading}
+        syncStatus={syncStatus}
+        authError={authError}
+        onSignIn={handleSignIn}
+        onSignOut={handleSignOut}
         onStartCurrentLevel={() => startLevel(saveData.highestUnlockedLevel)}
         onOpenLevelSelect={() => setGameState('LEVEL_SELECT')}
         onToggleSound={handleToggleSound}
@@ -451,7 +780,14 @@ export default function App() {
     return (
       <LevelSelectView
         saveData={saveData}
+        activeAccount={activeAccount}
+        hasLiveCloudAuth={Boolean(user)}
+        authReady={authReady}
+        authLoading={authLoading}
+        syncStatus={syncStatus}
         isPreviewMode={isPreviewMode}
+        onSignIn={handleSignIn}
+        onSignOut={handleSignOut}
         onSelectLevel={(lv) => startLevel(lv)}
         onTogglePreviewMode={handleTogglePreviewMode}
         onBack={() => setGameState('TITLE_MENU')}

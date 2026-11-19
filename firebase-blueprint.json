@@ -1,0 +1,83 @@
+{
+  "entities": {
+    "PlayerProfile": {
+      "title": "PlayerProfile",
+      "description": "Stores a single authenticated player's ChibiMon 200 progression, preferences, and per-level records.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Authentication UID of the player.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name of the player.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Verified Google account email address (PII, owner-only).",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Optional avatar URL from Google profile.",
+          "minLength": 0,
+          "maxLength": 500
+        },
+        "highestUnlockedLevel": {
+          "type": "integer",
+          "description": "Highest level unlocked by the player (1 to 200)."
+        },
+        "totalScore": {
+          "type": "integer",
+          "description": "Cumulative best score across all completed levels."
+        },
+        "soundEnabled": {
+          "type": "boolean",
+          "description": "Whether Web Audio sound effects are enabled."
+        },
+        "levels": {
+          "type": "object",
+          "description": "Map of level numbers ('1'..'200') to LevelProgress objects containing completed, stars, bestScore, and bestTimeRemaining."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the player profile was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the player profile was last updated."
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "email",
+        "photoURL",
+        "highestUnlockedLevel",
+        "totalScore",
+        "soundEnabled",
+        "levels",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/PlayerProfile"
+      },
+      "description": "Private player progression document owned strictly by the matching Firebase Auth user."
+    }
+  }
+}

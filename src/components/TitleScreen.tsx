@@ -1,12 +1,24 @@
 import React, { useState } from 'react';
-import { Play, Grid3X3, Volume2, VolumeX, ShieldCheck, Clock, Layers } from 'lucide-react';
+import { Play, Grid3X3, Volume2, VolumeX, ShieldCheck, Clock, Layers, Cloud } from 'lucide-react';
 import { formatDuration, getLevelConfig, MAX_LEVEL } from '../data/levels';
 import { getPokemonSpecies, PokemonArtwork } from '../data/pokemonSprites';
+import { CloudSyncStatus } from '../firebase';
 import { SaveData } from '../types/game';
+import { RememberedAccount } from '../utils/localAccountCache';
+import { AccountBar } from './AccountBar';
 import { PokeballIcon } from './PokeballIcon';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface TitleScreenProps {
   saveData: SaveData;
+  activeAccount: RememberedAccount | null;
+  hasLiveCloudAuth: boolean;
+  authReady: boolean;
+  authLoading: boolean;
+  syncStatus: CloudSyncStatus;
+  authError: string | null;
+  onSignIn: (forceSelectAccount?: boolean) => void;
+  onSignOut: () => void;
   onStartCurrentLevel: () => void;
   onOpenLevelSelect: () => void;
   onToggleSound: () => void;
@@ -16,6 +28,14 @@ const WORLD_BANNER_URL = '/src/assets/images/pokemon_hero_world_1795064302567.jp
 
 export const TitleScreen: React.FC<TitleScreenProps> = ({
   saveData,
+  activeAccount,
+  hasLiveCloudAuth,
+  authReady,
+  authLoading,
+  syncStatus,
+  authError,
+  onSignIn,
+  onSignOut,
   onStartCurrentLevel,
   onOpenLevelSelect,
   onToggleSound,
@@ -28,17 +48,17 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 
   return (
     <div className="min-h-screen bg-[#0F172A] text-slate-100 flex flex-col">
-      {/* Pokédex Crimson Header */}
+      {/* Crimson Header */}
       <header className="w-full bg-[#DC2626] border-b-4 border-[#0F172A] shadow-md">
-        <div className="max-w-6xl mx-auto px-6 py-3.5 flex items-center justify-between gap-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5 shrink-0">
             <PokeballIcon variant="poke" className="w-7 h-7 shrink-0" />
-            <span className="font-display text-xl font-extrabold tracking-tight text-white whitespace-nowrap">
+            <span className="font-display text-lg sm:text-xl font-extrabold tracking-tight text-white whitespace-nowrap">
               ChibiMon 200
             </span>
           </div>
 
-          <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-red-50">
+          <nav className="hidden lg:flex items-center gap-6 text-sm font-semibold text-red-50">
             <button
               type="button"
               onClick={onOpenLevelSelect}
@@ -54,12 +74,22 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             </a>
           </nav>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2.5 shrink-0">
+            <PWAInstallButton />
+            <AccountBar
+              account={activeAccount}
+              hasLiveCloudAuth={hasLiveCloudAuth}
+              authReady={authReady}
+              authLoading={authLoading}
+              syncStatus={syncStatus}
+              onSignIn={onSignIn}
+              onSignOut={onSignOut}
+            />
             <button
               type="button"
               onClick={onToggleSound}
               aria-label={saveData.soundEnabled ? 'Tắt âm thanh' : 'Bật âm thanh'}
-              className="p-2 rounded-lg border border-red-900 bg-[#B91C1C] text-red-50 hover:text-white hover:bg-[#991B1B] transition-colors cursor-pointer"
+              className="p-2 rounded-lg border border-red-900 bg-[#B91C1C] text-red-50 hover:text-white hover:bg-[#991B1B] transition-colors cursor-pointer shrink-0"
             >
               {saveData.soundEnabled ? (
                 <Volume2 className="w-4 h-4" />
@@ -70,7 +100,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             <button
               type="button"
               onClick={onStartCurrentLevel}
-              className="px-4 py-2 rounded-lg bg-[#FACC15] hover:bg-yellow-300 text-slate-950 font-extrabold text-sm transition-colors whitespace-nowrap shrink-0 cursor-pointer shadow-[0_2px_0_#A16207]"
+              className="hidden sm:inline-flex px-4 py-2 rounded-lg bg-[#FACC15] hover:bg-yellow-300 text-slate-950 font-extrabold text-sm transition-colors whitespace-nowrap shrink-0 cursor-pointer shadow-[0_2px_0_#A16207]"
             >
               Đấu cấp {currentLevel}
             </button>
@@ -80,6 +110,12 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 
       {/* Main Content */}
       <main className="flex-1 w-full max-w-6xl mx-auto px-6 py-8 lg:py-10 flex flex-col gap-10">
+        {authError && (
+          <div className="rounded-lg bg-rose-950/60 border border-rose-700/70 px-4 py-2.5 text-xs sm:text-sm text-rose-200">
+            {authError}
+          </div>
+        )}
+
         {/* Hero Split */}
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
           <div className="lg:col-span-6 flex flex-col justify-center gap-5">
@@ -113,15 +149,36 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 <Grid3X3 className="w-4 h-4 text-[#FACC15]" />
                 Bản đồ cấp độ
               </button>
+              {authReady && !activeAccount && (
+                <button
+                  type="button"
+                  onClick={() => onSignIn(false)}
+                  disabled={authLoading}
+                  className="inline-flex items-center gap-2 px-4 py-3 rounded-lg border border-emerald-700/70 bg-emerald-950/50 hover:bg-emerald-900/60 text-emerald-200 font-semibold text-sm transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <Cloud className="w-4 h-4 text-emerald-300" />
+                  Lưu tiến trình bằng Google
+                </button>
+              )}
             </div>
 
             {/* Clean unboxed trainer stats */}
             <div className="pt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs sm:text-sm text-slate-400 font-mono-num">
+              {activeAccount && (
+                <>
+                  <span className="font-sans font-semibold text-emerald-300">
+                    Tài khoản: {activeAccount.displayName || activeAccount.email}
+                  </span>
+                  <span aria-hidden="true">·</span>
+                </>
+              )}
               <span>Đã mở: {saveData.highestUnlockedLevel}/200 cấp</span>
               <span aria-hidden="true">·</span>
               <span>Đã vượt: {completedCount}/200</span>
               <span aria-hidden="true">·</span>
               <span>Tổng sao: {totalStars}/600</span>
+              <span aria-hidden="true">·</span>
+              <span>Điểm: {saveData.totalScore.toLocaleString('vi-VN')}</span>
             </div>
           </div>
 

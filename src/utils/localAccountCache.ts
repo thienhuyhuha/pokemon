@@ -1,0 +1,213 @@
+import { MAX_LEVEL } from '../data/levels';
+import { LevelProgress, SaveData } from '../types/game';
+
+export interface RememberedAccount {
+  uid: string;
+  displayName: string;
+  email: string;
+  photoURL: string;
+}
+
+const GUEST_STORAGE_KEY = 'chibimon_200_guest_save_v1';
+const LEGACY_STORAGE_KEY = 'pokeconnect_200_save_v2';
+const REMEMBERED_ACCOUNT_KEY = 'chibimon_200_remembered_account_v1';
+const PLAYER_SAVE_PREFIX = 'chibimon_200_player_save_v1_';
+
+export const DEFAULT_SAVE: SaveData = {
+  highestUnlockedLevel: 1,
+  totalScore: 0,
+  soundEnabled: true,
+  levels: {},
+};
+
+function sanitizeLevelsRecord(raw: unknown): Record<number, LevelProgress> {
+  const result: Record<number, LevelProgress> = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return result;
+
+  for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+    const levelNum = Number(key);
+    if (!Number.isInteger(levelNum) || levelNum < 1 || levelNum > MAX_LEVEL) continue;
+    if (!val || typeof val !== 'object') continue;
+    const item = val as Record<string, unknown>;
+    result[levelNum] = {
+      completed: Boolean(item.completed),
+      stars: Math.max(0, Math.min(3, Math.floor(Number(item.stars ?? 0) || 0))),
+      bestScore: Math.max(0, Math.floor(Number(item.bestScore ?? 0) || 0)),
+      bestTimeRemaining: Math.max(0, Math.floor(Number(item.bestTimeRemaining ?? 0) || 0)),
+    };
+  }
+  return result;
+}
+
+function parseSaveString(raw: string | null): SaveData | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<SaveData>;
+    return {
+      highestUnlockedLevel: Math.max(
+        1,
+        Math.min(MAX_LEVEL, Math.floor(parsed.highestUnlockedLevel ?? 1))
+      ),
+      totalScore: Math.max(0, Math.floor(parsed.totalScore ?? 0)),
+      soundEnabled: typeof parsed.soundEnabled === 'boolean' ? parsed.soundEnabled : true,
+      levels: sanitizeLevelsRecord(parsed.levels),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function loadGuestSaveData(): SaveData {
+  try {
+    const current = parseSaveString(localStorage.getItem(GUEST_STORAGE_KEY));
+    if (current) return current;
+    const legacy = parseSaveString(localStorage.getItem(LEGACY_STORAGE_KEY));
+    if (legacy) return legacy;
+    return DEFAULT_SAVE;
+  } catch {
+    return DEFAULT_SAVE;
+  }
+}
+
+export function saveGuestSaveData(data: SaveData): void {
+  try {
+    localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(data));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+export function clearGuestSaveData(): void {
+  try {
+    localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(DEFAULT_SAVE));
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+export function getRememberedAccount(): RememberedAccount | null {
+  try {
+    const raw = localStorage.getItem(REMEMBERED_ACCOUNT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<RememberedAccount>;
+    if (!parsed.uid || typeof parsed.uid !== 'string') return null;
+    return {
+      uid: parsed.uid,
+      displayName: parsed.displayName || 'Người chơi',
+      email: parsed.email || '',
+      photoURL: parsed.photoURL || '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function setRememberedAccount(account: RememberedAccount): void {
+  try {
+    localStorage.setItem(REMEMBERED_ACCOUNT_KEY, JSON.stringify(account));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+export function clearRememberedAccount(): void {
+  try {
+    localStorage.removeItem(REMEMBERED_ACCOUNT_KEY);
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+export function loadPlayerLocalSave(uid: string): SaveData | null {
+  try {
+    return parseSaveString(localStorage.getItem(`${PLAYER_SAVE_PREFIX}${uid}`));
+  } catch {
+    return null;
+  }
+}
+
+export function savePlayerLocalSave(uid: string, data: SaveData): void {
+  try {
+    localStorage.setItem(`${PLAYER_SAVE_PREFIX}${uid}`, JSON.stringify(data));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+export function mergeSaveData(
+  cloudSave: SaveData,
+  localSave: SaveData | null
+): { merged: SaveData; cloudNeedsUpdate: boolean } {
+  if (!localSave) {
+    return { merged: cloudSave, cloudNeedsUpdate: false };
+  }
+
+  let cloudNeedsUpdate = false;
+  const mergedLevels: Record<number, LevelProgress> = { ...cloudSave.levels };
+
+  for (const [key, localLv] of Object.entries(localSave.levels)) {
+    const levelNum = Number(key);
+    const cloudLv = mergedLevels[levelNum];
+    if (!cloudLv) {
+      mergedLevels[levelNum] = localLv;
+      cloudNeedsUpdate = true;
+      continue;
+    }
+
+    const completed = cloudLv.completed || localLv.completed;
+    const stars = Math.max(cloudLv.stars, localLv.stars);
+    const bestScore = Math.max(cloudLv.bestScore, localLv.bestScore);
+    const bestTimeRemaining = Math.max(
+      cloudLv.bestTimeRemaining,
+      localLv.bestTimeRemaining
+    );
+
+    if (
+      completed !== cloudLv.completed ||
+      stars !== cloudLv.stars ||
+      bestScore !== cloudLv.bestScore ||
+      bestTimeRemaining !== cloudLv.bestTimeRemaining
+    ) {
+      mergedLevels[levelNum] = {
+        completed,
+        stars,
+        bestScore,
+        bestTimeRemaining,
+      };
+      cloudNeedsUpdate = true;
+    }
+  }
+
+  const maxAllowedUnlocked = Math.min(MAX_LEVEL, Object.keys(mergedLevels).length + 1);
+  const highestUnlockedLevel = Math.min(
+    maxAllowedUnlocked,
+    Math.max(cloudSave.highestUnlockedLevel, localSave.highestUnlockedLevel)
+  );
+  if (highestUnlockedLevel > cloudSave.highestUnlockedLevel) {
+    cloudNeedsUpdate = true;
+  }
+
+  const summedBestScores = Object.values(mergedLevels).reduce(
+    (sum, lv) => sum + (lv.bestScore || 0),
+    0
+  );
+  const totalScore = Math.max(
+    cloudSave.totalScore,
+    localSave.totalScore,
+    summedBestScores
+  );
+  if (totalScore > cloudSave.totalScore) {
+    cloudNeedsUpdate = true;
+  }
+
+  return {
+    merged: {
+      highestUnlockedLevel,
+      totalScore,
+      soundEnabled: cloudSave.soundEnabled,
+      levels: mergedLevels,
+    },
+    cloudNeedsUpdate,
+  };
+}
