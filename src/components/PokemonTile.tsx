@@ -20,7 +20,7 @@ export const PokemonTile: React.FC<PokemonTileProps> = React.memo(
     const species = getPokemonSpecies(tile.speciesId);
 
     return (
-      <div className={`w-full h-full ${dense ? 'p-[1px]' : 'p-[1.5px] sm:p-[2px]'}`}>
+      <div className={`w-full h-full ${dense ? 'p-[0.5px] sm:p-[1px]' : 'p-[1px] sm:p-[2px]'}`}>
         <button
           type="button"
           onClick={() => onSelect(r, c)}
@@ -37,20 +37,20 @@ export const PokemonTile: React.FC<PokemonTileProps> = React.memo(
                   : species.borderTint,
           }}
           className={[
-            'relative w-full h-full border transition-transform duration-150 ease-out select-none flex flex-col items-center justify-center overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400',
+            'relative w-full h-full min-w-0 min-h-0 leading-none border transition-transform duration-150 ease-out select-none flex flex-col items-center justify-center overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400',
             dense
               ? 'rounded-[3px] sm:rounded-[4px] p-[1px]'
-              : 'rounded-[6px] sm:rounded-[8px] border-[1.5px] p-[2px]',
+              : 'rounded-[5px] sm:rounded-[7px] border-[1.5px] p-[1.5px] sm:p-[2px]',
             tile.frozen
               ? 'cursor-not-allowed shadow-[inset_0_0_0_1.5px_rgba(56,189,248,0.45),0_2px_0_#0284C7]'
               : dense
-                ? 'cursor-pointer shadow-[0_1.5px_0_rgba(15,23,42,0.45)] hover:-translate-y-[1px] active:translate-y-[0.5px]'
-                : 'cursor-pointer shadow-[0_3px_0_rgba(15,23,42,0.45)] hover:-translate-y-[1.5px] active:translate-y-[1px]',
+                ? 'cursor-pointer shadow-[0_1.5px_0_rgba(15,23,42,0.45)] lg:hover:-translate-y-[1px] active:scale-95'
+                : 'cursor-pointer shadow-[0_2.5px_0_rgba(15,23,42,0.45)] lg:hover:-translate-y-[1px] active:scale-95',
             isSelected
-              ? 'ring-2 ring-yellow-400 -translate-y-[2px] shadow-[0_4px_14px_rgba(220,38,38,0.7)] z-20'
+              ? 'ring-2 ring-yellow-400 scale-[1.04] shadow-[0_4px_14px_rgba(220,38,38,0.75)] z-20'
               : '',
             isHinted && !isSelected
-              ? 'ring-2 ring-emerald-400 shadow-[0_0_16px_rgba(16,185,129,0.85)] animate-pulse z-20'
+              ? 'ring-2 ring-emerald-400 shadow-[0_0_14px_rgba(16,185,129,0.85)] animate-pulse z-20'
               : '',
             isMatching ? 'animate-pop-match pointer-events-none z-30' : '',
             isInvalid ? 'animate-shake-invalid ring-2 ring-rose-500' : '',
@@ -60,7 +60,7 @@ export const PokemonTile: React.FC<PokemonTileProps> = React.memo(
           <span
             style={{ backgroundColor: tile.frozen ? '#38BDF8' : species.borderTint }}
             className={`absolute top-0 inset-x-0 pointer-events-none opacity-85 ${
-              dense ? 'h-[2px]' : 'h-[2.5px]'
+              dense ? 'h-[1.5px] sm:h-[2px]' : 'h-[2px] sm:h-[2.5px]'
             }`}
           />
 

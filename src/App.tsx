@@ -4,6 +4,8 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import {
   ArrowLeft,
   Lightbulb,
+  Maximize2,
+  Minimize2,
   Pause,
   Play,
   RotateCcw,
@@ -37,6 +39,7 @@ import {
   signOutPlayer,
   syncPlayerIdentity,
 } from './firebase';
+import { useViewportMode } from './hooks/useViewportMode';
 import {
   ActiveConnection,
   BoardGrid,
@@ -46,6 +49,11 @@ import {
   LevelConfig,
   SaveData,
 } from './types/game';
+import {
+  canRequestFullscreen,
+  enterGameFullscreenAndLandscape,
+  exitGameFullscreenAndUnlock,
+} from './utils/fullscreen';
 import {
   clearGuestSaveData,
   clearRememberedAccount,
@@ -158,8 +166,19 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [mobileZoomed, setMobileZoomed] = useState<boolean>(false);
 
+  const viewport = useViewportMode();
+
   const saveDataRef = useRef<SaveData>(saveData);
   const boardRef = useRef<BoardGrid>(board);
+  const selectedRef = useRef<GridPos | null>(selected);
+  const gameStateRef = useRef<GameState>(gameState);
+  const levelConfigRef = useRef<LevelConfig>(levelConfig);
+  const comboRef = useRef<number>(combo);
+  const pairsMatchedRef = useRef<number>(pairsMatched);
+  const scoreRef = useRef<number>(score);
+  const timeRemainingRef = useRef<number>(timeRemaining);
+  const userRef = useRef<User | null>(user);
+  const rememberedAccountRef = useRef<RememberedAccount | null>(rememberedAccount);
   const creatingProfileUidRef = useRef<string | null>(null);
   const identitySyncedUidRef = useRef<string | null>(null);
   const mergeSyncedUidRef = useRef<string | null>(null);
@@ -177,6 +196,42 @@ export default function App() {
   useEffect(() => {
     boardRef.current = board;
   }, [board]);
+
+  useEffect(() => {
+    selectedRef.current = selected;
+  }, [selected]);
+
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
+
+  useEffect(() => {
+    levelConfigRef.current = levelConfig;
+  }, [levelConfig]);
+
+  useEffect(() => {
+    comboRef.current = combo;
+  }, [combo]);
+
+  useEffect(() => {
+    pairsMatchedRef.current = pairsMatched;
+  }, [pairsMatched]);
+
+  useEffect(() => {
+    scoreRef.current = score;
+  }, [score]);
+
+  useEffect(() => {
+    timeRemainingRef.current = timeRemaining;
+  }, [timeRemaining]);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  useEffect(() => {
+    rememberedAccountRef.current = rememberedAccount;
+  }, [rememberedAccount]);
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -446,10 +501,20 @@ export default function App() {
       if (!isPreviewMode && levelNum > saveData.highestUnlockedLevel) {
         return;
       }
+      void enterGameFullscreenAndLandscape();
       clearPendingTimers();
       const cfg = getLevelConfig(levelNum);
       const rawBoard = generateBoard(cfg);
       const checked = ensurePlayableBoard(rawBoard);
+      boardRef.current = checked.board;
+      selectedRef.current = null;
+      levelConfigRef.current = cfg;
+      timeRemainingRef.current = cfg.timeLimitSeconds;
+      scoreRef.current = 0;
+      pairsMatchedRef.current = 0;
+      comboRef.current = 0;
+      gameStateRef.current = 'PLAYING';
+
       setLevelConfig(cfg);
       setBoard(checked.board);
       setSelected(null);
@@ -472,6 +537,20 @@ export default function App() {
     },
     [clearPendingTimers, isPreviewMode, saveData.highestUnlockedLevel]
   );
+
+  const handleExitToLevels = useCallback(() => {
+    clearPendingTimers();
+    void exitGameFullscreenAndUnlock();
+    setGameState('LEVEL_SELECT');
+  }, [clearPendingTimers]);
+
+  const handleToggleFullscreen = useCallback(() => {
+    if (viewport.isFullscreen) {
+      void exitGameFullscreenAndUnlock();
+    } else {
+      void enterGameFullscreenAndLandscape();
+    }
+  }, [viewport.isFullscreen]);
 
   // Countdown Timer
   useEffect(() => {
@@ -525,9 +604,11 @@ export default function App() {
       showToast('Đã hết lượt gợi ý trong màn này');
       return;
     }
-    const pair = findAnyValidPair(board);
+    const currentBoard = boardRef.current;
+    const pair = findAnyValidPair(currentBoard);
     if (!pair) {
-      const recovery = ensurePlayableBoard(board);
+      const recovery = ensurePlayableBoard(currentBoard);
+      boardRef.current = recovery.board;
       setBoard(recovery.board);
       showToast(recovery.reason ?? 'Đã tự động điều chỉnh bàn đấu!');
       return;
@@ -535,8 +616,9 @@ export default function App() {
     sound.playHint();
     setHintsLeft((h) => h - 1);
     setHintPair({ a: pair.a, b: pair.b });
+    selectedRef.current = null;
     setSelected(null);
-  }, [board, gameState, hintsLeft, showToast]);
+  }, [gameState, hintsLeft, showToast]);
 
   const handleShuffle = useCallback(() => {
     if (gameState !== 'PLAYING' || matchLockedRef.current) return;
@@ -546,15 +628,19 @@ export default function App() {
     }
     sound.playShuffle();
     setShufflesLeft((s) => s - 1);
-    setBoard((prev) => ensurePlayableBoard(shuffleBoard(prev)).board);
+    const nextBoard = ensurePlayableBoard(shuffleBoard(boardRef.current)).board;
+    boardRef.current = nextBoard;
+    selectedRef.current = null;
+    setBoard(nextBoard);
     setSelected(null);
     setHintPair(null);
   }, [gameState, shufflesLeft, showToast]);
 
   const handleSelectTile = useCallback(
     (r: number, c: number) => {
-      if (gameState !== 'PLAYING' || matchLockedRef.current) return;
-      const clickedTile = board[r]?.[c];
+      if (gameStateRef.current !== 'PLAYING' || matchLockedRef.current) return;
+      const currentBoard = boardRef.current;
+      const clickedTile = currentBoard[r]?.[c];
       if (!clickedTile) return;
 
       if (clickedTile.frozen) {
@@ -566,21 +652,25 @@ export default function App() {
         return;
       }
 
-      if (selected && selected.r === r && selected.c === c) {
+      const currentSelected = selectedRef.current;
+      if (currentSelected && currentSelected.r === r && currentSelected.c === c) {
+        selectedRef.current = null;
         setSelected(null);
         return;
       }
 
-      if (!selected) {
+      if (!currentSelected) {
         sound.playSelect();
+        selectedRef.current = { r, c };
         setSelected({ r, c });
         return;
       }
 
-      const firstPos = selected;
-      const firstTile = board[firstPos.r]?.[firstPos.c];
+      const firstPos = currentSelected;
+      const firstTile = currentBoard[firstPos.r]?.[firstPos.c];
       if (!firstTile || firstTile.frozen) {
         sound.playSelect();
+        selectedRef.current = { r, c };
         setSelected({ r, c });
         return;
       }
@@ -590,16 +680,18 @@ export default function App() {
         setInvalidPair([firstPos, { r, c }]);
         if (invalidTimerRef.current) window.clearTimeout(invalidTimerRef.current);
         invalidTimerRef.current = window.setTimeout(() => setInvalidPair(null), 260);
+        selectedRef.current = { r, c };
         setSelected({ r, c });
         return;
       }
 
-      const path = findConnectionPath(board, firstPos, { r, c });
+      const path = findConnectionPath(currentBoard, firstPos, { r, c });
       if (!path) {
         sound.playMismatch();
         setInvalidPair([firstPos, { r, c }]);
         if (invalidTimerRef.current) window.clearTimeout(invalidTimerRef.current);
         invalidTimerRef.current = window.setTimeout(() => setInvalidPair(null), 260);
+        selectedRef.current = { r, c };
         setSelected({ r, c });
         return;
       }
@@ -607,18 +699,23 @@ export default function App() {
       // Valid Match!
       const now = Date.now();
       const isCombo = now - lastMatchAtRef.current <= 4500;
-      const nextCombo = isCombo ? Math.min(10, combo + 1) : 1;
+      const nextCombo = isCombo ? Math.min(10, comboRef.current + 1) : 1;
       lastMatchAtRef.current = now;
       const pointsEarned = 100 + (nextCombo - 1) * 35;
 
       sound.playMatch(nextCombo);
       matchLockedRef.current = true;
+      selectedRef.current = null;
+      comboRef.current = nextCombo;
+      const nextScore = scoreRef.current + pointsEarned;
+      scoreRef.current = nextScore;
+      const nextMatchedCount = pairsMatchedRef.current + 1;
+      pairsMatchedRef.current = nextMatchedCount;
+
       setSelected(null);
       setHintPair(null);
       setCombo(nextCombo);
-      setScore((prev) => prev + pointsEarned);
-
-      const nextMatchedCount = pairsMatched + 1;
+      setScore(nextScore);
       setPairsMatched(nextMatchedCount);
 
       setActiveConnection({
@@ -639,6 +736,7 @@ export default function App() {
 
       matchTimerRef.current = window.setTimeout(() => {
         setActiveConnection(null);
+        const cfg = levelConfigRef.current;
 
         let next = cloneBoard(boardRef.current);
         next = thawAdjacentFrozen(next, firstPos, { r, c });
@@ -647,7 +745,7 @@ export default function App() {
 
         const shifted = applyGravity(
           next,
-          levelConfig.gravityMode,
+          cfg.gravityMode,
           nextMatchedCount,
           firstPos,
           { r, c }
@@ -657,35 +755,40 @@ export default function App() {
 
         const remaining = countRemainingTiles(next);
         if (remaining === 0) {
+          boardRef.current = next;
           setBoard(next);
           sound.playWin();
-          const ratio = timeRemaining / levelConfig.timeLimitSeconds;
+          const curTime = timeRemainingRef.current;
+          const ratio = curTime / cfg.timeLimitSeconds;
           const stars = ratio >= 0.4 ? 3 : ratio >= 0.2 ? 2 : 1;
-          const timeBonus = timeRemaining * 15;
-          const finalRoundScore = score + pointsEarned + timeBonus;
+          const timeBonus = curTime * 15;
+          const finalRoundScore = scoreRef.current + timeBonus;
 
+          scoreRef.current = finalRoundScore;
           setScore(finalRoundScore);
           setEarnedStars(stars);
+          gameStateRef.current = 'ROUND_SUMMARY';
           setGameState('ROUND_SUMMARY');
 
           // Only save progression if this level was legitimately unlocked
           const nextSave = computeWinSaveData(
             saveDataRef.current,
-            levelConfig.level,
+            cfg.level,
             finalRoundScore,
             stars,
-            timeRemaining
+            curTime
           );
           if (nextSave) {
             setSaveData(nextSave);
-            const activeUid = user?.uid ?? rememberedAccount?.uid ?? null;
+            const activeUser = userRef.current;
+            const activeUid = activeUser?.uid ?? rememberedAccountRef.current?.uid ?? null;
             if (activeUid) {
               savePlayerLocalSave(activeUid, nextSave);
             }
-            if (user) {
+            if (activeUser) {
               const isOfflineNow = typeof navigator !== 'undefined' && !navigator.onLine;
               setSyncStatus(isOfflineNow ? 'remembered' : 'syncing');
-              void savePlayerProgressToCloud(user.uid, nextSave)
+              void savePlayerProgressToCloud(activeUser.uid, nextSave)
                 .then(() => setSyncStatus('synced'))
                 .catch((err: unknown) => {
                   if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -704,6 +807,7 @@ export default function App() {
         } else {
           const recovery = ensurePlayableBoard(next);
           next = recovery.board;
+          boardRef.current = next;
           setBoard(next);
           if (recovery.adjusted && recovery.reason) {
             sound.playShuffle();
@@ -712,23 +816,9 @@ export default function App() {
         }
 
         matchLockedRef.current = false;
-      }, 190);
+      }, 160);
     },
-    [
-      board,
-      combo,
-      gameState,
-      levelConfig.gravityMode,
-      levelConfig.level,
-      levelConfig.timeLimitSeconds,
-      pairsMatched,
-      rememberedAccount,
-      score,
-      selected,
-      showToast,
-      timeRemaining,
-      user,
-    ]
+    [showToast]
   );
 
   useEffect(() => {
@@ -806,329 +896,402 @@ export default function App() {
   );
   const isLowTime = timeRemaining <= 30;
   const totalPairs = levelConfig.pairsCount;
+  const fsSupported = canRequestFullscreen();
 
-  return (
-    <div className="h-[100dvh] w-screen overflow-hidden bg-[#111827] text-slate-100 flex flex-col">
-      {/* Slim Mobile Top Game HUD (< md) */}
-      <header className="md:hidden w-full h-12 px-2.5 bg-[#B91C1C] border-b-2 border-[#0F172A] shrink-0 flex items-center justify-between gap-2 shadow-md">
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            type="button"
-            onClick={() => {
-              clearPendingTimers();
-              setGameState('LEVEL_SELECT');
-            }}
-            aria-label="Quay về bản đồ cấp độ"
-            className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg bg-[#991B1B] border border-red-900 text-red-50 cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <div className="leading-tight">
-            <div className="font-mono-num text-xs font-extrabold text-white whitespace-nowrap">
-              Cấp {levelConfig.level}
-            </div>
-            <div className="font-mono-num text-[10px] text-red-100 whitespace-nowrap">
-              Còn {totalPairs - pairsMatched} cặp
-            </div>
-          </div>
-        </div>
+  const stageContent = (
+    <>
+      {viewport.isCompactLandscape ? (
+        /* Compact Mobile/Tablet Landscape Stage: 0px top/bottom waste, dual slim side rails */
+        <div className="w-full h-full flex overflow-hidden bg-[#111827]">
+          {/* Left Slim Status Rail */}
+          <aside className="w-[74px] sm:w-[86px] shrink-0 bg-[#991B1B] border-r-2 border-[#0F172A] flex flex-col justify-between py-1.5 px-1.5 select-none">
+            <div className="flex flex-col gap-1.5">
+              <button
+                type="button"
+                onClick={handleExitToLevels}
+                aria-label="Quay về bản đồ cấp độ"
+                className="w-full min-h-[36px] flex items-center justify-center gap-1 rounded-lg bg-[#7F1D1D] hover:bg-[#450A0A] border border-red-950/70 text-red-50 text-[11px] font-bold cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
+                <span>Thoát</span>
+              </button>
 
-        {/* Compact Mobile Timer */}
-        <div className="flex-1 max-w-[130px] flex flex-col gap-0.5 bg-[#0F172A]/50 px-2.5 py-1 rounded-lg border border-red-950/60">
-          <div className="flex items-center justify-between gap-1 text-[11px] font-mono-num">
-            <span className={isLowTime ? 'text-yellow-300 font-bold' : 'text-red-100'}>
-              {isLowTime ? 'Sắp hết!' : 'Giờ'}
-            </span>
-            <span className={`font-bold ${isLowTime ? 'text-[#FACC15]' : 'text-white'}`}>
-              {formatDuration(timeRemaining)}
-            </span>
-          </div>
-          <div className="w-full h-1 rounded-full bg-slate-900/90 overflow-hidden">
-            <div
-              style={{ width: `${timeProgressPct}%` }}
-              className={`h-full transition-all duration-500 ${
-                isLowTime
-                  ? 'bg-rose-400'
-                  : timeProgressPct < 35
-                    ? 'bg-[#FACC15]'
-                    : 'bg-emerald-400'
-              }`}
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1.5 shrink-0">
-          <div className="text-right leading-tight pr-0.5">
-            <div className="text-[10px] text-red-100">
-              Điểm{combo > 1 ? ` x${combo}` : ''}
-            </div>
-            <div className="font-mono-num text-xs font-extrabold text-[#FACC15]">
-              {score.toLocaleString('vi-VN')}
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() =>
-              setGameState((s) => (s === 'PLAYING' ? 'PAUSED' : 'PLAYING'))
-            }
-            aria-label={gameState === 'PAUSED' ? 'Tiếp tục' : 'Tạm dừng'}
-            className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg border border-[#0F172A] bg-[#1E293B] text-white cursor-pointer"
-          >
-            {gameState === 'PAUSED' ? (
-              <Play className="w-4 h-4 fill-current" />
-            ) : (
-              <Pause className="w-4 h-4" />
-            )}
-          </button>
-        </div>
-      </header>
-
-      {/* Desktop Web Crimson Game HUD (md+) */}
-      <header className="hidden md:block w-full px-6 py-2.5 bg-[#B91C1C] border-b-4 border-[#0F172A] shrink-0 shadow-md">
-        <div className="max-w-[1440px] mx-auto flex items-center justify-between gap-3">
-          {/* Left: Back & Level / Movement Rule */}
-          <div className="flex items-center gap-3 min-w-0">
-            <button
-              type="button"
-              onClick={() => {
-                clearPendingTimers();
-                setGameState('LEVEL_SELECT');
-              }}
-              aria-label="Quay về bản đồ cấp độ"
-              className="p-2 rounded-lg border border-red-900 bg-[#991B1B] text-red-100 hover:text-white hover:bg-[#7F1D1D] transition-colors cursor-pointer shrink-0"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <PokeballIcon variant="poke" className="w-6 h-6 shrink-0" />
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 text-sm font-extrabold text-white font-mono-num whitespace-nowrap">
-                <span>Cấp {levelConfig.level}/200</span>
-                <span className="text-red-200/70" aria-hidden="true">
-                  ·
-                </span>
-                <span className="font-sans font-semibold text-[#FACC15] truncate">
-                  {lastShiftLabel || levelConfig.gravityLabel}
-                </span>
-                {isPreviewMode && (
-                  <>
-                    <span className="text-red-200/70" aria-hidden="true">
-                      ·
-                    </span>
-                    <span className="font-sans text-xs text-yellow-200">Xem trước</span>
-                  </>
-                )}
-              </div>
-              <div className="text-xs text-red-100/90 truncate font-mono-num">
-                {levelConfig.cols}×{levelConfig.rows} ({totalPairs} cặp) · {levelConfig.speciesCount} loài · Còn {totalPairs - pairsMatched} cặp
+              <div className="rounded-lg bg-[#0F172A]/55 border border-red-950/60 px-1.5 py-1 text-center">
+                <div className="font-mono-num text-xs font-extrabold text-white whitespace-nowrap">
+                  Cấp {levelConfig.level}
+                </div>
+                <div className="font-mono-num text-[10px] text-red-100/90 whitespace-nowrap">
+                  {levelConfig.cols}×{levelConfig.rows}
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Center: Timer & Score */}
-          <div className="flex items-center gap-6">
-            <div className="flex flex-col gap-1 min-w-[175px] bg-[#0F172A]/45 px-3 py-1 rounded-lg border border-red-950/60">
-              <div className="flex items-center justify-between gap-2 text-xs">
-                <span className={isLowTime ? 'text-yellow-300 font-bold' : 'text-red-100'}>
-                  {isLowTime ? 'Sắp hết giờ!' : 'Thời gian'}
+            {/* Timer + Pairs + Score */}
+            <div className="flex flex-col gap-1.5">
+              <div className="rounded-lg bg-[#0F172A]/65 border border-red-950/60 px-1.5 py-1.5 flex flex-col gap-1 text-center">
+                <span className={`text-[10px] font-semibold ${isLowTime ? 'text-yellow-300' : 'text-red-100'}`}>
+                  {isLowTime ? 'Sắp hết!' : 'Thời gian'}
                 </span>
-                <span
-                  className={`font-mono-num text-base font-bold ${
-                    isLowTime ? 'text-[#FACC15]' : 'text-white'
-                  }`}
-                >
+                <span className={`font-mono-num text-xs sm:text-sm font-extrabold ${isLowTime ? 'text-[#FACC15]' : 'text-white'}`}>
                   {formatDuration(timeRemaining)}
                 </span>
+                <div className="w-full h-1.5 rounded-full bg-slate-900 overflow-hidden">
+                  <div
+                    style={{ width: `${timeProgressPct}%` }}
+                    className={`h-full transition-all duration-500 ${
+                      isLowTime
+                        ? 'bg-rose-400'
+                        : timeProgressPct < 35
+                          ? 'bg-[#FACC15]'
+                          : 'bg-emerald-400'
+                    }`}
+                  />
+                </div>
               </div>
-              <div className="w-full h-1.5 rounded-full bg-slate-900/90 overflow-hidden">
-                <div
-                  style={{ width: `${timeProgressPct}%` }}
-                  className={`h-full transition-all duration-500 ${
-                    isLowTime
-                      ? 'bg-rose-400'
-                      : timeProgressPct < 35
-                        ? 'bg-[#FACC15]'
-                        : 'bg-emerald-400'
-                  }`}
-                />
+
+              <div className="rounded-lg bg-[#0F172A]/50 border border-red-950/50 px-1.5 py-1 text-center">
+                <div className="text-[10px] text-red-100">Còn lại</div>
+                <div className="font-mono-num text-xs font-extrabold text-white">
+                  {totalPairs - pairsMatched}/{totalPairs}
+                </div>
+              </div>
+
+              <div className="rounded-lg bg-[#0F172A]/50 border border-red-950/50 px-1.5 py-1 text-center">
+                <div className="text-[10px] text-red-100">
+                  Điểm{combo > 1 ? ` x${combo}` : ''}
+                </div>
+                <div className="font-mono-num text-xs font-extrabold text-[#FACC15] truncate">
+                  {score.toLocaleString('vi-VN')}
+                </div>
               </div>
             </div>
 
-            <div className="flex flex-col text-right">
-              <span className="text-xs text-red-100">Đã ghép</span>
-              <span className="font-mono-num text-sm font-bold text-white">
-                {pairsMatched}/{totalPairs}
-              </span>
+            <div className="text-[10px] leading-tight text-center text-yellow-200/95 font-medium line-clamp-2 px-0.5">
+              {lastShiftLabel || levelConfig.gravityLabel}
             </div>
+          </aside>
 
-            <div className="flex flex-col text-right">
-              <span className="text-xs text-red-100">
-                Điểm {combo > 1 ? `(x${combo})` : ''}
-              </span>
-              <span className="font-mono-num text-base font-extrabold text-[#FACC15]">
-                {score.toLocaleString('vi-VN')}
-              </span>
-            </div>
-          </div>
+          {/* Center Full-Height Landscape Battle Arena */}
+          <main className="relative flex-1 min-w-0 h-full flex items-center justify-center p-1 overflow-hidden">
+            <GameBoard
+              board={board}
+              selected={selected}
+              hintPair={hintPair}
+              activeConnection={activeConnection}
+              invalidPair={invalidPair}
+              floatingScores={floatingScores}
+              isPaused={gameState === 'PAUSED'}
+              isCompactLandscape={true}
+              mobileZoomed={mobileZoomed}
+              onSelectTile={handleSelectTile}
+              onResume={() => setGameState('PLAYING')}
+            />
 
-          {/* Right: Action Controls */}
-          <div className="flex items-center gap-2 shrink-0">
+            {toastMessage && (
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-50 px-3 py-1.5 rounded-lg bg-[#0F172A]/95 border border-[#FACC15]/70 text-xs font-semibold text-[#FACC15] shadow-xl pointer-events-none whitespace-nowrap max-w-[92%] truncate">
+                {toastMessage}
+              </div>
+            )}
+          </main>
+
+          {/* Right Slim Thumb Action Rail */}
+          <aside className="w-[62px] sm:w-[70px] shrink-0 bg-[#0F172A] border-l border-slate-800 py-1.5 px-1.5 grid grid-rows-6 gap-1 select-none">
+            <button
+              type="button"
+              onClick={() => setGameState((s) => (s === 'PLAYING' ? 'PAUSED' : 'PLAYING'))}
+              className="rounded-xl bg-[#1E293B] border border-slate-700/80 flex flex-col items-center justify-center gap-0.5 text-white cursor-pointer"
+            >
+              {gameState === 'PAUSED' ? <Play className="w-4 h-4 fill-current" /> : <Pause className="w-4 h-4" />}
+              <span className="text-[10px] font-semibold whitespace-nowrap">
+                {gameState === 'PAUSED' ? 'Chơi' : 'Dừng'}
+              </span>
+            </button>
+
             <button
               type="button"
               onClick={handleHint}
               disabled={gameState !== 'PLAYING' || hintsLeft <= 0}
-              title="Gợi ý một cặp hợp lệ (Phím H)"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#0F172A] bg-[#1E293B] hover:bg-[#334155] disabled:opacity-45 disabled:cursor-not-allowed text-xs font-semibold text-emerald-300 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="rounded-xl bg-[#1E293B] border border-slate-700/80 disabled:opacity-40 flex flex-col items-center justify-center gap-0.5 text-emerald-300 cursor-pointer"
             >
-              <Lightbulb className="w-3.5 h-3.5" />
-              <span>Gợi ý</span>
-              <span className="font-mono-num text-slate-200">({hintsLeft})</span>
+              <Lightbulb className="w-4 h-4" />
+              <span className="text-[10px] font-semibold font-mono-num whitespace-nowrap">
+                Gợi ý ({hintsLeft})
+              </span>
             </button>
 
             <button
               type="button"
               onClick={handleShuffle}
               disabled={gameState !== 'PLAYING' || shufflesLeft <= 0}
-              title="Đảo vị trí các ô còn lại (Phím S)"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#0F172A] bg-[#1E293B] hover:bg-[#334155] disabled:opacity-45 disabled:cursor-not-allowed text-xs font-semibold text-[#FACC15] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="rounded-xl bg-[#1E293B] border border-slate-700/80 disabled:opacity-40 flex flex-col items-center justify-center gap-0.5 text-[#FACC15] cursor-pointer"
             >
-              <Shuffle className="w-3.5 h-3.5" />
-              <span>Đảo bàn</span>
-              <span className="font-mono-num text-slate-200">({shufflesLeft})</span>
+              <Shuffle className="w-4 h-4" />
+              <span className="text-[10px] font-semibold font-mono-num whitespace-nowrap">
+                Đảo ({shufflesLeft})
+              </span>
             </button>
 
             <button
               type="button"
-              onClick={() =>
-                setGameState((s) => (s === 'PLAYING' ? 'PAUSED' : 'PLAYING'))
-              }
-              title="Tạm dừng / Tiếp tục (Phím P)"
-              aria-label={gameState === 'PAUSED' ? 'Tiếp tục' : 'Tạm dừng'}
-              className="p-2 rounded-lg border border-[#0F172A] bg-[#1E293B] hover:bg-[#334155] text-white transition-colors cursor-pointer shrink-0"
+              onClick={() => setMobileZoomed((z) => !z)}
+              className={`rounded-xl border flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
+                mobileZoomed
+                  ? 'bg-[#DC2626] border-[#FACC15] text-white'
+                  : 'bg-[#1E293B] border-slate-700/80 text-slate-200'
+              }`}
             >
-              {gameState === 'PAUSED' ? (
-                <Play className="w-4 h-4 fill-current" />
-              ) : (
-                <Pause className="w-4 h-4" />
-              )}
+              {mobileZoomed ? <ZoomOut className="w-4 h-4" /> : <ZoomIn className="w-4 h-4" />}
+              <span className="text-[10px] font-semibold whitespace-nowrap">
+                {mobileZoomed ? 'Vừa' : 'Phóng'}
+              </span>
             </button>
 
             <button
               type="button"
               onClick={() => startLevel(levelConfig.level)}
-              title="Chơi lại màn này"
-              aria-label="Chơi lại"
-              className="p-2 rounded-lg border border-[#0F172A] bg-[#1E293B] hover:bg-[#334155] text-white transition-colors cursor-pointer shrink-0"
+              className="rounded-xl bg-[#1E293B] border border-slate-700/80 flex flex-col items-center justify-center gap-0.5 text-slate-200 cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
+              <span className="text-[10px] font-semibold whitespace-nowrap">Chơi lại</span>
             </button>
 
-            <button
-              type="button"
-              onClick={handleToggleSound}
-              aria-label={saveData.soundEnabled ? 'Tắt âm thanh' : 'Bật âm thanh'}
-              className="p-2 rounded-lg border border-[#0F172A] bg-[#1E293B] hover:bg-[#334155] text-white transition-colors cursor-pointer shrink-0"
-            >
-              {saveData.soundEnabled ? (
-                <Volume2 className="w-4 h-4" />
+            <div className="grid grid-cols-2 gap-1">
+              <button
+                type="button"
+                onClick={handleToggleSound}
+                aria-label={saveData.soundEnabled ? 'Tắt âm thanh' : 'Bật âm thanh'}
+                className="rounded-xl bg-[#1E293B] border border-slate-700/80 flex items-center justify-center text-slate-200 cursor-pointer"
+              >
+                {saveData.soundEnabled ? (
+                  <Volume2 className="w-4 h-4 text-emerald-300" />
+                ) : (
+                  <VolumeX className="w-4 h-4 text-slate-400" />
+                )}
+              </button>
+
+              {fsSupported ? (
+                <button
+                  type="button"
+                  onClick={handleToggleFullscreen}
+                  aria-label={viewport.isFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
+                  className={`rounded-xl border flex items-center justify-center cursor-pointer ${
+                    !viewport.isFullscreen
+                      ? 'bg-[#FACC15] border-yellow-300 text-slate-950'
+                      : 'bg-[#1E293B] border-slate-700/80 text-slate-200'
+                  }`}
+                >
+                  {viewport.isFullscreen ? (
+                    <Minimize2 className="w-3.5 h-3.5" />
+                  ) : (
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  )}
+                </button>
               ) : (
-                <VolumeX className="w-4 h-4" />
+                <div className="rounded-xl bg-[#1E293B]/50 border border-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-400">
+                  HD
+                </div>
               )}
-            </button>
-          </div>
+            </div>
+          </aside>
         </div>
-      </header>
+      ) : (
+        /* Desktop Web Fullscreen Landscape Stage */
+        <div className="w-full h-full flex flex-col bg-[#111827]">
+          <header className="w-full px-6 py-2.5 bg-[#B91C1C] border-b-4 border-[#0F172A] shrink-0 shadow-md">
+            <div className="max-w-[1440px] mx-auto flex items-center justify-between gap-3">
+              {/* Left: Back & Level / Movement Rule */}
+              <div className="flex items-center gap-3 min-w-0">
+                <button
+                  type="button"
+                  onClick={handleExitToLevels}
+                  aria-label="Quay về bản đồ cấp độ"
+                  className="p-2 rounded-lg border border-red-900 bg-[#991B1B] text-red-100 hover:text-white hover:bg-[#7F1D1D] transition-colors cursor-pointer shrink-0"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+                <PokeballIcon variant="poke" className="w-6 h-6 shrink-0" />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-sm font-extrabold text-white font-mono-num whitespace-nowrap">
+                    <span>Cấp {levelConfig.level}/200</span>
+                    <span className="text-red-200/70" aria-hidden="true">
+                      ·
+                    </span>
+                    <span className="font-sans font-semibold text-[#FACC15] truncate">
+                      {lastShiftLabel || levelConfig.gravityLabel}
+                    </span>
+                    {isPreviewMode && (
+                      <>
+                        <span className="text-red-200/70" aria-hidden="true">
+                          ·
+                        </span>
+                        <span className="font-sans text-xs text-yellow-200">Xem trước</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="text-xs text-red-100/90 truncate font-mono-num">
+                    {levelConfig.cols}×{levelConfig.rows} ({totalPairs} cặp) · {levelConfig.speciesCount} loài · Còn {totalPairs - pairsMatched} cặp
+                  </div>
+                </div>
+              </div>
 
-      {/* Main Arena Stage */}
-      <main className="relative flex-1 flex items-center justify-center p-1 md:p-4 overflow-hidden">
-        <GameBoard
-          board={board}
-          selected={selected}
-          hintPair={hintPair}
-          activeConnection={activeConnection}
-          invalidPair={invalidPair}
-          floatingScores={floatingScores}
-          isPaused={gameState === 'PAUSED'}
-          mobileZoomed={mobileZoomed}
-          onSelectTile={handleSelectTile}
-          onResume={() => setGameState('PLAYING')}
-        />
+              {/* Center: Timer & Score */}
+              <div className="flex items-center gap-6">
+                <div className="flex flex-col gap-1 min-w-[175px] bg-[#0F172A]/45 px-3 py-1 rounded-lg border border-red-950/60">
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className={isLowTime ? 'text-yellow-300 font-bold' : 'text-red-100'}>
+                      {isLowTime ? 'Sắp hết giờ!' : 'Thời gian'}
+                    </span>
+                    <span
+                      className={`font-mono-num text-base font-bold ${
+                        isLowTime ? 'text-[#FACC15]' : 'text-white'
+                      }`}
+                    >
+                      {formatDuration(timeRemaining)}
+                    </span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full bg-slate-900/90 overflow-hidden">
+                    <div
+                      style={{ width: `${timeProgressPct}%` }}
+                      className={`h-full transition-all duration-500 ${
+                        isLowTime
+                          ? 'bg-rose-400'
+                          : timeProgressPct < 35
+                            ? 'bg-[#FACC15]'
+                            : 'bg-emerald-400'
+                      }`}
+                    />
+                  </div>
+                </div>
 
-        {toastMessage && (
-          <div className="fixed bottom-16 md:bottom-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-[#0F172A]/95 border border-[#FACC15]/70 text-xs sm:text-sm font-semibold text-[#FACC15] shadow-xl pointer-events-none whitespace-nowrap max-w-[92vw] truncate">
-            {toastMessage}
-          </div>
-        )}
-      </main>
+                <div className="flex flex-col text-right">
+                  <span className="text-xs text-red-100">Đã ghép</span>
+                  <span className="font-mono-num text-sm font-bold text-white">
+                    {pairsMatched}/{totalPairs}
+                  </span>
+                </div>
 
-      {/* Mobile Bottom Thumb Action Dock (< md) */}
-      <nav
-        aria-label="Điều khiển trận đấu trên di động"
-        className="md:hidden w-full bg-[#0F172A] border-t border-slate-800 px-2 pt-1.5 pb-[calc(0.375rem+env(safe-area-inset-bottom))] shrink-0 grid grid-cols-5 gap-1.5"
-      >
-        <button
-          type="button"
-          onClick={handleHint}
-          disabled={gameState !== 'PLAYING' || hintsLeft <= 0}
-          className="min-h-[44px] rounded-xl bg-[#1E293B] border border-slate-700/80 disabled:opacity-40 flex flex-col items-center justify-center gap-0.5 text-emerald-300 cursor-pointer"
-        >
-          <Lightbulb className="w-4 h-4" />
-          <span className="text-[10px] font-semibold font-mono-num whitespace-nowrap">
-            Gợi ý ({hintsLeft})
-          </span>
-        </button>
+                <div className="flex flex-col text-right">
+                  <span className="text-xs text-red-100">
+                    Điểm {combo > 1 ? `(x${combo})` : ''}
+                  </span>
+                  <span className="font-mono-num text-base font-extrabold text-[#FACC15]">
+                    {score.toLocaleString('vi-VN')}
+                  </span>
+                </div>
+              </div>
 
-        <button
-          type="button"
-          onClick={handleShuffle}
-          disabled={gameState !== 'PLAYING' || shufflesLeft <= 0}
-          className="min-h-[44px] rounded-xl bg-[#1E293B] border border-slate-700/80 disabled:opacity-40 flex flex-col items-center justify-center gap-0.5 text-[#FACC15] cursor-pointer"
-        >
-          <Shuffle className="w-4 h-4" />
-          <span className="text-[10px] font-semibold font-mono-num whitespace-nowrap">
-            Đảo ({shufflesLeft})
-          </span>
-        </button>
+              {/* Right: Action Controls */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleHint}
+                  disabled={gameState !== 'PLAYING' || hintsLeft <= 0}
+                  title="Gợi ý một cặp hợp lệ (Phím H)"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#0F172A] bg-[#1E293B] hover:bg-[#334155] disabled:opacity-45 disabled:cursor-not-allowed text-xs font-semibold text-emerald-300 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <Lightbulb className="w-3.5 h-3.5" />
+                  <span>Gợi ý</span>
+                  <span className="font-mono-num text-slate-200">({hintsLeft})</span>
+                </button>
 
-        <button
-          type="button"
-          onClick={() => setMobileZoomed((z) => !z)}
-          className={`min-h-[44px] rounded-xl border flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
-            mobileZoomed
-              ? 'bg-[#DC2626] border-[#FACC15] text-white'
-              : 'bg-[#1E293B] border-slate-700/80 text-slate-200'
-          }`}
-        >
-          {mobileZoomed ? <ZoomOut className="w-4 h-4" /> : <ZoomIn className="w-4 h-4" />}
-          <span className="text-[10px] font-semibold whitespace-nowrap">
-            {mobileZoomed ? 'Vừa màn' : 'Phóng to'}
-          </span>
-        </button>
+                <button
+                  type="button"
+                  onClick={handleShuffle}
+                  disabled={gameState !== 'PLAYING' || shufflesLeft <= 0}
+                  title="Đảo vị trí các ô còn lại (Phím S)"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#0F172A] bg-[#1E293B] hover:bg-[#334155] disabled:opacity-45 disabled:cursor-not-allowed text-xs font-semibold text-[#FACC15] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <Shuffle className="w-3.5 h-3.5" />
+                  <span>Đảo bàn</span>
+                  <span className="font-mono-num text-slate-200">({shufflesLeft})</span>
+                </button>
 
-        <button
-          type="button"
-          onClick={() => startLevel(levelConfig.level)}
-          className="min-h-[44px] rounded-xl bg-[#1E293B] border border-slate-700/80 flex flex-col items-center justify-center gap-0.5 text-slate-200 cursor-pointer"
-        >
-          <RotateCcw className="w-4 h-4" />
-          <span className="text-[10px] font-semibold whitespace-nowrap">Chơi lại</span>
-        </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setGameState((s) => (s === 'PLAYING' ? 'PAUSED' : 'PLAYING'))
+                  }
+                  title="Tạm dừng / Tiếp tục (Phím P)"
+                  aria-label={gameState === 'PAUSED' ? 'Tiếp tục' : 'Tạm dừng'}
+                  className="p-2 rounded-lg border border-[#0F172A] bg-[#1E293B] hover:bg-[#334155] text-white transition-colors cursor-pointer shrink-0"
+                >
+                  {gameState === 'PAUSED' ? (
+                    <Play className="w-4 h-4 fill-current" />
+                  ) : (
+                    <Pause className="w-4 h-4" />
+                  )}
+                </button>
 
-        <button
-          type="button"
-          onClick={handleToggleSound}
-          className="min-h-[44px] rounded-xl bg-[#1E293B] border border-slate-700/80 flex flex-col items-center justify-center gap-0.5 text-slate-200 cursor-pointer"
-        >
-          {saveData.soundEnabled ? (
-            <Volume2 className="w-4 h-4 text-emerald-300" />
-          ) : (
-            <VolumeX className="w-4 h-4 text-slate-400" />
-          )}
-          <span className="text-[10px] font-semibold whitespace-nowrap">
-            {saveData.soundEnabled ? 'Tiếng' : 'Tắt'}
-          </span>
-        </button>
-      </nav>
+                <button
+                  type="button"
+                  onClick={() => startLevel(levelConfig.level)}
+                  title="Chơi lại màn này"
+                  aria-label="Chơi lại"
+                  className="p-2 rounded-lg border border-[#0F172A] bg-[#1E293B] hover:bg-[#334155] text-white transition-colors cursor-pointer shrink-0"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleToggleSound}
+                  aria-label={saveData.soundEnabled ? 'Tắt âm thanh' : 'Bật âm thanh'}
+                  className="p-2 rounded-lg border border-[#0F172A] bg-[#1E293B] hover:bg-[#334155] text-white transition-colors cursor-pointer shrink-0"
+                >
+                  {saveData.soundEnabled ? (
+                    <Volume2 className="w-4 h-4" />
+                  ) : (
+                    <VolumeX className="w-4 h-4" />
+                  )}
+                </button>
+
+                {fsSupported && (
+                  <button
+                    type="button"
+                    onClick={handleToggleFullscreen}
+                    title={viewport.isFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
+                    aria-label={viewport.isFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
+                    className={`p-2 rounded-lg border transition-colors cursor-pointer shrink-0 ${
+                      !viewport.isFullscreen
+                        ? 'border-yellow-300 bg-[#FACC15] hover:bg-yellow-300 text-slate-950'
+                        : 'border-[#0F172A] bg-[#1E293B] hover:bg-[#334155] text-white'
+                    }`}
+                  >
+                    {viewport.isFullscreen ? (
+                      <Minimize2 className="w-4 h-4" />
+                    ) : (
+                      <Maximize2 className="w-4 h-4" />
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          </header>
+
+          {/* Main Arena Stage */}
+          <main className="relative flex-1 min-h-0 flex items-center justify-center p-2 lg:p-3 overflow-hidden">
+            <GameBoard
+              board={board}
+              selected={selected}
+              hintPair={hintPair}
+              activeConnection={activeConnection}
+              invalidPair={invalidPair}
+              floatingScores={floatingScores}
+              isPaused={gameState === 'PAUSED'}
+              isCompactLandscape={false}
+              mobileZoomed={false}
+              onSelectTile={handleSelectTile}
+              onResume={() => setGameState('PLAYING')}
+            />
+
+            {toastMessage && (
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-[#0F172A]/95 border border-[#FACC15]/70 text-xs sm:text-sm font-semibold text-[#FACC15] shadow-xl pointer-events-none whitespace-nowrap max-w-[92vw] truncate">
+                {toastMessage}
+              </div>
+            )}
+          </main>
+        </div>
+      )}
 
       {(gameState === 'ROUND_SUMMARY' || gameState === 'GAME_OVER') && (
         <EndRoundModal
@@ -1143,9 +1306,32 @@ export default function App() {
           isPreviewMode={isPreviewMode && levelConfig.level > saveData.highestUnlockedLevel}
           onReplay={() => startLevel(levelConfig.level)}
           onNextLevel={() => startLevel(Math.min(MAX_LEVEL, levelConfig.level + 1))}
-          onLevelSelect={() => setGameState('LEVEL_SELECT')}
+          onLevelSelect={handleExitToLevels}
         />
       )}
+    </>
+  );
+
+  if (viewport.needsLandscapeRotation) {
+    return (
+      <div className="fixed inset-0 z-40 overflow-hidden bg-[#0B1120]">
+        <div
+          style={{
+            width: '100dvh',
+            height: '100vw',
+            transform: 'translate(-50%, -50%) rotate(90deg)',
+          }}
+          className="fixed top-1/2 left-1/2 overflow-hidden bg-[#111827] text-slate-100 pl-[env(safe-area-inset-top)] pr-[env(safe-area-inset-bottom)]"
+        >
+          {stageContent}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 overflow-hidden bg-[#111827] text-slate-100 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+      {stageContent}
     </div>
   );
 }

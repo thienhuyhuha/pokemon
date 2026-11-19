@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { useViewportMode } from '../hooks/useViewportMode';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { ActiveConnection, BoardGrid, FloatingScore, GridPos, TileCell } from '../types/game';
 import { PokemonTile } from './PokemonTile';
 
@@ -11,6 +10,7 @@ interface GameBoardProps {
   invalidPair: [GridPos, GridPos] | null;
   floatingScores: FloatingScore[];
   isPaused: boolean;
+  isCompactLandscape?: boolean;
   mobileZoomed?: boolean;
   onSelectTile: (r: number, c: number) => void;
   onResume: () => void;
@@ -18,24 +18,14 @@ interface GameBoardProps {
 
 const STADIUM_BG = '/src/assets/images/mon_stadium_turf_1795064520201.jpg';
 
-function toSvgCoord(
-  pos: GridPos,
-  rows: number,
-  cols: number,
-  transposed: boolean
-): { x: number; y: number } {
-  const vr = transposed ? pos.c : pos.r;
-  const vc = transposed ? pos.r : pos.c;
-  const vRows = transposed ? cols : rows;
-  const vCols = transposed ? rows : cols;
+function toSvgCoord(pos: GridPos, rows: number, cols: number): { x: number; y: number } {
+  let x = pos.c + 1;
+  if (pos.c < 0) x = 0.25;
+  else if (pos.c >= cols) x = cols + 0.75;
 
-  let x = vc + 1;
-  if (vc < 0) x = 0.25;
-  else if (vc >= vCols) x = vCols + 0.75;
-
-  let y = vr + 1;
-  if (vr < 0) y = 0.25;
-  else if (vr >= vRows) y = vRows + 0.75;
+  let y = pos.r + 1;
+  if (pos.r < 0) y = 0.25;
+  else if (pos.r >= rows) y = rows + 0.75;
 
   return { x, y };
 }
@@ -48,85 +38,102 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   invalidPair,
   floatingScores,
   isPaused,
+  isCompactLandscape = false,
   mobileZoomed = false,
   onSelectTile,
   onResume,
 }) => {
   const [stadiumErr, setStadiumErr] = useState(false);
-  const { isMobile, isPortraitMobile } = useViewportMode();
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [containerSize, setContainerSize] = useState<{ width: number; height: number }>({
+    width: 960,
+    height: 480,
+  });
+
+  useLayoutEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+
+    const measure = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (w > 0 && h > 0) {
+        setContainerSize((prev) =>
+          prev.width === w && prev.height === h ? prev : { width: w, height: h }
+        );
+      }
+    };
+
+    measure();
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(measure);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
 
   const rows = board.length || 10;
   const cols = rows > 0 && board[0] ? board[0].length : 20;
 
-  // On portrait phones, transpose visual layout (cols x rows -> rows x cols)
-  // so 20x10 becomes 10x20 and fills the vertical mobile screen cleanly!
-  const transposed = isPortraitMobile;
-  const visualRows = transposed ? cols : rows;
-  const visualCols = transposed ? rows : cols;
-
-  const outerW = visualCols + 1;
-  const outerH = visualRows + 1;
+  // Always arrange in native horizontal landscape grid (cols x rows)
+  const outerW = cols + 1;
+  const outerH = rows + 1;
   const isDense = cols >= 26 || rows >= 14;
+
+  const padX = isCompactLandscape ? 6 : 20;
+  const padY = isCompactLandscape ? 6 : 16;
+  const maxW = Math.max(180, containerSize.width - padX);
+  const maxH = Math.max(120, containerSize.height - padY);
+
+  const fitW = Math.floor(Math.min(maxW, (maxH * outerW) / outerH));
+  const fitH = Math.floor((fitW * outerH) / outerW);
+
+  const zoomFactor = isCompactLandscape && mobileZoomed ? 1.55 : 1;
+  const boardW = Math.round(fitW * zoomFactor);
+  const boardH = Math.round(fitH * zoomFactor);
 
   const pathPoints = activeConnection
     ? activeConnection.path
         .map((pt) => {
-          const { x, y } = toSvgCoord(pt, rows, cols, transposed);
+          const { x, y } = toSvgCoord(pt, rows, cols);
           return `${x},${y}`;
         })
         .join(' ')
     : '';
 
-  const tilesList: { tile: TileCell; r: number; c: number; vr: number; vc: number }[] = [];
+  const tilesList: { tile: TileCell; r: number; c: number }[] = [];
   if (!isPaused) {
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const cell = board[r]?.[c];
         if (cell) {
-          tilesList.push({
-            tile: cell,
-            r,
-            c,
-            vr: transposed ? c : r,
-            vc: transposed ? r : c,
-          });
+          tilesList.push({ tile: cell, r, c });
         }
       }
     }
   }
 
-  const tileWidthPct = 100 / visualCols;
-  const tileHeightPct = 100 / visualRows;
+  const tileWidthPct = 100 / cols;
+  const tileHeightPct = 100 / rows;
   const strokeScale = isDense ? 1.15 : 1;
-
-  // Responsive sizing: full-fit viewport math tailored for mobile vs desktop web
-  const baseWidthExpr = isMobile
-    ? `min(calc(100vw - 12px), calc((100dvh - 118px) * ${outerW} / ${outerH}))`
-    : `min(calc(100vw - 24px), calc((100dvh - 122px) * ${outerW} / ${outerH}))`;
-
-  const boardStyle: React.CSSProperties =
-    isMobile && mobileZoomed
-      ? {
-          width: `max(calc((100vw - 12px) * 1.55), calc(${baseWidthExpr} * 1.55))`,
-          aspectRatio: `${outerW} / ${outerH}`,
-        }
-      : {
-          width: baseWidthExpr,
-          aspectRatio: `${outerW} / ${outerH}`,
-        };
 
   return (
     <div
+      ref={wrapperRef}
       className={`relative w-full h-full flex ${
-        isMobile && mobileZoomed
+        isCompactLandscape && mobileZoomed
           ? 'overflow-auto items-start justify-start p-1'
           : 'items-center justify-center overflow-hidden'
       }`}
     >
-      {/* Battle Arena Frame */}
+      {/* Landscape Battle Arena Frame */}
       <div
-        style={boardStyle}
-        className="relative shrink-0 rounded-xl sm:rounded-2xl bg-[#111827] p-[2px] sm:p-[3px] shadow-[0_20px_55px_rgba(0,0,0,0.75)] border-2 border-[#DC2626] overflow-hidden"
+        style={{ width: `${boardW}px`, height: `${boardH}px` }}
+        className="relative shrink-0 rounded-xl sm:rounded-2xl bg-[#111827] p-[2px] sm:p-[3px] shadow-[0_18px_50px_rgba(0,0,0,0.75)] border-2 border-[#DC2626] overflow-hidden"
       >
         <div className="relative w-full h-full rounded-[10px] sm:rounded-[13px] bg-[#14532D] overflow-hidden">
           {!stadiumErr ? (
@@ -149,12 +156,12 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             style={{
               left: `${(0.5 / outerW) * 100}%`,
               top: `${(0.5 / outerH) * 100}%`,
-              width: `${(visualCols / outerW) * 100}%`,
-              height: `${(visualRows / outerH) * 100}%`,
+              width: `${(cols / outerW) * 100}%`,
+              height: `${(rows / outerH) * 100}%`,
             }}
             className="absolute"
           >
-            {tilesList.map(({ tile, r, c, vr, vc }) => {
+            {tilesList.map(({ tile, r, c }) => {
               const isSelected = selected?.r === r && selected?.c === c;
               const isHinted =
                 (hintPair?.a.r === r && hintPair?.a.c === c) ||
@@ -172,8 +179,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                   style={{
                     width: `${tileWidthPct}%`,
                     height: `${tileHeightPct}%`,
-                    transform: `translate3d(${vc * 100}%, ${vr * 100}%, 0)`,
-                    transition: 'transform 240ms cubic-bezier(0.22, 1, 0.36, 1)',
+                    transform: `translate3d(${c * 100}%, ${r * 100}%, 0)`,
+                    transition: 'transform 180ms cubic-bezier(0.22, 1, 0.36, 1)',
                   }}
                   className={`absolute top-0 left-0 ${isSelected || isMatching ? 'z-20' : 'z-10'}`}
                 >
@@ -217,7 +224,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                 strokeLinejoin="round"
               />
               {activeConnection.path.map((pt, i) => {
-                const { x, y } = toSvgCoord(pt, rows, cols, transposed);
+                const { x, y } = toSvgCoord(pt, rows, cols);
                 return (
                   <circle
                     key={i}
@@ -236,10 +243,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           {/* Floating Score Popups */}
           {!isPaused &&
             floatingScores.map((fs) => {
-              const vr = transposed ? fs.c : fs.r;
-              const vc = transposed ? fs.r : fs.c;
-              const leftPct = ((vc + 1) / outerW) * 100;
-              const topPct = ((vr + 1) / outerH) * 100;
+              const leftPct = ((fs.c + 1) / outerW) * 100;
+              const topPct = ((fs.r + 1) / outerH) * 100;
               return (
                 <div
                   key={fs.id}
@@ -254,17 +259,17 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
           {/* Pause Veil Overlay */}
           {isPaused && (
-            <div className="absolute inset-0 z-40 bg-[#0F172A]/95 backdrop-blur-sm flex flex-col items-center justify-center gap-4 p-6 text-center">
-              <h2 className="font-display text-2xl sm:text-3xl font-bold text-white tracking-tight">
+            <div className="absolute inset-0 z-40 bg-[#0F172A]/95 backdrop-blur-sm flex flex-col items-center justify-center gap-3 p-4 text-center">
+              <h2 className="font-display text-xl sm:text-3xl font-bold text-white tracking-tight">
                 Trò chơi đang tạm dừng
               </h2>
-              <p className="text-sm text-slate-300 max-w-sm">
+              <p className="text-xs sm:text-sm text-slate-300 max-w-sm">
                 Đồng hồ đếm ngược đã tạm dừng. Nhấn tiếp tục khi bạn sẵn sàng quay lại sân đấu.
               </p>
               <button
                 type="button"
                 onClick={onResume}
-                className="min-h-[44px] px-6 py-2.5 rounded-xl bg-[#FACC15] hover:bg-yellow-300 text-slate-950 font-bold text-sm transition-colors cursor-pointer shadow-[0_3px_0_#CA8A04]"
+                className="min-h-[44px] px-6 py-2 rounded-xl bg-[#FACC15] hover:bg-yellow-300 text-slate-950 font-bold text-sm transition-colors cursor-pointer shadow-[0_3px_0_#CA8A04]"
               >
                 Tiếp tục đấu
               </button>
