@@ -4,29 +4,29 @@ export const MAX_LEVEL = 200;
 
 /**
  * 20 tiers (every 10 levels: 1-10, 11-20, ..., 191-200)
- * Scaling cleanly from 100 pairs (20x10) at Level 1 up to 400 pairs (40x20) at Level 200.
+ * Scaling smoothly from 80 pairs (16x10) at Level 1 up to 160 pairs (20x16) at Level 200.
  */
 const GRID_TIERS: { cols: number; rows: number }[] = [
-  { cols: 20, rows: 10 }, // Lv   1 -  10: 100 pairs (200 tiles)
-  { cols: 22, rows: 10 }, // Lv  11 -  20: 110 pairs (220 tiles)
-  { cols: 22, rows: 12 }, // Lv  21 -  30: 132 pairs (264 tiles)
-  { cols: 24, rows: 12 }, // Lv  31 -  40: 144 pairs (288 tiles)
-  { cols: 26, rows: 12 }, // Lv  41 -  50: 156 pairs (312 tiles)
-  { cols: 28, rows: 12 }, // Lv  51 -  60: 168 pairs (336 tiles)
-  { cols: 26, rows: 14 }, // Lv  61 -  70: 182 pairs (364 tiles)
-  { cols: 28, rows: 14 }, // Lv  71 -  80: 196 pairs (392 tiles)
-  { cols: 30, rows: 14 }, // Lv  81 -  90: 210 pairs (420 tiles)
-  { cols: 32, rows: 14 }, // Lv  91 - 100: 224 pairs (448 tiles)
-  { cols: 30, rows: 16 }, // Lv 101 - 110: 240 pairs (480 tiles)
-  { cols: 32, rows: 16 }, // Lv 111 - 120: 256 pairs (512 tiles)
-  { cols: 34, rows: 16 }, // Lv 121 - 130: 272 pairs (544 tiles)
-  { cols: 32, rows: 18 }, // Lv 131 - 140: 288 pairs (576 tiles)
-  { cols: 34, rows: 18 }, // Lv 141 - 150: 306 pairs (612 tiles)
-  { cols: 36, rows: 18 }, // Lv 151 - 160: 324 pairs (648 tiles)
-  { cols: 34, rows: 20 }, // Lv 161 - 170: 340 pairs (680 tiles)
-  { cols: 36, rows: 20 }, // Lv 171 - 180: 360 pairs (720 tiles)
-  { cols: 38, rows: 20 }, // Lv 181 - 190: 380 pairs (760 tiles)
-  { cols: 40, rows: 20 }, // Lv 191 - 200: 400 pairs (800 tiles)
+  { cols: 16, rows: 10 }, // Lv   1 -  10:  80 pairs (160 tiles)
+  { cols: 17, rows: 10 }, // Lv  11 -  20:  85 pairs (170 tiles)
+  { cols: 18, rows: 10 }, // Lv  21 -  30:  90 pairs (180 tiles)
+  { cols: 19, rows: 10 }, // Lv  31 -  40:  95 pairs (190 tiles)
+  { cols: 20, rows: 10 }, // Lv  41 -  50: 100 pairs (200 tiles)
+  { cols: 21, rows: 10 }, // Lv  51 -  60: 105 pairs (210 tiles)
+  { cols: 18, rows: 12 }, // Lv  61 -  70: 108 pairs (216 tiles)
+  { cols: 20, rows: 11 }, // Lv  71 -  80: 110 pairs (220 tiles)
+  { cols: 19, rows: 12 }, // Lv  81 -  90: 114 pairs (228 tiles)
+  { cols: 20, rows: 12 }, // Lv  91 - 100: 120 pairs (240 tiles)
+  { cols: 21, rows: 12 }, // Lv 101 - 110: 126 pairs (252 tiles)
+  { cols: 22, rows: 12 }, // Lv 111 - 120: 132 pairs (264 tiles)
+  { cols: 23, rows: 12 }, // Lv 121 - 130: 138 pairs (276 tiles)
+  { cols: 22, rows: 13 }, // Lv 131 - 140: 143 pairs (286 tiles)
+  { cols: 24, rows: 12 }, // Lv 141 - 150: 144 pairs (288 tiles)
+  { cols: 21, rows: 14 }, // Lv 151 - 160: 147 pairs (294 tiles)
+  { cols: 25, rows: 12 }, // Lv 161 - 170: 150 pairs (300 tiles)
+  { cols: 22, rows: 14 }, // Lv 171 - 180: 154 pairs (308 tiles)
+  { cols: 24, rows: 13 }, // Lv 181 - 190: 156 pairs (312 tiles)
+  { cols: 20, rows: 16 }, // Lv 191 - 200: 160 pairs (320 tiles)
 ];
 
 export const CHAPTER_NAMES = [
@@ -121,10 +121,10 @@ export function getLevelConfig(level: number): LevelConfig {
   else if (lv <= 165) gravityMode = 'ALTERNATING';
   else gravityMode = 'RANDOM_8';
 
-  // Frost tiles appear from level 141 to 200 (gradually up to 48 frozen tiles on 800-tile boards)
+  // Frost tiles appear from level 141 to 200 (gradually up to 24 frozen tiles)
   let frozenCount = 0;
   if (lv >= 141) {
-    frozenCount = Math.min(48, 8 + Math.floor(((lv - 141) / 59) * 40));
+    frozenCount = Math.min(24, 6 + Math.floor(((lv - 141) / 59) * 18));
   }
 
   const initialHints = lv <= 40 ? 5 : lv <= 120 ? 4 : 3;

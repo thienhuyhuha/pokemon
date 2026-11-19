@@ -209,15 +209,15 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
           {/* Copy & Actions */}
           <div className="order-2 lg:order-1 lg:col-span-6 flex flex-col justify-center gap-4 sm:gap-5">
             <p className="text-xs sm:text-sm font-semibold text-[#FACC15]">
-              Cấp 1 đến Cấp 200 · Từ 100 cặp đến 400 cặp
+              Cấp 1 đến Cấp 200 · Từ 80 cặp đến 160 cặp
             </p>
             <h1 className="font-display text-3xl sm:text-5xl font-extrabold tracking-tight text-white leading-[1.12] text-balance">
               Ghép cặp Thú Cưng qua 200 đấu trường tăng dần
             </h1>
             <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-xl">
               Nối hai thẻ thú cưng giống nhau qua tối đa 3 đoạn thẳng. Số lượng cặp tăng dần mỗi 10
-              màn từ 100 cặp lên 400 cặp, thời gian rút ngắn từ 10 phút xuống 5 phút kèm xoay dọc
-              vừa tay trên di động.
+              màn từ 80 cặp lên 160 cặp, thời gian rút ngắn từ 10 phút xuống 5 phút với màn hình
+              ngang toàn màn hình tối ưu cho di động.
             </p>
 
             {/* Primary CTA & Secondary Actions */}
@@ -312,11 +312,11 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2 text-[#FACC15] font-semibold text-sm">
               <Layers className="w-4 h-4 shrink-0" />
-              <span>Tăng cặp mỗi 10 màn (100 → 400 cặp)</span>
+              <span>Tăng cặp mỗi 10 màn (80 → 160 cặp)</span>
             </div>
             <p className="text-sm text-slate-300 leading-relaxed">
-              Màn 1–10 có 100 cặp, tăng đều mỗi 10 màn tới 400 cặp ở cấp 200 với 45 loài thú cưng
-              nguyên tố riêng biệt.
+              Màn 1–10 có 80 cặp, tăng đều mỗi 10 màn tới 160 cặp ở cấp 200 với 45 loài thú cưng
+              nguyên tố riêng biệt, thẻ hình lớn dễ chạm.
             </p>
           </div>
 
@@ -334,11 +334,11 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2 text-[#FACC15] font-semibold text-sm">
               <ShieldCheck className="w-4 h-4 shrink-0" />
-              <span>Tự tối ưu Mobile, Lưu & Chơi Offline</span>
+              <span>Full màn hình ngang, Lưu & Offline</span>
             </div>
             <p className="text-sm text-slate-300 leading-relaxed">
-              Tự động xoay dọc bàn đấu cho vừa tay điện thoại, đồng bộ tài khoản Google 1 lần và
-              cho phép chơi mượt kể cả khi mất mạng.
+              Tự động mở toàn màn hình ngang trên di động, đồng bộ tài khoản Google 1 lần và cho
+              phép chơi mượt kể cả khi mất mạng.
             </p>
           </div>
         </section>

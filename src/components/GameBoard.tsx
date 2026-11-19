@@ -17,15 +17,16 @@ interface GameBoardProps {
 }
 
 const STADIUM_BG = '/src/assets/images/mon_stadium_turf_1795064520201.jpg';
+const PERIMETER_PAD = 0.22;
 
 function toSvgCoord(pos: GridPos, rows: number, cols: number): { x: number; y: number } {
-  let x = pos.c + 1;
-  if (pos.c < 0) x = 0.25;
-  else if (pos.c >= cols) x = cols + 0.75;
+  let x = pos.c + PERIMETER_PAD + 0.5;
+  if (pos.c < 0) x = PERIMETER_PAD * 0.45;
+  else if (pos.c >= cols) x = cols + PERIMETER_PAD * 1.55;
 
-  let y = pos.r + 1;
-  if (pos.r < 0) y = 0.25;
-  else if (pos.r >= rows) y = rows + 0.75;
+  let y = pos.r + PERIMETER_PAD + 0.5;
+  if (pos.r < 0) y = PERIMETER_PAD * 0.45;
+  else if (pos.r >= rows) y = rows + PERIMETER_PAD * 1.55;
 
   return { x, y };
 }
@@ -77,22 +78,30 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   }, []);
 
   const rows = board.length || 10;
-  const cols = rows > 0 && board[0] ? board[0].length : 20;
+  const cols = rows > 0 && board[0] ? board[0].length : 16;
 
-  // Always arrange in native horizontal landscape grid (cols x rows)
-  const outerW = cols + 1;
-  const outerH = rows + 1;
-  const isDense = cols >= 26 || rows >= 14;
+  // Compact perimeter channel keeps outside connection beams clear while maximizing tile size
+  const outerW = cols + PERIMETER_PAD * 2;
+  const outerH = rows + PERIMETER_PAD * 2;
+  const isDense = cols >= 22 || rows >= 14;
 
-  const padX = isCompactLandscape ? 6 : 20;
-  const padY = isCompactLandscape ? 6 : 16;
+  const padX = isCompactLandscape ? 2 : 16;
+  const padY = isCompactLandscape ? 2 : 12;
   const maxW = Math.max(180, containerSize.width - padX);
   const maxH = Math.max(120, containerSize.height - padY);
 
-  const fitW = Math.floor(Math.min(maxW, (maxH * outerW) / outerH));
-  const fitH = Math.floor((fitW * outerH) / outerW);
+  const squareW = Math.min(maxW, (maxH * outerW) / outerH);
+  const squareH = (squareW * outerH) / outerW;
 
-  const zoomFactor = isCompactLandscape && mobileZoomed ? 1.55 : 1;
+  // On mobile landscape, gently allow up to 1.24x fill on the slack axis so the board fills edge-to-edge with zero top/bottom gaps
+  const fitW = isCompactLandscape
+    ? Math.floor(Math.min(maxW, squareW * 1.24))
+    : Math.floor(squareW);
+  const fitH = isCompactLandscape
+    ? Math.floor(Math.min(maxH, squareH * 1.24))
+    : Math.floor(squareH);
+
+  const zoomFactor = isCompactLandscape && mobileZoomed ? 1.5 : 1;
   const boardW = Math.round(fitW * zoomFactor);
   const boardH = Math.round(fitH * zoomFactor);
 
@@ -119,23 +128,31 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
   const tileWidthPct = 100 / cols;
   const tileHeightPct = 100 / rows;
-  const strokeScale = isDense ? 1.15 : 1;
+  const strokeScale = isDense ? 1.1 : 1;
 
   return (
     <div
       ref={wrapperRef}
       className={`relative w-full h-full flex ${
         isCompactLandscape && mobileZoomed
-          ? 'overflow-auto items-start justify-start p-1'
+          ? 'overflow-auto items-start justify-start p-0.5'
           : 'items-center justify-center overflow-hidden'
       }`}
     >
-      {/* Landscape Battle Arena Frame */}
+      {/* Full-Fill Landscape Battle Arena Frame */}
       <div
         style={{ width: `${boardW}px`, height: `${boardH}px` }}
-        className="relative shrink-0 rounded-xl sm:rounded-2xl bg-[#111827] p-[2px] sm:p-[3px] shadow-[0_18px_50px_rgba(0,0,0,0.75)] border-2 border-[#DC2626] overflow-hidden"
+        className={`relative shrink-0 bg-[#111827] shadow-[0_14px_40px_rgba(0,0,0,0.75)] overflow-hidden ${
+          isCompactLandscape
+            ? 'rounded-lg p-[1px] border border-[#DC2626]'
+            : 'rounded-2xl p-[3px] border-2 border-[#DC2626]'
+        }`}
       >
-        <div className="relative w-full h-full rounded-[10px] sm:rounded-[13px] bg-[#14532D] overflow-hidden">
+        <div
+          className={`relative w-full h-full bg-[#14532D] overflow-hidden ${
+            isCompactLandscape ? 'rounded-[7px]' : 'rounded-[13px]'
+          }`}
+        >
           {!stadiumErr ? (
             <img
               src={STADIUM_BG}
@@ -154,8 +171,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           {/* Dynamic Inner Playfield Container */}
           <div
             style={{
-              left: `${(0.5 / outerW) * 100}%`,
-              top: `${(0.5 / outerH) * 100}%`,
+              left: `${(PERIMETER_PAD / outerW) * 100}%`,
+              top: `${(PERIMETER_PAD / outerH) * 100}%`,
               width: `${(cols / outerW) * 100}%`,
               height: `${(rows / outerH) * 100}%`,
             }}
@@ -211,7 +228,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                 points={pathPoints}
                 fill="none"
                 stroke="rgba(250, 204, 21, 0.5)"
-                strokeWidth={0.38 * strokeScale}
+                strokeWidth={0.34 * strokeScale}
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
@@ -219,7 +236,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                 points={pathPoints}
                 fill="none"
                 stroke="#FACC15"
-                strokeWidth={0.16 * strokeScale}
+                strokeWidth={0.14 * strokeScale}
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
@@ -230,7 +247,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                     key={i}
                     cx={x}
                     cy={y}
-                    r={(i === 0 || i === activeConnection.path.length - 1 ? 0.24 : 0.13) * strokeScale}
+                    r={(i === 0 || i === activeConnection.path.length - 1 ? 0.22 : 0.12) * strokeScale}
                     fill="#FEF08A"
                     stroke="#DC2626"
                     strokeWidth={0.05 * strokeScale}
@@ -243,8 +260,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           {/* Floating Score Popups */}
           {!isPaused &&
             floatingScores.map((fs) => {
-              const leftPct = ((fs.c + 1) / outerW) * 100;
-              const topPct = ((fs.r + 1) / outerH) * 100;
+              const leftPct = ((fs.c + PERIMETER_PAD + 0.5) / outerW) * 100;
+              const topPct = ((fs.r + PERIMETER_PAD + 0.5) / outerH) * 100;
               return (
                 <div
                   key={fs.id}

@@ -901,78 +901,70 @@ export default function App() {
   const stageContent = (
     <>
       {viewport.isCompactLandscape ? (
-        /* Compact Mobile/Tablet Landscape Stage: 0px top/bottom waste, dual slim side rails */
+        /* Compact Mobile/Tablet Landscape Stage: ultra-slim 44px side rails, maximum Pokemon board area */
         <div className="w-full h-full flex overflow-hidden bg-[#111827]">
-          {/* Left Slim Status Rail */}
-          <aside className="w-[74px] sm:w-[86px] shrink-0 bg-[#991B1B] border-r-2 border-[#0F172A] flex flex-col justify-between py-1.5 px-1.5 select-none">
-            <div className="flex flex-col gap-1.5">
-              <button
-                type="button"
-                onClick={handleExitToLevels}
-                aria-label="Quay về bản đồ cấp độ"
-                className="w-full min-h-[36px] flex items-center justify-center gap-1 rounded-lg bg-[#7F1D1D] hover:bg-[#450A0A] border border-red-950/70 text-red-50 text-[11px] font-bold cursor-pointer"
+          {/* Left Ultra-Slim Status Rail (44px) */}
+          <aside className="w-11 shrink-0 bg-[#991B1B] border-r border-[#0F172A] flex flex-col items-stretch justify-between py-1 px-1 gap-1 select-none">
+            <button
+              type="button"
+              onClick={handleExitToLevels}
+              title="Quay về bản đồ cấp độ"
+              aria-label="Quay về bản đồ cấp độ"
+              className="h-8 flex items-center justify-center rounded-md bg-[#7F1D1D] hover:bg-[#450A0A] border border-red-950/70 text-red-50 cursor-pointer shrink-0"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+
+            <div className="rounded-md bg-[#0F172A]/60 px-0.5 py-1 text-center leading-tight">
+              <div className="text-[9px] text-red-200 font-semibold">Cấp</div>
+              <div className="font-mono-num text-[11px] font-extrabold text-white">
+                {levelConfig.level}
+              </div>
+            </div>
+
+            <div className="rounded-md bg-[#0F172A]/70 px-0.5 py-1 flex flex-col items-center gap-0.5 text-center leading-tight">
+              <span
+                className={`font-mono-num text-[10px] font-extrabold ${
+                  isLowTime ? 'text-[#FACC15]' : 'text-white'
+                }`}
               >
-                <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
-                <span>Thoát</span>
-              </button>
-
-              <div className="rounded-lg bg-[#0F172A]/55 border border-red-950/60 px-1.5 py-1 text-center">
-                <div className="font-mono-num text-xs font-extrabold text-white whitespace-nowrap">
-                  Cấp {levelConfig.level}
-                </div>
-                <div className="font-mono-num text-[10px] text-red-100/90 whitespace-nowrap">
-                  {levelConfig.cols}×{levelConfig.rows}
-                </div>
+                {formatDuration(timeRemaining)}
+              </span>
+              <div className="w-full h-1 rounded-full bg-slate-900 overflow-hidden">
+                <div
+                  style={{ width: `${timeProgressPct}%` }}
+                  className={`h-full transition-all duration-500 ${
+                    isLowTime
+                      ? 'bg-rose-400'
+                      : timeProgressPct < 35
+                        ? 'bg-[#FACC15]'
+                        : 'bg-emerald-400'
+                  }`}
+                />
               </div>
             </div>
 
-            {/* Timer + Pairs + Score */}
-            <div className="flex flex-col gap-1.5">
-              <div className="rounded-lg bg-[#0F172A]/65 border border-red-950/60 px-1.5 py-1.5 flex flex-col gap-1 text-center">
-                <span className={`text-[10px] font-semibold ${isLowTime ? 'text-yellow-300' : 'text-red-100'}`}>
-                  {isLowTime ? 'Sắp hết!' : 'Thời gian'}
-                </span>
-                <span className={`font-mono-num text-xs sm:text-sm font-extrabold ${isLowTime ? 'text-[#FACC15]' : 'text-white'}`}>
-                  {formatDuration(timeRemaining)}
-                </span>
-                <div className="w-full h-1.5 rounded-full bg-slate-900 overflow-hidden">
-                  <div
-                    style={{ width: `${timeProgressPct}%` }}
-                    className={`h-full transition-all duration-500 ${
-                      isLowTime
-                        ? 'bg-rose-400'
-                        : timeProgressPct < 35
-                          ? 'bg-[#FACC15]'
-                          : 'bg-emerald-400'
-                    }`}
-                  />
-                </div>
-              </div>
-
-              <div className="rounded-lg bg-[#0F172A]/50 border border-red-950/50 px-1.5 py-1 text-center">
-                <div className="text-[10px] text-red-100">Còn lại</div>
-                <div className="font-mono-num text-xs font-extrabold text-white">
-                  {totalPairs - pairsMatched}/{totalPairs}
-                </div>
-              </div>
-
-              <div className="rounded-lg bg-[#0F172A]/50 border border-red-950/50 px-1.5 py-1 text-center">
-                <div className="text-[10px] text-red-100">
-                  Điểm{combo > 1 ? ` x${combo}` : ''}
-                </div>
-                <div className="font-mono-num text-xs font-extrabold text-[#FACC15] truncate">
-                  {score.toLocaleString('vi-VN')}
-                </div>
+            <div className="rounded-md bg-[#0F172A]/50 px-0.5 py-1 text-center leading-tight">
+              <div className="text-[9px] text-red-200">Cặp</div>
+              <div className="font-mono-num text-[11px] font-extrabold text-white">
+                {totalPairs - pairsMatched}
               </div>
             </div>
 
-            <div className="text-[10px] leading-tight text-center text-yellow-200/95 font-medium line-clamp-2 px-0.5">
-              {lastShiftLabel || levelConfig.gravityLabel}
+            <div className="rounded-md bg-[#0F172A]/50 px-0.5 py-1 text-center leading-tight">
+              <div className="text-[9px] text-red-200">
+                {combo > 1 ? `x${combo}` : 'Điểm'}
+              </div>
+              <div className="font-mono-num text-[10px] font-extrabold text-[#FACC15] truncate">
+                {score >= 10000
+                  ? `${(score / 1000).toFixed(1)}k`
+                  : score.toLocaleString('vi-VN')}
+              </div>
             </div>
           </aside>
 
-          {/* Center Full-Height Landscape Battle Arena */}
-          <main className="relative flex-1 min-w-0 h-full flex items-center justify-center p-1 overflow-hidden">
+          {/* Center Edge-to-Edge Landscape Battle Arena */}
+          <main className="relative flex-1 min-w-0 h-full flex items-center justify-center p-0 overflow-hidden">
             <GameBoard
               board={board}
               selected={selected}
@@ -988,110 +980,105 @@ export default function App() {
             />
 
             {toastMessage && (
-              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-50 px-3 py-1.5 rounded-lg bg-[#0F172A]/95 border border-[#FACC15]/70 text-xs font-semibold text-[#FACC15] shadow-xl pointer-events-none whitespace-nowrap max-w-[92%] truncate">
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-50 px-3 py-1 rounded-lg bg-[#0F172A]/95 border border-[#FACC15]/70 text-xs font-semibold text-[#FACC15] shadow-xl pointer-events-none whitespace-nowrap max-w-[92%] truncate">
                 {toastMessage}
               </div>
             )}
           </main>
 
-          {/* Right Slim Thumb Action Rail */}
-          <aside className="w-[62px] sm:w-[70px] shrink-0 bg-[#0F172A] border-l border-slate-800 py-1.5 px-1.5 grid grid-rows-6 gap-1 select-none">
+          {/* Right Ultra-Slim Thumb Action Rail (44px) */}
+          <aside className="w-11 shrink-0 bg-[#0F172A] border-l border-slate-800 py-1 px-1 flex flex-col items-stretch justify-between gap-1 select-none">
             <button
               type="button"
               onClick={() => setGameState((s) => (s === 'PLAYING' ? 'PAUSED' : 'PLAYING'))}
-              className="rounded-xl bg-[#1E293B] border border-slate-700/80 flex flex-col items-center justify-center gap-0.5 text-white cursor-pointer"
+              title={gameState === 'PAUSED' ? 'Tiếp tục' : 'Tạm dừng'}
+              aria-label={gameState === 'PAUSED' ? 'Tiếp tục' : 'Tạm dừng'}
+              className="flex-1 min-h-0 rounded-lg bg-[#1E293B] border border-slate-700/80 flex items-center justify-center text-white cursor-pointer"
             >
               {gameState === 'PAUSED' ? <Play className="w-4 h-4 fill-current" /> : <Pause className="w-4 h-4" />}
-              <span className="text-[10px] font-semibold whitespace-nowrap">
-                {gameState === 'PAUSED' ? 'Chơi' : 'Dừng'}
-              </span>
             </button>
 
             <button
               type="button"
               onClick={handleHint}
               disabled={gameState !== 'PLAYING' || hintsLeft <= 0}
-              className="rounded-xl bg-[#1E293B] border border-slate-700/80 disabled:opacity-40 flex flex-col items-center justify-center gap-0.5 text-emerald-300 cursor-pointer"
+              title={`Gợi ý (${hintsLeft})`}
+              aria-label={`Gợi ý (${hintsLeft})`}
+              className="flex-1 min-h-0 rounded-lg bg-[#1E293B] border border-slate-700/80 disabled:opacity-40 flex flex-col items-center justify-center text-emerald-300 cursor-pointer leading-none gap-0.5"
             >
-              <Lightbulb className="w-4 h-4" />
-              <span className="text-[10px] font-semibold font-mono-num whitespace-nowrap">
-                Gợi ý ({hintsLeft})
-              </span>
+              <Lightbulb className="w-3.5 h-3.5" />
+              <span className="text-[9px] font-bold font-mono-num">{hintsLeft}</span>
             </button>
 
             <button
               type="button"
               onClick={handleShuffle}
               disabled={gameState !== 'PLAYING' || shufflesLeft <= 0}
-              className="rounded-xl bg-[#1E293B] border border-slate-700/80 disabled:opacity-40 flex flex-col items-center justify-center gap-0.5 text-[#FACC15] cursor-pointer"
+              title={`Đảo bàn (${shufflesLeft})`}
+              aria-label={`Đảo bàn (${shufflesLeft})`}
+              className="flex-1 min-h-0 rounded-lg bg-[#1E293B] border border-slate-700/80 disabled:opacity-40 flex flex-col items-center justify-center text-[#FACC15] cursor-pointer leading-none gap-0.5"
             >
-              <Shuffle className="w-4 h-4" />
-              <span className="text-[10px] font-semibold font-mono-num whitespace-nowrap">
-                Đảo ({shufflesLeft})
-              </span>
+              <Shuffle className="w-3.5 h-3.5" />
+              <span className="text-[9px] font-bold font-mono-num">{shufflesLeft}</span>
             </button>
 
             <button
               type="button"
               onClick={() => setMobileZoomed((z) => !z)}
-              className={`rounded-xl border flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
+              title={mobileZoomed ? 'Thu vừa màn hình' : 'Phóng to'}
+              aria-label={mobileZoomed ? 'Thu vừa màn hình' : 'Phóng to'}
+              className={`flex-1 min-h-0 rounded-lg border flex items-center justify-center cursor-pointer ${
                 mobileZoomed
                   ? 'bg-[#DC2626] border-[#FACC15] text-white'
                   : 'bg-[#1E293B] border-slate-700/80 text-slate-200'
               }`}
             >
               {mobileZoomed ? <ZoomOut className="w-4 h-4" /> : <ZoomIn className="w-4 h-4" />}
-              <span className="text-[10px] font-semibold whitespace-nowrap">
-                {mobileZoomed ? 'Vừa' : 'Phóng'}
-              </span>
             </button>
 
             <button
               type="button"
               onClick={() => startLevel(levelConfig.level)}
-              className="rounded-xl bg-[#1E293B] border border-slate-700/80 flex flex-col items-center justify-center gap-0.5 text-slate-200 cursor-pointer"
+              title="Chơi lại"
+              aria-label="Chơi lại"
+              className="flex-1 min-h-0 rounded-lg bg-[#1E293B] border border-slate-700/80 flex items-center justify-center text-slate-200 cursor-pointer"
             >
-              <RotateCcw className="w-4 h-4" />
-              <span className="text-[10px] font-semibold whitespace-nowrap">Chơi lại</span>
+              <RotateCcw className="w-3.5 h-3.5" />
             </button>
 
-            <div className="grid grid-cols-2 gap-1">
+            <button
+              type="button"
+              onClick={handleToggleSound}
+              title={saveData.soundEnabled ? 'Tắt âm thanh' : 'Bật âm thanh'}
+              aria-label={saveData.soundEnabled ? 'Tắt âm thanh' : 'Bật âm thanh'}
+              className="flex-1 min-h-0 rounded-lg bg-[#1E293B] border border-slate-700/80 flex items-center justify-center text-slate-200 cursor-pointer"
+            >
+              {saveData.soundEnabled ? (
+                <Volume2 className="w-3.5 h-3.5 text-emerald-300" />
+              ) : (
+                <VolumeX className="w-3.5 h-3.5 text-slate-400" />
+              )}
+            </button>
+
+            {fsSupported && (
               <button
                 type="button"
-                onClick={handleToggleSound}
-                aria-label={saveData.soundEnabled ? 'Tắt âm thanh' : 'Bật âm thanh'}
-                className="rounded-xl bg-[#1E293B] border border-slate-700/80 flex items-center justify-center text-slate-200 cursor-pointer"
+                onClick={handleToggleFullscreen}
+                title={viewport.isFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
+                aria-label={viewport.isFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
+                className={`flex-1 min-h-0 rounded-lg border flex items-center justify-center cursor-pointer ${
+                  !viewport.isFullscreen
+                    ? 'bg-[#FACC15] border-yellow-300 text-slate-950'
+                    : 'bg-[#1E293B] border-slate-700/80 text-slate-200'
+                }`}
               >
-                {saveData.soundEnabled ? (
-                  <Volume2 className="w-4 h-4 text-emerald-300" />
+                {viewport.isFullscreen ? (
+                  <Minimize2 className="w-3.5 h-3.5" />
                 ) : (
-                  <VolumeX className="w-4 h-4 text-slate-400" />
+                  <Maximize2 className="w-3.5 h-3.5" />
                 )}
               </button>
-
-              {fsSupported ? (
-                <button
-                  type="button"
-                  onClick={handleToggleFullscreen}
-                  aria-label={viewport.isFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
-                  className={`rounded-xl border flex items-center justify-center cursor-pointer ${
-                    !viewport.isFullscreen
-                      ? 'bg-[#FACC15] border-yellow-300 text-slate-950'
-                      : 'bg-[#1E293B] border-slate-700/80 text-slate-200'
-                  }`}
-                >
-                  {viewport.isFullscreen ? (
-                    <Minimize2 className="w-3.5 h-3.5" />
-                  ) : (
-                    <Maximize2 className="w-3.5 h-3.5" />
-                  )}
-                </button>
-              ) : (
-                <div className="rounded-xl bg-[#1E293B]/50 border border-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-400">
-                  HD
-                </div>
-              )}
-            </div>
+            )}
           </aside>
         </div>
       ) : (

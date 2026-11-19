@@ -20,7 +20,7 @@ export const PokemonTile: React.FC<PokemonTileProps> = React.memo(
     const species = getPokemonSpecies(tile.speciesId);
 
     return (
-      <div className={`w-full h-full ${dense ? 'p-[0.5px] sm:p-[1px]' : 'p-[1px] sm:p-[2px]'}`}>
+      <div className={`w-full h-full ${dense ? 'p-[0.5px]' : 'p-[0.5px] sm:p-[1.5px]'}`}>
         <button
           type="button"
           onClick={() => onSelect(r, c)}
@@ -39,13 +39,13 @@ export const PokemonTile: React.FC<PokemonTileProps> = React.memo(
           className={[
             'relative w-full h-full min-w-0 min-h-0 leading-none border transition-transform duration-150 ease-out select-none flex flex-col items-center justify-center overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400',
             dense
-              ? 'rounded-[3px] sm:rounded-[4px] p-[1px]'
-              : 'rounded-[5px] sm:rounded-[7px] border-[1.5px] p-[1.5px] sm:p-[2px]',
+              ? 'rounded-[3px] sm:rounded-[5px] p-0'
+              : 'rounded-[4px] sm:rounded-[7px] sm:border-[1.5px] p-0 sm:p-[1px]',
             tile.frozen
-              ? 'cursor-not-allowed shadow-[inset_0_0_0_1.5px_rgba(56,189,248,0.45),0_2px_0_#0284C7]'
+              ? 'cursor-not-allowed shadow-[inset_0_0_0_1.5px_rgba(56,189,248,0.45),0_1.5px_0_#0284C7]'
               : dense
                 ? 'cursor-pointer shadow-[0_1.5px_0_rgba(15,23,42,0.45)] lg:hover:-translate-y-[1px] active:scale-95'
-                : 'cursor-pointer shadow-[0_2.5px_0_rgba(15,23,42,0.45)] lg:hover:-translate-y-[1px] active:scale-95',
+                : 'cursor-pointer shadow-[0_2px_0_rgba(15,23,42,0.45)] lg:hover:-translate-y-[1px] active:scale-95',
             isSelected
               ? 'ring-2 ring-yellow-400 scale-[1.04] shadow-[0_4px_14px_rgba(220,38,38,0.75)] z-20'
               : '',
@@ -59,16 +59,14 @@ export const PokemonTile: React.FC<PokemonTileProps> = React.memo(
           {/* Thin top elemental type bar */}
           <span
             style={{ backgroundColor: tile.frozen ? '#38BDF8' : species.borderTint }}
-            className={`absolute top-0 inset-x-0 pointer-events-none opacity-85 ${
-              dense ? 'h-[1.5px] sm:h-[2px]' : 'h-[2px] sm:h-[2.5px]'
-            }`}
+            className="absolute top-0 inset-x-0 pointer-events-none opacity-85 h-[1.5px] sm:h-[2px]"
           />
 
-          {/* Pure white inner canvas so mix-blend-multiply makes sprite background invisible */}
-          <div className="relative z-10 w-full h-full flex items-center justify-center pt-[1px]">
+          {/* Pure white inner canvas with maximized creature artwork */}
+          <div className="relative z-10 w-full h-full flex items-center justify-center overflow-hidden">
             <PokemonArtwork
               speciesId={tile.speciesId}
-              className={`${dense ? 'w-[94%] h-[94%]' : 'w-[90%] h-[90%]'} ${
+              className={`w-[96%] h-[96%] scale-[1.08] ${
                 tile.frozen ? 'opacity-60 saturate-50' : ''
               }`}
             />
