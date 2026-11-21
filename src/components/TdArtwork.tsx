@@ -1,5 +1,5 @@
 import React from 'react';
-import { TdBranchId, TdEnemyType, TdMapLandmark, TdTowerType } from '../types/towerDefense';
+import { TdBranchId, TdEnemyType, TdMapLandmark, TdTowerLevel, TdTowerType } from '../types/towerDefense';
 import {
   resolveEnemyAnimeKey,
   resolveGuardAnimeKey,
@@ -173,7 +173,7 @@ export const TdSharedArtworkDefs: React.FC = () => (
 
 interface TdTowerSpriteProps {
   type: TdTowerType;
-  level: 1 | 2 | 3 | 4;
+  level: TdTowerLevel;
   branch: TdBranchId | null;
   facingAngle?: number;
   recoil?: number;
@@ -182,11 +182,11 @@ interface TdTowerSpriteProps {
 
 /**
  * Architectural Bastion Pedestal that visibly evolves from Lv1 Timber/Stone Outpost ->
- * Lv2 Fortified Masonry Rampart -> Lv3 Royal Citadel Dais -> Lv4 Class-Specific Grand Shrine.
+ * Lv2 Fortified Masonry Rampart -> Lv3 Royal Citadel Dais -> Lv4-7 Mythic Grand Shrine.
  */
 function renderHeroPedestal(
   type: TdTowerType,
-  level: 1 | 2 | 3 | 4,
+  level: TdTowerLevel,
   branch: TdBranchId | null
 ) {
   let bodyFill = 'url(#tdPedestalStoneGrad)';
@@ -294,8 +294,8 @@ function renderHeroPedestal(
         </>
       )}
 
-      {/* Lv4 Branch Shrine Architectural Crown */}
-      {level === 4 && (
+      {/* Lv4+ Branch Shrine Architectural Crown */}
+      {level >= 4 && (
         <g>
           {/* Radiant Ground Aura */}
           <ellipse cx="0" cy="9.5" rx="22.5" ry="7.4" fill="none" stroke={auraColor} strokeWidth="1.5" strokeDasharray="5 3" className="td-anim-glow" />
@@ -938,8 +938,9 @@ export const TdTowerSprite: React.FC<TdTowerSpriteProps> = React.memo(
                     ? '#7DD3FC'
                     : '#FEF08A';
 
-      const sizeW = level === 4 ? 64 : level === 3 ? 60 : level === 2 ? 56 : 52;
-      const sizeH = level === 4 ? 64 : level === 3 ? 60 : level === 2 ? 56 : 52;
+      const sizeW =
+        level >= 7 ? 70 : level === 6 ? 68 : level === 5 ? 66 : level === 4 ? 64 : level === 3 ? 60 : level === 2 ? 56 : 52;
+      const sizeH = sizeW;
 
       // 2-Stage Spring Kinematics: Anticipation pull-back (windup) -> Release snap / recoil (firing)
       const shiftX = isWinding
@@ -984,22 +985,60 @@ export const TdTowerSprite: React.FC<TdTowerSpriteProps> = React.memo(
       return (
         <g>
           {/* Soft Ground Contact Shadow */}
-          <ellipse cx="0" cy="14.5" rx={level >= 3 ? 23 : 20} ry="7.8" fill="#020617" opacity="0.52" />
+          <ellipse cx="0" cy="14.5" rx={level >= 5 ? 25 : level >= 3 ? 23 : 20} ry="7.8" fill="#020617" opacity="0.52" />
 
           {/* Level Evolution Magic Ring */}
           {level >= 2 && (
             <ellipse
               cx="0"
               cy="12.5"
-              rx={level >= 4 ? 23 : level === 3 ? 21 : 19}
-              ry={level >= 4 ? 8 : 6.8}
+              rx={level >= 5 ? 25 : level >= 4 ? 23 : level === 3 ? 21 : 19}
+              ry={level >= 5 ? 8.8 : level >= 4 ? 8 : 6.8}
               fill={auraColor}
-              fillOpacity={level >= 4 ? 0.2 : 0.12}
-              stroke={auraColor}
-              strokeWidth={level >= 4 ? 1.8 : 1.3}
-              strokeDasharray={level === 4 ? '6 3' : undefined}
+              fillOpacity={level >= 5 ? 0.26 : level >= 4 ? 0.2 : 0.12}
+              stroke={level >= 7 ? '#FEF08A' : level >= 5 ? '#E879F9' : auraColor}
+              strokeWidth={level >= 5 ? 2.2 : level >= 4 ? 1.8 : 1.3}
+              strokeDasharray={level >= 4 ? '6 3' : undefined}
               className={level >= 3 ? 'td-anim-glow' : undefined}
             />
+          )}
+
+          {/* Mythic Ascension Aura (Lv 5, 6, 7) */}
+          {level >= 5 && (
+            <g className="pointer-events-none">
+              <ellipse
+                cx="0"
+                cy="12.5"
+                rx={level >= 7 ? 29 : 27}
+                ry={level >= 7 ? 10 : 9.2}
+                fill="none"
+                stroke={level >= 7 ? '#38BDF8' : '#FACC15'}
+                strokeWidth="1.4"
+                strokeDasharray="3 4"
+                opacity="0.85"
+              />
+              <polygon
+                points="-22,-18 -20,-14 -16,-12 -20,-10 -22,-6 -24,-10 -28,-12 -24,-14"
+                fill={level >= 7 ? '#FEF08A' : '#E879F9'}
+                className="td-anim-orb"
+              />
+              {level >= 6 && (
+                <polygon
+                  points="22,-20 24,-16 28,-14 24,-12 22,-8 20,-12 16,-14 20,-16"
+                  fill="#38BDF8"
+                  className="td-anim-orb"
+                />
+              )}
+              {level >= 7 && (
+                <polygon
+                  points="0,-46 2.5,-41 7.5,-38.5 2.5,-36 0,-31 -2.5,-36 -7.5,-38.5 -2.5,-41"
+                  fill="#FEF08A"
+                  stroke="#0F172A"
+                  strokeWidth="0.7"
+                  className="td-anim-glow"
+                />
+              )}
+            </g>
           )}
 
           {/* Crisp Transparent Anime Hero with Windup Anticipation & Follow-Through Spring */}
@@ -1557,7 +1596,7 @@ export const TdTowerSprite: React.FC<TdTowerSpriteProps> = React.memo(
                 crystal,
                 aimRight,
                 firing,
-                hasCrown: level === 4,
+                hasCrown: level >= 4,
                 isFrost: true,
                 isStorm,
               })}
@@ -1585,7 +1624,7 @@ export const TdTowerSprite: React.FC<TdTowerSpriteProps> = React.memo(
                 crystal,
                 aimRight,
                 firing,
-                hasCrown: level === 4,
+                hasCrown: level >= 4,
                 isFrost: true,
                 isStorm,
               })}
@@ -2559,7 +2598,7 @@ export const TdSoldierSprite: React.FC<{
   facingLeft: boolean;
   isAttacking?: boolean;
   isMoving?: boolean;
-  level?: 1 | 2 | 3 | 4;
+  level?: TdTowerLevel;
   branch?: TdBranchId | null;
 }> = React.memo(
   ({
@@ -2809,7 +2848,7 @@ TdMapLandmarkSprite.displayName = 'TdMapLandmarkSprite';
 
 export const TdTowerPreview: React.FC<{
   type: TdTowerType;
-  level?: 1 | 2 | 3 | 4;
+  level?: TdTowerLevel;
   branch?: TdBranchId | null;
   className?: string;
 }> = React.memo(({ type, level = 1, branch = null, className = 'w-11 h-11' }) => (

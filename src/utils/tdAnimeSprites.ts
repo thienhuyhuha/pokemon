@@ -4,7 +4,7 @@ import tdHeroesSheet2 from '../assets/images/td_anime_heroes_2_1795252934353.jpg
 import tdGuardsSheet from '../assets/images/td_anime_guards_1795252933143.jpg';
 import tdMonstersSheet1 from '../assets/images/td_anime_monsters_1_1795252933896.jpg';
 import tdMonstersSheet2 from '../assets/images/td_anime_monsters_2_1795252934093.jpg';
-import { TdBranchId, TdEnemyType, TdTowerType } from '../types/towerDefense';
+import { TdBranchId, TdEnemyType, TdTowerLevel, TdTowerType } from '../types/towerDefense';
 
 export type TdAnimeSpriteKey =
   | 'ARCHER_BASE'
@@ -345,7 +345,7 @@ export function preloadTdAnimeSprites(): void {
 
 export function resolveHeroAnimeKey(
   type: TdTowerType,
-  level: 1 | 2 | 3 | 4,
+  level: TdTowerLevel,
   branch: TdBranchId | null
 ): TdAnimeSpriteKey {
   if (type === 'ARCHER') {

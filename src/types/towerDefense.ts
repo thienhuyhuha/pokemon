@@ -1,5 +1,7 @@
 export type TdBiomeId = 'FOREST' | 'DESERT' | 'VOLCANO' | 'ICE' | 'ABYSS' | 'SKY';
 
+export type TdTowerLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
 export type TdTowerType =
   | 'ARCHER'
   | 'BARRACKS'
@@ -203,7 +205,7 @@ export interface TdBuiltTower {
   id: string;
   padId: string;
   type: TdTowerType;
-  level: 1 | 2 | 3 | 4;
+  level: TdTowerLevel;
   branch: TdBranchId | null;
   x: number;
   y: number;
@@ -255,7 +257,7 @@ export interface TdEnemyEntity {
 export interface TdSoldierEntity {
   id: string;
   towerId: string | null; // null = temporary Reinforcement spell unit
-  towerLevel?: 1 | 2 | 3 | 4;
+  towerLevel?: TdTowerLevel;
   towerBranch?: TdBranchId | null;
   slotIndex: number;
   x: number;

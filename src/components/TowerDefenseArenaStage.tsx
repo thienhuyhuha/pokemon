@@ -29,6 +29,7 @@ import {
   TD_MAP_VOLCANO_URL,
 } from '../data/pokemonSprites';
 import {
+  getExtraTowerUpgradeCost,
   TD_ENEMIES,
   TD_MAX_LEVEL,
   TD_TOWERS,
@@ -45,6 +46,7 @@ import {
   TdPoint,
   TdProjectile,
   TdSoldierEntity,
+  TdTowerLevel,
   TdTowerType,
   TdUpgrades,
 } from '../types/towerDefense';
@@ -157,19 +159,34 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
   const rawDamage = branchCfg ? branchCfg.damage : tierStats.damage;
   const rawRange = branchCfg ? branchCfg.range : tierStats.range;
   const rawCooldown = branchCfg ? branchCfg.cooldown : tierStats.cooldown;
-  const targetCount = branchCfg?.targetCount ?? tierStats.targetCount ?? 1;
-  const splashRadius = branchCfg?.splashRadius ?? tierStats.splashRadius ?? 0;
+  const baseTargetCount = branchCfg?.targetCount ?? tierStats.targetCount ?? 1;
+  const baseSplashRadius = branchCfg?.splashRadius ?? tierStats.splashRadius ?? 0;
 
-  let damage = rawDamage;
-  let range = rawRange;
-  let cooldown = rawCooldown;
+  const extraTiers = Math.max(0, tower.level - 4); // 1, 2, 3 for Lv 5, 6, 7
+
+  let damage = Math.round(rawDamage * (1 + extraTiers * 0.38));
+  let range = Math.round(rawRange * (1 + extraTiers * 0.08));
+  let cooldown = rawCooldown * Math.pow(0.86, extraTiers);
+  const targetCount = baseTargetCount + (extraTiers >= 1 ? 1 : 0) + (extraTiers >= 3 ? 1 : 0);
+  const splashRadius = baseSplashRadius > 0 ? baseSplashRadius + extraTiers * 12 : 0;
   let slowPct = branchCfg?.slowPct ?? tierStats.slowPct ?? 0;
+  if (slowPct > 0 && extraTiers > 0) {
+    slowPct = Math.min(0.72, slowPct + extraTiers * 0.04);
+  }
   const slowSplashRadius = branchCfg?.slowSplashRadius ?? tierStats.slowSplashRadius ?? 0;
   const poisonDps = branchCfg?.poisonDps ?? tierStats.poisonDps ?? 0;
-  const critChance = branchCfg?.critChance ?? tierStats.critChance ?? 0;
-  const chainCount = branchCfg?.chainCount ?? 0;
-  const auraHastePct = branchCfg?.auraHastePct ?? tierStats.auraHastePct ?? 0;
-  const healSoldierAmt = branchCfg?.healSoldierAmt ?? tierStats.healSoldierAmt ?? 0;
+  let critChance = branchCfg?.critChance ?? tierStats.critChance ?? 0;
+  if (critChance > 0 && extraTiers > 0) {
+    critChance = Math.min(0.75, critChance + extraTiers * 0.05);
+  }
+  const baseChain = branchCfg?.chainCount ?? 0;
+  const chainCount = baseChain > 0 ? baseChain + extraTiers : 0;
+  let auraHastePct = branchCfg?.auraHastePct ?? tierStats.auraHastePct ?? 0;
+  if (auraHastePct > 0 && extraTiers > 0) {
+    auraHastePct += extraTiers * 0.04;
+  }
+  const baseHealSoldier = branchCfg?.healSoldierAmt ?? tierStats.healSoldierAmt ?? 0;
+  const healSoldierAmt = baseHealSoldier > 0 ? Math.round(baseHealSoldier * (1 + extraTiers * 0.28)) : 0;
   const canHitAir = cfg.canHitAir || tower.branch === 'TESLA_COIL';
 
   // Apply Star Workshop bonuses
@@ -183,19 +200,23 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
   if (tower.type === 'MAGE' || tower.type === 'VALKYRIE') {
     if (upgrades.magic >= 1) damage = Math.round(damage * 1.15);
     if (upgrades.magic >= 2) range = Math.round(range * 1.15);
-    if (upgrades.magic >= 3 && slowPct > 0) slowPct = Math.min(0.68, slowPct + 0.15);
+    if (upgrades.magic >= 3 && slowPct > 0) slowPct = Math.min(0.72, slowPct + 0.15);
   }
 
-  const soldierCount = branchCfg?.soldierCount ?? tierStats.soldierCount ?? 3;
-  let soldierHp = branchCfg?.soldierHp ?? tierStats.soldierHp ?? 125;
-  let soldierArmor = branchCfg?.soldierArmor ?? tierStats.soldierArmor ?? 0.16;
-  let soldierDamage = branchCfg?.soldierDamage ?? tierStats.soldierDamage ?? 13;
+  const baseSoldierCount = branchCfg?.soldierCount ?? tierStats.soldierCount ?? 3;
+  const soldierCount = tower.type === 'BARRACKS' && extraTiers >= 2 ? baseSoldierCount + 1 : baseSoldierCount;
+  let soldierHp = Math.round((branchCfg?.soldierHp ?? tierStats.soldierHp ?? 125) * (1 + extraTiers * 0.35));
+  let soldierArmor = Math.min(
+    0.78,
+    (branchCfg?.soldierArmor ?? tierStats.soldierArmor ?? 0.16) + extraTiers * 0.05
+  );
+  let soldierDamage = Math.round((branchCfg?.soldierDamage ?? tierStats.soldierDamage ?? 13) * (1 + extraTiers * 0.35));
   const cleaveRadius = branchCfg?.cleaveRadius ?? tierStats.cleaveRadius ?? 0;
   const soldierRespawn = 5.0; // Exact 5s respawn delay after a guard falls
   if (tower.type === 'BARRACKS') {
     if (upgrades.barracks >= 1) {
       soldierHp = Math.round(soldierHp * 1.25);
-      soldierArmor = Math.min(0.75, soldierArmor + 0.12);
+      soldierArmor = Math.min(0.78, soldierArmor + 0.12);
     }
     if (upgrades.barracks >= 3) {
       soldierDamage = Math.round(soldierDamage * 1.3);
@@ -1336,6 +1357,10 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
         const branchCfg = cfg.branches.find((b) => b.id === branchId);
         if (!branchCfg) return;
         cost = branchCfg.cost;
+      } else if (tw.level >= 4 && tw.level < 7) {
+        const extraCost = getExtraTowerUpgradeCost(tw.type, tw.level, tw.branch);
+        if (extraCost === null) return;
+        cost = extraCost;
       } else {
         return;
       }
@@ -1344,10 +1369,12 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
       w.gold -= cost;
       tw.totalSpent += cost;
       if (tw.level < 3) {
-        tw.level = (tw.level + 1) as 2 | 3;
-      } else if (branchId) {
+        tw.level = (tw.level + 1) as TdTowerLevel;
+      } else if (tw.level === 3 && branchId) {
         tw.level = 4;
         tw.branch = branchId;
+      } else if (tw.level >= 4 && tw.level < 7) {
+        tw.level = (tw.level + 1) as TdTowerLevel;
       }
 
       // Refresh barracks soldier stats, visual tier/branch & staggered training for new slots
@@ -1751,17 +1778,26 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                 />
                 {/* Level Pips & Barracks Respawn Timer */}
                 <g transform="translate(0, 21)">
-                  {Array.from({ length: built.level }).map((_, pipIdx) => (
-                    <circle
-                      key={pipIdx}
-                      cx={(pipIdx - (built.level - 1) / 2) * 7}
-                      cy="0"
-                      r="2.4"
-                      fill={built.level === 4 ? '#38BDF8' : '#FACC15'}
-                      stroke="#0F172A"
-                      strokeWidth="1"
-                    />
-                  ))}
+                  {Array.from({ length: built.level }).map((_, pipIdx) => {
+                    const step = built.level >= 6 ? 5.6 : 6.8;
+                    return (
+                      <circle
+                        key={pipIdx}
+                        cx={(pipIdx - (built.level - 1) / 2) * step}
+                        cy="0"
+                        r={built.level >= 6 ? '2.1' : '2.4'}
+                        fill={
+                          pipIdx >= 4
+                            ? '#E879F9'
+                            : built.level >= 4
+                              ? '#38BDF8'
+                              : '#FACC15'
+                        }
+                        stroke="#0F172A"
+                        strokeWidth="1"
+                      />
+                    );
+                  })}
                 </g>
                 {built.type === 'BARRACKS' && (() => {
                   const pending = snap.soldiers
@@ -2369,7 +2405,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                   {selectedTower.branch
                     ? TD_TOWERS[selectedTower.type].branches.find((b) => b.id === selectedTower.branch)?.name
                     : TD_TOWERS[selectedTower.type].name}{' '}
-                  <span className="text-sky-300 font-mono-num">Cấp {selectedTower.level}</span>
+                  <span className="text-sky-300 font-mono-num">Cấp {selectedTower.level}/7</span>
                 </div>
                 <div className="text-[11px] text-slate-400 font-mono-num">
                   {(() => {
@@ -2455,6 +2491,50 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                   </button>
                 );
               })}
+
+            {selectedTower.level >= 4 && selectedTower.level < 7 && (() => {
+              const nextLv = (selectedTower.level + 1) as TdTowerLevel;
+              const upCost = getExtraTowerUpgradeCost(
+                selectedTower.type,
+                selectedTower.level,
+                selectedTower.branch
+              ) ?? 0;
+              const canUp = snap.gold >= upCost;
+              return (
+                <button
+                  type="button"
+                  disabled={!canUp}
+                  onClick={() => handleUpgradeTower(selectedTower.id)}
+                  className={`flex-1 min-h-[46px] px-3 py-1 rounded-xl border font-extrabold text-xs flex items-center justify-center gap-2 ${
+                    canUp
+                      ? 'bg-gradient-to-r from-fuchsia-600 to-amber-500 hover:from-fuchsia-500 hover:to-amber-400 border-amber-300 text-white cursor-pointer'
+                      : 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
+                  }`}
+                >
+                  <TdTowerPreview
+                    type={selectedTower.type}
+                    level={nextLv}
+                    branch={selectedTower.branch}
+                    className="w-9 h-9 shrink-0"
+                  />
+                  <TrendingUp className="w-3.5 h-3.5 shrink-0" />
+                  <div className="text-left leading-tight">
+                    <div>
+                      Đột Phá Cấp {nextLv}/7 ({upCost}g)
+                    </div>
+                    <div className="text-[10px] opacity-90 font-semibold">
+                      +38% Sát thương · +Tốc đánh{nextLv === 5 || nextLv === 7 ? ' · +Mục tiêu' : ''}
+                    </div>
+                  </div>
+                </button>
+              );
+            })()}
+
+            {selectedTower.level === 7 && (
+              <div className="flex-1 min-h-[42px] px-3 rounded-xl bg-slate-800/80 border border-amber-400/50 text-amber-300 font-extrabold text-xs flex items-center justify-center">
+                Cấp Tối Đa (7/7)
+              </div>
+            )}
 
             {selectedTower.type === 'BARRACKS' && (
               <button
