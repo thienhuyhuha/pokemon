@@ -16,31 +16,41 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
+import { DiamondArenaStage } from './components/DiamondArenaStage';
+import { DiamondLevelSelectView } from './components/DiamondLevelSelectView';
 import { EndRoundModal } from './components/EndRoundModal';
 import { GameBoard } from './components/GameBoard';
 import { LevelSelectView } from './components/LevelSelectView';
 import { PokeballIcon } from './components/PokeballIcon';
 import { TitleScreen } from './components/TitleScreen';
+import { DIAMOND_MAX_LEVEL, getDiamondLevelConfig } from './data/diamondLevels';
 import {
   formatDuration,
   getLevelConfig,
   MAX_LEVEL,
 } from './data/levels';
+import { preloadAllGameAssets } from './data/pokemonSprites';
 import {
   auth,
+  checkGoogleRedirectResult,
   CloudSyncStatus,
+  createDiamondProfile,
   createPlayerProfile,
   db,
   handleFirestoreError,
+  normalizeDiamondLevelsFromCloud,
   normalizeLevelsFromCloud,
   OperationType,
+  saveDiamondProgressToCloud,
   savePlayerProgressToCloud,
   savePlayerSoundToCloud,
   signInWithGoogle,
+  signInWithGoogleRedirect,
   signOutPlayer,
   syncPlayerIdentity,
 } from './firebase';
 import { useViewportMode } from './hooks/useViewportMode';
+import { DiamondLevelConfig, DiamondSaveData, GameId } from './types/diamond';
 import {
   ActiveConnection,
   BoardGrid,
@@ -57,15 +67,22 @@ import {
   exitGameFullscreenAndUnlock,
 } from './utils/fullscreen';
 import {
+  clearGuestDiamondSave,
   clearGuestSaveData,
   clearRememberedAccount,
+  DEFAULT_DIAMOND_SAVE,
   DEFAULT_SAVE,
   getRememberedAccount,
+  loadGuestDiamondSave,
   loadGuestSaveData,
+  loadPlayerDiamondSave,
   loadPlayerLocalSave,
+  mergeDiamondSaveData,
   mergeSaveData,
   RememberedAccount,
+  saveGuestDiamondSave,
   saveGuestSaveData,
+  savePlayerDiamondSave,
   savePlayerLocalSave,
   setRememberedAccount,
 } from './utils/localAccountCache';
@@ -131,10 +148,13 @@ export default function App() {
   const [authReady, setAuthReady] = useState<boolean>(false);
   const [authLoading, setAuthLoading] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [showRedirectFallback, setShowRedirectFallback] = useState<boolean>(false);
   const [syncStatus, setSyncStatus] = useState<CloudSyncStatus>(() =>
     getRememberedAccount() ? 'remembered' : 'local'
   );
   const [fatalError, setFatalError] = useState<Error | null>(null);
+
+  const [activeGame, setActiveGame] = useState<GameId>('CHIBIMON');
 
   const [saveData, setSaveData] = useState<SaveData>(() => {
     const remembered = getRememberedAccount();
@@ -144,6 +164,12 @@ export default function App() {
     sound.setEnabled(loaded.soundEnabled);
     return loaded;
   });
+  const [diamondSaveData, setDiamondSaveData] = useState<DiamondSaveData>(() => {
+    const remembered = getRememberedAccount();
+    return remembered
+      ? (loadPlayerDiamondSave(remembered.uid) ?? loadGuestDiamondSave())
+      : loadGuestDiamondSave();
+  });
   const [bgmEnabled, setBgmEnabled] = useState<boolean>(() => sound.bgmEnabled);
 
   // Creator/Admin preview mode (session-only; regular players must unlock sequentially)
@@ -151,6 +177,10 @@ export default function App() {
 
   const [gameState, setGameState] = useState<GameState>('TITLE_MENU');
   const [levelConfig, setLevelConfig] = useState<LevelConfig>(() => getLevelConfig(1));
+  const [diamondLevelConfig, setDiamondLevelConfig] = useState<DiamondLevelConfig>(() =>
+    getDiamondLevelConfig(1)
+  );
+  const [diamondRunNonce, setDiamondRunNonce] = useState<number>(0);
   const [board, setBoard] = useState<BoardGrid>([]);
   const [selected, setSelected] = useState<GridPos | null>(null);
   const [hintPair, setHintPair] = useState<{ a: GridPos; b: GridPos } | null>(null);
@@ -173,6 +203,7 @@ export default function App() {
   const viewport = useViewportMode();
 
   const saveDataRef = useRef<SaveData>(saveData);
+  const diamondSaveRef = useRef<DiamondSaveData>(diamondSaveData);
   const boardRef = useRef<BoardGrid>(board);
   const selectedRef = useRef<GridPos | null>(selected);
   const gameStateRef = useRef<GameState>(gameState);
@@ -184,8 +215,10 @@ export default function App() {
   const userRef = useRef<User | null>(user);
   const rememberedAccountRef = useRef<RememberedAccount | null>(rememberedAccount);
   const creatingProfileUidRef = useRef<string | null>(null);
+  const creatingDiamondUidRef = useRef<string | null>(null);
   const identitySyncedUidRef = useRef<string | null>(null);
   const mergeSyncedUidRef = useRef<string | null>(null);
+  const mergeDiamondSyncedUidRef = useRef<string | null>(null);
 
   const lastMatchAtRef = useRef<number>(0);
   const effectTimersRef = useRef<Set<number>>(new Set());
@@ -195,6 +228,10 @@ export default function App() {
   useEffect(() => {
     saveDataRef.current = saveData;
   }, [saveData]);
+
+  useEffect(() => {
+    diamondSaveRef.current = diamondSaveData;
+  }, [diamondSaveData]);
 
   useEffect(() => {
     boardRef.current = board;
@@ -273,27 +310,36 @@ export default function App() {
     };
   }, []);
 
+  // Eagerly preload all sprite sheets & arena images so offline mode never loses any tier
+  useEffect(() => {
+    preloadAllGameAssets();
+    void checkGoogleRedirectResult();
+  }, []);
+
   // Keep background music mode synced with game state and remaining time
   useEffect(() => {
     if (gameState === 'TITLE_MENU' || gameState === 'LEVEL_SELECT') {
       sound.setBgmState('menu', false);
     } else if (gameState === 'PLAYING') {
-      sound.setBgmState('battle', timeRemaining <= 30);
+      const hurry = activeGame === 'CHIBIMON' && timeRemaining <= 30;
+      sound.setBgmState('battle', hurry);
     } else {
       sound.setBgmState('off', false);
     }
-  }, [gameState, timeRemaining]);
+  }, [activeGame, gameState, timeRemaining]);
 
   // Persist current player's progress locally on their machine
   useEffect(() => {
     const activeUid = user?.uid ?? rememberedAccount?.uid ?? null;
     if (activeUid) {
       savePlayerLocalSave(activeUid, saveData);
+      savePlayerDiamondSave(activeUid, diamondSaveData);
       return;
     }
     if (!authReady) return;
     saveGuestSaveData(saveData);
-  }, [authReady, user, rememberedAccount, saveData]);
+    saveGuestDiamondSave(diamondSaveData);
+  }, [authReady, user, rememberedAccount, saveData, diamondSaveData]);
 
   // Listen for Firebase Auth state changes
   useEffect(() => {
@@ -303,22 +349,29 @@ export default function App() {
 
       if (!nextUser) {
         creatingProfileUidRef.current = null;
+        creatingDiamondUidRef.current = null;
         identitySyncedUidRef.current = null;
         mergeSyncedUidRef.current = null;
+        mergeDiamondSyncedUidRef.current = null;
 
         const remembered = getRememberedAccount();
         if (remembered) {
           setRememberedAccountState(remembered);
           setSyncStatus('remembered');
           const cached = loadPlayerLocalSave(remembered.uid) ?? DEFAULT_SAVE;
+          const cachedDiamond =
+            loadPlayerDiamondSave(remembered.uid) ?? DEFAULT_DIAMOND_SAVE;
           sound.setEnabled(cached.soundEnabled);
           setSaveData(cached);
+          setDiamondSaveData(cachedDiamond);
         } else {
           setRememberedAccountState(null);
           setSyncStatus('local');
           const guest = loadGuestSaveData();
+          const guestDiamond = loadGuestDiamondSave();
           sound.setEnabled(guest.soundEnabled);
           setSaveData(guest);
+          setDiamondSaveData(guestDiamond);
         }
         return;
       }
@@ -332,12 +385,17 @@ export default function App() {
       setRememberedAccount(acct);
       setRememberedAccountState(acct);
       setAuthError(null);
+      setShowRedirectFallback(false);
       setSyncStatus('syncing');
 
       const cached = loadPlayerLocalSave(nextUser.uid);
       if (cached) {
         sound.setEnabled(cached.soundEnabled);
         setSaveData(cached);
+      }
+      const cachedDiamond = loadPlayerDiamondSave(nextUser.uid);
+      if (cachedDiamond) {
+        setDiamondSaveData(cachedDiamond);
       }
     });
     return () => unsub();
@@ -470,30 +528,128 @@ export default function App() {
     };
   }, [authReady, user, showToast]);
 
+  // Attach Firestore real-time listener for Kim Cương 100 progress
+  useEffect(() => {
+    if (!authReady || !user) return;
+
+    const path = `diamondProgress/${user.uid}`;
+    const docRef = doc(db, 'diamondProgress', user.uid);
+    let active = true;
+
+    const unsubscribe = onSnapshot(
+      docRef,
+      (snap) => {
+        if (!active) return;
+
+        if (snap.exists()) {
+          const data = snap.data();
+          const cloudSave: DiamondSaveData = {
+            highestUnlockedLevel: Math.max(
+              1,
+              Math.min(DIAMOND_MAX_LEVEL, Number(data.highestUnlockedLevel) || 1)
+            ),
+            totalScore: Math.max(0, Number(data.totalScore) || 0),
+            levels: normalizeDiamondLevelsFromCloud(data.levels),
+          };
+
+          const localCached = loadPlayerDiamondSave(user.uid);
+          const { merged, cloudNeedsUpdate } = mergeDiamondSaveData(cloudSave, localCached);
+
+          setDiamondSaveData(merged);
+          savePlayerDiamondSave(user.uid, merged);
+
+          if (cloudNeedsUpdate && mergeDiamondSyncedUidRef.current !== user.uid) {
+            mergeDiamondSyncedUidRef.current = user.uid;
+            void saveDiamondProgressToCloud(user.uid, merged).catch(() => {
+              // Offline cache will retry automatically via Firestore persistent cache
+            });
+          }
+          return;
+        }
+
+        if (creatingDiamondUidRef.current === user.uid) return;
+        creatingDiamondUidRef.current = user.uid;
+
+        const existingLocal = loadPlayerDiamondSave(user.uid);
+        const guest = loadGuestDiamondSave();
+        const hasGuestProgress =
+          guest.highestUnlockedLevel > 1 || Object.keys(guest.levels).length > 0;
+        const initialSave = existingLocal ?? (hasGuestProgress ? guest : DEFAULT_DIAMOND_SAVE);
+
+        void createDiamondProfile(user.uid, initialSave)
+          .then(() => {
+            if (!active) return;
+            if (!existingLocal && hasGuestProgress) {
+              clearGuestDiamondSave();
+            }
+            savePlayerDiamondSave(user.uid, initialSave);
+            setDiamondSaveData(initialSave);
+          })
+          .catch(() => {
+            if (!active) return;
+            creatingDiamondUidRef.current = null;
+          });
+      },
+      (error) => {
+        if (!active) return;
+        if (error.message.includes('Quota exceeded')) return;
+        try {
+          handleFirestoreError(error, OperationType.GET, path);
+        } catch (wrapped) {
+          setFatalError(wrapped instanceof Error ? wrapped : new Error(String(wrapped)));
+        }
+      }
+    );
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [authReady, user]);
+
   const handleSignIn = useCallback(
     async (forceSelectAccount = false) => {
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         setAuthError(
           'Bạn đang ở chế độ Offline. Hãy kết nối mạng để đăng nhập/đồng bộ Google — bạn vẫn có thể chơi offline ngay lúc này!'
         );
+        setShowRedirectFallback(false);
         return;
       }
-      setAuthLoading(true);
       setAuthError(null);
+      setShowRedirectFallback(false);
+      // Invoke signInWithPopup synchronously in click handler before React re-renders steal gesture activation
+      const popupPromise = signInWithGoogle(forceSelectAccount);
+      setAuthLoading(true);
+      clearPendingTimers();
       try {
-        clearPendingTimers();
-        await signInWithGoogle(forceSelectAccount);
+        await popupPromise;
         setGameState((prev) => (prev === 'PLAYING' || prev === 'PAUSED' ? 'TITLE_MENU' : prev));
       } catch (err: unknown) {
         const code = (err as { code?: string })?.code ?? '';
-        if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
-          setAuthError('Bạn đã đóng cửa sổ đăng nhập Google.');
+        const host = typeof window !== 'undefined' ? window.location.hostname : '';
+        if (code === 'auth/popup-closed-by-user') {
+          setAuthError('Bạn đã đóng cửa sổ đăng nhập Google trước khi hoàn tất.');
+        } else if (code === 'auth/cancelled-popup-request') {
+          setAuthError('Yêu cầu đăng nhập trước đó đang xử lý — hãy bấm lại nút Đăng nhập Google.');
         } else if (code === 'auth/popup-blocked') {
-          setAuthError('Trình duyệt đã chặn cửa sổ đăng nhập. Vui lòng cho phép popup và thử lại.');
+          setAuthError(
+            'Trình duyệt đã chặn cửa sổ bật lên (popup). Hãy cho phép popup hoặc bấm nút Đăng nhập bằng chuyển hướng.'
+          );
+          setShowRedirectFallback(true);
+        } else if (code === 'auth/unauthorized-domain') {
+          setAuthError(
+            `Tên miền "${host}" chưa nằm trong Authorized Domains của Firebase Auth. Hãy thêm "${host}" vào Firebase Console → Authentication → Settings → Authorized domains.`
+          );
+        } else if (code === 'auth/operation-not-allowed') {
+          setAuthError('Đăng nhập Google chưa được bật trong Firebase Authentication.');
         } else if (code === 'auth/network-request-failed') {
           setAuthError('Không có kết nối mạng. Bạn vẫn có thể tiếp tục chơi chế độ Offline.');
         } else {
-          setAuthError('Không thể đăng nhập lúc này. Vui lòng thử lại sau.');
+          setAuthError(
+            `Không thể đăng nhập Google (${code || 'lỗi xác thực'}). Bạn có thể thử chuyển hướng bên dưới.`
+          );
+          setShowRedirectFallback(true);
         }
       } finally {
         setAuthLoading(false);
@@ -502,16 +658,31 @@ export default function App() {
     [clearPendingTimers]
   );
 
+  const handleSignInRedirect = useCallback(async () => {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      await signInWithGoogleRedirect(true);
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code ?? '';
+      setAuthError(`Không thể mở trang chuyển hướng Google (${code || 'unknown'}).`);
+      setAuthLoading(false);
+    }
+  }, []);
+
   const handleSignOut = useCallback(async () => {
     clearPendingTimers();
     setAuthError(null);
+    setShowRedirectFallback(false);
     clearRememberedAccount();
     setRememberedAccountState(null);
     try {
       await signOutPlayer();
       const guest = loadGuestSaveData();
+      const guestDiamond = loadGuestDiamondSave();
       sound.setEnabled(guest.soundEnabled);
       setSaveData(guest);
+      setDiamondSaveData(guestDiamond);
       setSyncStatus('local');
       setGameState('TITLE_MENU');
     } catch {
@@ -559,9 +730,74 @@ export default function App() {
       setToastMessage(null);
       setMobileZoomed(false);
       lastMatchAtRef.current = 0;
+      setActiveGame('CHIBIMON');
       setGameState('PLAYING');
     },
     [clearPendingTimers, isPreviewMode, saveData.highestUnlockedLevel]
+  );
+
+  const startDiamondLevel = useCallback(
+    (levelNum: number) => {
+      if (!isPreviewMode && levelNum > diamondSaveRef.current.highestUnlockedLevel) {
+        return;
+      }
+      sound.unlock();
+      void enterGameFullscreenAndLandscape();
+      clearPendingTimers();
+      const cfg = getDiamondLevelConfig(levelNum);
+      setDiamondLevelConfig(cfg);
+      setDiamondRunNonce((n) => n + 1);
+      setActiveGame('DIAMOND');
+      setGameState('PLAYING');
+    },
+    [clearPendingTimers, isPreviewMode]
+  );
+
+  const handleDiamondWinLevel = useCallback(
+    (level: number, finalScore: number, stars: number, movesLeft: number) => {
+      const prevSave = diamondSaveRef.current;
+      if (level > prevSave.highestUnlockedLevel) return;
+
+      const prevLv = prevSave.levels[level];
+      const bestScore = Math.max(prevLv?.bestScore ?? 0, finalScore);
+      const bestStars = Math.max(prevLv?.stars ?? 0, stars);
+      const bestMovesLeft = Math.max(prevLv?.bestMovesLeft ?? 0, movesLeft);
+      const scoreDelta = prevLv ? Math.max(0, finalScore - prevLv.bestScore) : finalScore;
+
+      const nextSave: DiamondSaveData = {
+        highestUnlockedLevel: Math.min(
+          DIAMOND_MAX_LEVEL,
+          Math.max(prevSave.highestUnlockedLevel, level + 1)
+        ),
+        totalScore: prevSave.totalScore + scoreDelta,
+        levels: {
+          ...prevSave.levels,
+          [level]: {
+            completed: true,
+            stars: bestStars,
+            bestScore,
+            bestMovesLeft,
+          },
+        },
+      };
+
+      setDiamondSaveData(nextSave);
+      setGameState('ROUND_SUMMARY');
+
+      const activeUser = userRef.current;
+      const activeUid = activeUser?.uid ?? rememberedAccountRef.current?.uid ?? null;
+      if (activeUid) {
+        savePlayerDiamondSave(activeUid, nextSave);
+      } else {
+        saveGuestDiamondSave(nextSave);
+      }
+      if (activeUser) {
+        void saveDiamondProgressToCloud(activeUser.uid, nextSave).catch(() => {
+          // Persisted locally and queued via Firestore persistent cache
+        });
+      }
+    },
+    []
   );
 
   const handleExitToLevels = useCallback(() => {
@@ -578,9 +814,9 @@ export default function App() {
     }
   }, [viewport.isFullscreen]);
 
-  // Countdown Timer
+  // Countdown Timer (ChibiMon only)
   useEffect(() => {
-    if (gameState !== 'PLAYING') return;
+    if (activeGame !== 'CHIBIMON' || gameState !== 'PLAYING') return;
 
     const interval = window.setInterval(() => {
       setTimeRemaining((prev) => {
@@ -913,18 +1149,30 @@ export default function App() {
   if (gameState === 'TITLE_MENU') {
     return (
       <TitleScreen
+        activeGame={activeGame}
+        onSelectGame={setActiveGame}
         saveData={saveData}
+        diamondSaveData={diamondSaveData}
         activeAccount={activeAccount}
         hasLiveCloudAuth={Boolean(user)}
         authReady={authReady}
         authLoading={authLoading}
         syncStatus={syncStatus}
         authError={authError}
+        showRedirectFallback={showRedirectFallback}
         bgmEnabled={bgmEnabled}
         onSignIn={handleSignIn}
+        onSignInRedirect={handleSignInRedirect}
         onSignOut={handleSignOut}
         onStartCurrentLevel={() => startLevel(saveData.highestUnlockedLevel)}
         onOpenLevelSelect={() => setGameState('LEVEL_SELECT')}
+        onStartDiamondCurrentLevel={() =>
+          startDiamondLevel(diamondSaveData.highestUnlockedLevel)
+        }
+        onOpenDiamondLevelSelect={() => {
+          setActiveGame('DIAMOND');
+          setGameState('LEVEL_SELECT');
+        }}
         onToggleSound={handleToggleSound}
         onToggleBgm={handleToggleBgm}
       />
@@ -932,6 +1180,29 @@ export default function App() {
   }
 
   if (gameState === 'LEVEL_SELECT') {
+    if (activeGame === 'DIAMOND') {
+      return (
+        <DiamondLevelSelectView
+          saveData={diamondSaveData}
+          activeAccount={activeAccount}
+          hasLiveCloudAuth={Boolean(user)}
+          authReady={authReady}
+          authLoading={authLoading}
+          syncStatus={syncStatus}
+          isPreviewMode={isPreviewMode}
+          soundEnabled={saveData.soundEnabled}
+          bgmEnabled={bgmEnabled}
+          onSignIn={handleSignIn}
+          onSignOut={handleSignOut}
+          onSelectLevel={(lv) => startDiamondLevel(lv)}
+          onTogglePreviewMode={handleTogglePreviewMode}
+          onToggleSound={handleToggleSound}
+          onToggleBgm={handleToggleBgm}
+          onBack={() => setGameState('TITLE_MENU')}
+        />
+      );
+    }
+
     return (
       <LevelSelectView
         saveData={saveData}
@@ -961,9 +1232,36 @@ export default function App() {
   const totalPairs = levelConfig.pairsCount;
   const fsSupported = canRequestFullscreen();
 
-  const stageContent = (
-    <>
-      {viewport.isCompactLandscape ? (
+  const stageContent =
+    activeGame === 'DIAMOND' ? (
+      <DiamondArenaStage
+        levelConfig={diamondLevelConfig}
+        runNonce={diamondRunNonce}
+        isPaused={gameState === 'PAUSED'}
+        isCompactLandscape={viewport.isCompactLandscape}
+        isStageRotated90={viewport.needsLandscapeRotation}
+        isFullscreen={viewport.isFullscreen}
+        fsSupported={fsSupported}
+        soundEnabled={saveData.soundEnabled}
+        bgmEnabled={bgmEnabled}
+        isPreviewMode={isPreviewMode}
+        highestUnlockedLevel={diamondSaveData.highestUnlockedLevel}
+        onTogglePause={() =>
+          setGameState((s) => (s === 'PLAYING' ? 'PAUSED' : 'PLAYING'))
+        }
+        onResume={() => setGameState('PLAYING')}
+        onExitToLevels={handleExitToLevels}
+        onToggleFullscreen={handleToggleFullscreen}
+        onToggleSound={handleToggleSound}
+        onToggleBgm={handleToggleBgm}
+        onReplay={() => startDiamondLevel(diamondLevelConfig.level)}
+        onNextLevel={(nextLv) => startDiamondLevel(nextLv)}
+        onWinLevel={handleDiamondWinLevel}
+        onLoseLevel={() => setGameState('GAME_OVER')}
+      />
+    ) : (
+      <>
+        {viewport.isCompactLandscape ? (
         /* Compact Mobile/Tablet Landscape Stage: ultra-slim 44px side rails, maximum Pokemon board area */
         <div className="w-full h-full flex overflow-hidden bg-[#111827]">
           {/* Left Ultra-Slim Status Rail (44px) */}

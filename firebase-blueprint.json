@@ -70,6 +70,50 @@
         "createdAt",
         "updatedAt"
       ]
+    },
+    "DiamondProfile": {
+      "title": "DiamondProfile",
+      "description": "Stores a single authenticated player's Kim Cương 100 progression and per-level records.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Authentication UID of the player.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "highestUnlockedLevel": {
+          "type": "integer",
+          "description": "Highest Diamond Match-3 level unlocked by the player (1 to 100)."
+        },
+        "totalScore": {
+          "type": "integer",
+          "description": "Cumulative best score across completed Diamond levels."
+        },
+        "levels": {
+          "type": "object",
+          "description": "Map of level numbers ('1'..'100') to DiamondLevelProgress objects containing completed, stars, bestScore, and bestMovesLeft."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the Diamond progression record was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the Diamond progression record was last updated."
+        }
+      },
+      "required": [
+        "uid",
+        "highestUnlockedLevel",
+        "totalScore",
+        "levels",
+        "createdAt",
+        "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -77,7 +121,13 @@
       "schema": {
         "$ref": "#/entities/PlayerProfile"
       },
-      "description": "Private player progression document owned strictly by the matching Firebase Auth user."
+      "description": "Private ChibiMon 200 player progression document owned strictly by the matching Firebase Auth user."
+    },
+    "/diamondProgress/{userId}": {
+      "schema": {
+        "$ref": "#/entities/DiamondProfile"
+      },
+      "description": "Private Kim Cương 100 player progression document owned strictly by the matching Firebase Auth user."
     }
   }
 }

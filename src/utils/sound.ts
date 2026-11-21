@@ -487,6 +487,107 @@ class SoundManager {
     osc.start(now);
     osc.stop(now + 0.04);
   }
+
+  public playGemSwap(): void {
+    const audio = this.getSfxContext();
+    if (!audio) return;
+    const { ctx, out } = audio;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(380, now);
+    osc.frequency.exponentialRampToValueAtTime(640, now + 0.075);
+    gain.gain.setValueAtTime(0.09, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.085);
+    osc.connect(gain);
+    gain.connect(out);
+    osc.start(now);
+    osc.stop(now + 0.09);
+  }
+
+  public playGemInvalid(): void {
+    const audio = this.getSfxContext();
+    if (!audio) return;
+    const { ctx, out } = audio;
+    const now = ctx.currentTime;
+    [210, 165].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      const t = now + i * 0.06;
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.09, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+      osc.connect(gain);
+      gain.connect(out);
+      osc.start(t);
+      osc.stop(t + 0.085);
+    });
+  }
+
+  public playGemMatch(combo: number, groupSize = 3): void {
+    const audio = this.getSfxContext();
+    if (!audio) return;
+    const { ctx, out } = audio;
+    const now = ctx.currentTime;
+
+    const semitone = Math.min(Math.max(0, combo - 1), 12);
+    const base = 587.33 * Math.pow(1.059463, semitone); // starts at D5
+    const notes =
+      groupSize >= 4 || combo >= 3
+        ? [base, base * 1.25, base * 1.5, base * 2]
+        : [base, base * 1.25, base * 1.5];
+
+    notes.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      const t = now + idx * 0.032;
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.linearRampToValueAtTime(0.15, t + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.24);
+      osc.connect(gain);
+      gain.connect(out);
+      osc.start(t);
+      osc.stop(t + 0.25);
+    });
+  }
+
+  public playGemSpecial(): void {
+    const audio = this.getSfxContext();
+    if (!audio) return;
+    const { ctx, out } = audio;
+    const now = ctx.currentTime;
+
+    // Punchy low-mid burst + high crystal shimmer
+    const boom = ctx.createOscillator();
+    const boomGain = ctx.createGain();
+    boom.type = 'triangle';
+    boom.frequency.setValueAtTime(260, now);
+    boom.frequency.exponentialRampToValueAtTime(68, now + 0.19);
+    boomGain.gain.setValueAtTime(0.2, now);
+    boomGain.gain.exponentialRampToValueAtTime(0.001, now + 0.21);
+    boom.connect(boomGain);
+    boomGain.connect(out);
+    boom.start(now);
+    boom.stop(now + 0.22);
+
+    [880, 1174.66, 1567.98].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      const t = now + i * 0.035;
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.11, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.24);
+      osc.connect(gain);
+      gain.connect(out);
+      osc.start(t);
+      osc.stop(t + 0.25);
+    });
+  }
 }
 
 export const sound = new SoundManager();

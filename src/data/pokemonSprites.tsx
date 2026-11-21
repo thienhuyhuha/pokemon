@@ -1,4 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import sheet1 from '../assets/images/mon_sheet_set1_1795064518876.jpg';
+import sheet2 from '../assets/images/mon_sheet_set2_1795064519532.jpg';
+import sheet3 from '../assets/images/mon_sheet_set3_1795064519821.jpg';
+import sheet4 from '../assets/images/mon_sheet_set4_1795064519615.jpg';
+import sheet5 from '../assets/images/mon_sheet_set5_1795064519959.jpg';
+import stadiumTurf from '../assets/images/mon_stadium_turf_1795064520201.jpg';
+import heroWorldBanner from '../assets/images/pokemon_hero_world_1795064302567.jpg';
 
 export interface PokemonSpecies {
   id: number;
@@ -11,13 +18,42 @@ export interface PokemonSpecies {
   borderTint: string;
 }
 
-export const SPRITE_SHEETS = [
-  '/src/assets/images/mon_sheet_set1_1795064518876.jpg',
-  '/src/assets/images/mon_sheet_set2_1795064519532.jpg',
-  '/src/assets/images/mon_sheet_set3_1795064519821.jpg',
-  '/src/assets/images/mon_sheet_set4_1795064519615.jpg',
-  '/src/assets/images/mon_sheet_set5_1795064519959.jpg',
-];
+export const SPRITE_SHEETS = [sheet1, sheet2, sheet3, sheet4, sheet5];
+export const STADIUM_TURF_URL = stadiumTurf;
+export const HERO_WORLD_URL = heroWorldBanner;
+
+const sheetLoadedSet = new Set<string>();
+const sheetFailedSet = new Set<string>();
+const sheetListeners = new Set<() => void>();
+let preloadStarted = false;
+
+function notifySheetListeners() {
+  sheetListeners.forEach((fn) => fn());
+}
+
+/**
+ * Eagerly fetches and decodes all 5 sprite sheets + stadium backgrounds once at startup
+ * so every monster tier (1..45) stays cached in browser & Service Worker for true offline play.
+ */
+export function preloadAllGameAssets(): void {
+  if (typeof window === 'undefined' || preloadStarted) return;
+  preloadStarted = true;
+
+  const urls = [...SPRITE_SHEETS, STADIUM_TURF_URL, HERO_WORLD_URL];
+  urls.forEach((url) => {
+    const img = new Image();
+    img.onload = () => {
+      sheetLoadedSet.add(url);
+      sheetFailedSet.delete(url);
+      notifySheetListeners();
+    };
+    img.onerror = () => {
+      sheetFailedSet.add(url);
+      notifySheetListeners();
+    };
+    img.src = url;
+  });
+}
 
 export const POKEMON_SPECIES: PokemonSpecies[] = [
   // Sheet 1
@@ -82,12 +118,52 @@ export function getPokemonSpecies(speciesId: number): PokemonSpecies {
 
 /**
  * Renders one of the 45 original ~70% Pokémon-inspired cel-shaded anime creatures
- * cropped cleanly from the 5 local 3x3 sprite sheets using GPU-friendly CSS background positioning.
+ * cropped cleanly from Vite-bundled sprite sheets, with a crisp SVG fallback emblem
+ * so tiles are NEVER blank white even if an image hasn't finished caching offline.
  */
 export const PokemonArtwork: React.FC<{ speciesId: number; className?: string }> = React.memo(
   ({ speciesId, className = 'w-full h-full' }) => {
     const species = getPokemonSpecies(speciesId);
     const sheetUrl = SPRITE_SHEETS[species.sheetIndex];
+    const [failed, setFailed] = useState<boolean>(() => sheetFailedSet.has(sheetUrl));
+
+    useEffect(() => {
+      preloadAllGameAssets();
+      const sync = () => setFailed(sheetFailedSet.has(sheetUrl));
+      sync();
+      sheetListeners.add(sync);
+      return () => {
+        sheetListeners.delete(sync);
+      };
+    }, [sheetUrl]);
+
+    if (failed) {
+      return (
+        <div
+          role="img"
+          aria-label={species.name}
+          style={{ backgroundColor: species.bgTint }}
+          className={`${className} aspect-square rounded flex flex-col items-center justify-center select-none pointer-events-none`}
+        >
+          <svg viewBox="0 0 40 40" className="w-[72%] h-[72%]">
+            <circle cx="20" cy="20" r="16" fill={species.borderTint} opacity="0.22" />
+            <circle cx="20" cy="20" r="11" fill={species.borderTint} />
+            <circle cx="16" cy="18" r="2" fill="#FFFFFF" />
+            <circle cx="24" cy="18" r="2" fill="#FFFFFF" />
+            <text
+              x="20"
+              y="29"
+              textAnchor="middle"
+              fill="#FFFFFF"
+              fontSize="9"
+              fontWeight="800"
+            >
+              {species.id}
+            </text>
+          </svg>
+        </div>
+      );
+    }
 
     return (
       <div

@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
-import { PokemonArtwork, getPokemonSpecies } from '../data/pokemonSprites';
+import { PokemonArtwork, STADIUM_TURF_URL, getPokemonSpecies } from '../data/pokemonSprites';
 import {
   ActiveConnection,
   BoardGrid,
@@ -25,7 +25,7 @@ interface GameBoardProps {
   onResume: () => void;
 }
 
-const STADIUM_BG = '/src/assets/images/mon_stadium_turf_1795064520201.jpg';
+const STADIUM_BG = STADIUM_TURF_URL;
 const PERIMETER_PAD = 0.22;
 
 function toSvgCoord(pos: GridPos, rows: number, cols: number): { x: number; y: number } {

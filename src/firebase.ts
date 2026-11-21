@@ -2,10 +2,12 @@ import { initializeApp } from 'firebase/app';
 import {
   browserLocalPersistence,
   getAuth,
+  getRedirectResult,
   GoogleAuthProvider,
   indexedDBLocalPersistence,
   setPersistence,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
   User,
 } from 'firebase/auth';
@@ -21,7 +23,9 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
+import { DIAMOND_MAX_LEVEL } from './data/diamondLevels';
 import { MAX_LEVEL } from './data/levels';
+import { DiamondLevelProgress, DiamondSaveData } from './types/diamond';
 import { LevelProgress, SaveData } from './types/game';
 
 const app = initializeApp(firebaseConfig);
@@ -104,6 +108,7 @@ export function handleFirestoreError(
 }
 
 async function testConnection() {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return;
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
@@ -185,22 +190,79 @@ export function normalizeLevelsFromCloud(raw: unknown): Record<number, LevelProg
   return result;
 }
 
-export async function signInWithGoogle(forceSelectAccount = false): Promise<User> {
-  try {
-    await setPersistence(auth, indexedDBLocalPersistence);
-  } catch {
-    try {
-      await setPersistence(auth, browserLocalPersistence);
-    } catch {
-      // Keep default SDK persistence
-    }
+export function sanitizeDiamondLevelsMap(
+  rawLevels: Record<number | string, DiamondLevelProgress> | undefined
+): Record<string, DiamondLevelProgress> {
+  const out: Record<string, DiamondLevelProgress> = {};
+  if (!rawLevels || typeof rawLevels !== 'object') return out;
+
+  const entries = Object.entries(rawLevels)
+    .filter(([key]) => {
+      const n = Number(key);
+      return Number.isInteger(n) && n >= 1 && n <= DIAMOND_MAX_LEVEL;
+    })
+    .slice(0, DIAMOND_MAX_LEVEL);
+
+  for (const [key, val] of entries) {
+    if (!val || typeof val !== 'object') continue;
+    out[String(Number(key))] = {
+      completed: Boolean(val.completed),
+      stars: clampInt(Number(val.stars ?? 0), 0, 3),
+      bestScore: clampInt(Number(val.bestScore ?? 0), 0, 500000000),
+      bestMovesLeft: clampInt(Number(val.bestMovesLeft ?? 0), 0, 200),
+    };
   }
+  return out;
+}
+
+export function normalizeDiamondLevelsFromCloud(
+  raw: unknown
+): Record<number, DiamondLevelProgress> {
+  const result: Record<number, DiamondLevelProgress> = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return result;
+
+  for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+    const levelNum = Number(key);
+    if (!Number.isInteger(levelNum) || levelNum < 1 || levelNum > DIAMOND_MAX_LEVEL) continue;
+    if (!val || typeof val !== 'object') continue;
+    const item = val as Record<string, unknown>;
+    result[levelNum] = {
+      completed: Boolean(item.completed),
+      stars: clampInt(Number(item.stars ?? 0), 0, 3),
+      bestScore: clampInt(Number(item.bestScore ?? 0), 0, 500000000),
+      bestMovesLeft: clampInt(Number(item.bestMovesLeft ?? 0), 0, 200),
+    };
+  }
+  return result;
+}
+
+/**
+ * NOTE: Do NOT await setPersistence() before signInWithPopup() — doing an async operation
+ * before opening the OAuth popup forfeits the user-gesture activation token on Safari/Chrome Mobile.
+ */
+export function signInWithGoogle(forceSelectAccount = false): Promise<User> {
   const provider = new GoogleAuthProvider();
   if (forceSelectAccount) {
     provider.setCustomParameters({ prompt: 'select_account' });
   }
-  const credential = await signInWithPopup(auth, provider);
-  return credential.user;
+  return signInWithPopup(auth, provider).then((credential) => credential.user);
+}
+
+export function signInWithGoogleRedirect(forceSelectAccount = false): Promise<void> {
+  const provider = new GoogleAuthProvider();
+  if (forceSelectAccount) {
+    provider.setCustomParameters({ prompt: 'select_account' });
+  }
+  return signInWithRedirect(auth, provider);
+}
+
+export async function checkGoogleRedirectResult(): Promise<User | null> {
+  try {
+    const res = await getRedirectResult(auth);
+    return res?.user ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function signOutPlayer(): Promise<void> {
@@ -270,6 +332,50 @@ export async function savePlayerSoundToCloud(uid: string, soundEnabled: boolean)
   try {
     await updateDoc(docRef, {
       soundEnabled: Boolean(soundEnabled),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function createDiamondProfile(
+  uid: string,
+  initialSave: DiamondSaveData
+): Promise<void> {
+  if (!VALID_UID_REGEX.test(uid) || uid.length > 128) {
+    throw new Error('Invalid user UID format');
+  }
+  const path = `diamondProgress/${uid}`;
+  const docRef = doc(db, 'diamondProgress', uid);
+
+  const payload = {
+    uid,
+    highestUnlockedLevel: clampInt(initialSave.highestUnlockedLevel, 1, DIAMOND_MAX_LEVEL),
+    totalScore: clampInt(initialSave.totalScore, 0, 500000000),
+    levels: sanitizeDiamondLevelsMap(initialSave.levels),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+
+  try {
+    await setDoc(docRef, payload);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function saveDiamondProgressToCloud(
+  uid: string,
+  nextSave: DiamondSaveData
+): Promise<void> {
+  const path = `diamondProgress/${uid}`;
+  const docRef = doc(db, 'diamondProgress', uid);
+  try {
+    await updateDoc(docRef, {
+      highestUnlockedLevel: clampInt(nextSave.highestUnlockedLevel, 1, DIAMOND_MAX_LEVEL),
+      totalScore: clampInt(nextSave.totalScore, 0, 500000000),
+      levels: sanitizeDiamondLevelsMap(nextSave.levels),
       updatedAt: serverTimestamp(),
     });
   } catch (error) {

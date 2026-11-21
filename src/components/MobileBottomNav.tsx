@@ -21,6 +21,7 @@ import { RememberedAccount } from '../utils/localAccountCache';
 
 interface MobileBottomNavProps {
   activeTab: 'HOME' | 'LEVELS' | 'ACCOUNT';
+  levelsLabel?: string;
   onGoHome: () => void;
   onGoLevels: () => void;
   onOpenAccountSheet: () => void;
@@ -28,6 +29,7 @@ interface MobileBottomNavProps {
 
 export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   activeTab,
+  levelsLabel = '200 Cấp',
   onGoHome,
   onGoLevels,
   onOpenAccountSheet,
@@ -61,7 +63,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           }`}
         >
           <Grid3X3 className="w-5 h-5" />
-          <span className="text-[11px] font-semibold whitespace-nowrap">200 Cấp</span>
+          <span className="text-[11px] font-semibold whitespace-nowrap">{levelsLabel}</span>
         </button>
 
         <button
@@ -91,6 +93,7 @@ interface MobileAccountSheetProps {
   soundEnabled: boolean;
   bgmEnabled: boolean;
   highestUnlockedLevel: number;
+  maxLevel?: number;
   totalScore: number;
   onSignIn: (forceSelectAccount?: boolean) => void;
   onSignOut: () => void;
@@ -108,6 +111,7 @@ export const MobileAccountSheet: React.FC<MobileAccountSheetProps> = ({
   soundEnabled,
   bgmEnabled,
   highestUnlockedLevel,
+  maxLevel = 200,
   totalScore,
   onSignIn,
   onSignOut,
@@ -199,7 +203,7 @@ export const MobileAccountSheet: React.FC<MobileAccountSheetProps> = ({
             <div>
               <div className="text-slate-400 font-sans">Cấp đang mở</div>
               <div className="text-base font-bold text-[#FACC15]">
-                {highestUnlockedLevel}/200
+                {highestUnlockedLevel}/{maxLevel}
               </div>
             </div>
             <div>

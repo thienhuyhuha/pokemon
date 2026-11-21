@@ -2,18 +2,8 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
-import {defineConfig} from 'vite';
-import {VitePWA} from 'vite-plugin-pwa';
-
-const GAME_IMAGE_ASSETS = [
-  '/src/assets/images/mon_sheet_set1_1795064518876.jpg',
-  '/src/assets/images/mon_sheet_set2_1795064519532.jpg',
-  '/src/assets/images/mon_sheet_set3_1795064519821.jpg',
-  '/src/assets/images/mon_sheet_set4_1795064519615.jpg',
-  '/src/assets/images/mon_sheet_set5_1795064519959.jpg',
-  '/src/assets/images/mon_stadium_turf_1795064520201.jpg',
-  '/src/assets/images/pokemon_hero_world_1795064302567.jpg',
-];
+import { defineConfig } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
   return {
@@ -31,10 +21,10 @@ export default defineConfig(() => {
         ],
         manifest: {
           id: '/',
-          name: 'ChibiMon 200 — Ghép Cặp Thú Cưng',
-          short_name: 'ChibiMon 200',
+          name: 'ChibiMon & Kim Cương — Puzzle 2 trong 1',
+          short_name: 'ChibiMon',
           description:
-            'Game ghép cặp thú cưng nguyên tố 200 cấp độ, chơi mượt cả khi ngoại tuyến.',
+            'Game Ghép Cặp Thú Cưng 200 màn & Ghép Kim Cương 100 màn, chơi mượt cả khi ngoại tuyến.',
           theme_color: '#DC2626',
           background_color: '#0F172A',
           display: 'standalone',
@@ -62,20 +52,21 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
-          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-          globPatterns: ['**/*.{js,css,html,ico,png,jpg,jpeg,svg,woff,woff2}'],
-          additionalManifestEntries: GAME_IMAGE_ASSETS.map((url) => ({
-            url,
-            revision: 'v1',
-          })),
+          cleanupOutdatedCaches: true,
+          skipWaiting: true,
+          clientsClaim: true,
+          maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+          globPatterns: ['**/*.{js,css,html,ico,png,jpg,jpeg,svg,webp,woff,woff2}'],
+          navigateFallback: '/index.html',
+          navigateFallbackDenylist: [/^\/__\/auth/, /^\/api/],
           runtimeCaching: [
             {
-              urlPattern: /\/src\/assets\/images\/.*/i,
+              urlPattern: /\/(?:assets|src\/assets\/images)\/.*\.(?:png|jpg|jpeg|svg|webp)$/i,
               handler: 'CacheFirst',
               options: {
                 cacheName: 'chibimon-game-images',
                 expiration: {
-                  maxEntries: 20,
+                  maxEntries: 60,
                   maxAgeSeconds: 60 * 60 * 24 * 365,
                 },
                 cacheableResponse: {
@@ -118,9 +109,7 @@ export default defineConfig(() => {
           type: 'module',
         },
       }),
-      // Copies src/assets into dist/ so root-relative URLs like
-      // "/src/assets/images/..." (e.g. generate_image output) still resolve
-      // in production builds. Do not remove.
+      // Copies src/assets into dist/ as a safety net for any direct asset path lookups.
       {
         name: 'copy-unbundled-src-assets',
         apply: 'build',
@@ -132,7 +121,7 @@ export default defineConfig(() => {
           const srcAssets = path.resolve(__dirname, 'src/assets');
           const distAssets = path.resolve(distDir, 'src/assets');
           if (fs.existsSync(distDir) && fs.existsSync(srcAssets)) {
-            fs.cpSync(srcAssets, distAssets, {recursive: true, force: true});
+            fs.cpSync(srcAssets, distAssets, { recursive: true, force: true });
           }
         },
       },
@@ -144,9 +133,7 @@ export default defineConfig(() => {
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
   };

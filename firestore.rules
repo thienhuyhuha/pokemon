@@ -81,7 +81,7 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
-    // Action Helpers for Update
+    // Action Helpers for PlayerProfile Update
     function isImmutableProfilePreserved() {
       return incoming().uid == existing().uid
         && incoming().createdAt == existing().createdAt
@@ -116,7 +116,53 @@ service cloud.firestore {
         ]);
     }
 
-    // 4. Private Per-Player Progression Collection
+    // 4. DiamondProfile Validation Blueprint (Kim Cương 100)
+    function isValidDiamondProfile(data, userId) {
+      return data.keys().hasAll([
+          'uid',
+          'highestUnlockedLevel',
+          'totalScore',
+          'levels',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid',
+          'highestUnlockedLevel',
+          'totalScore',
+          'levels',
+          'createdAt',
+          'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.uid == userId
+        && data.highestUnlockedLevel is int
+        && data.highestUnlockedLevel >= 1
+        && data.highestUnlockedLevel <= 100
+        && data.totalScore is int
+        && data.totalScore >= 0
+        && data.totalScore <= 500000000
+        && data.levels is map
+        && data.levels.size() <= 100
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isDiamondProgressUpdateAction() {
+      return isImmutableProfilePreserved()
+        && incoming().highestUnlockedLevel >= existing().highestUnlockedLevel
+        && incoming().highestUnlockedLevel <= incoming().levels.size() + 1
+        && incoming().totalScore >= existing().totalScore
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'highestUnlockedLevel',
+          'totalScore',
+          'levels',
+          'updatedAt'
+        ]);
+    }
+
+    // 5. Private Per-Player Progression Collections
     match /users/{userId} {
       allow get: if isOwner(userId) && isValidId(userId);
       allow list: if false;
@@ -135,6 +181,24 @@ service cloud.firestore {
           || isProfileSyncAction()
           || isProgressUpdateAction()
         );
+
+      allow delete: if false;
+    }
+
+    match /diamondProgress/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isOwner(userId)
+        && isValidId(userId)
+        && isValidDiamondProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isOwner(userId)
+        && isValidId(userId)
+        && isValidDiamondProfile(incoming(), userId)
+        && isDiamondProgressUpdateAction();
 
       allow delete: if false;
     }
