@@ -309,14 +309,18 @@ export const DiamondLevelSelectView: React.FC<DiamondLevelSelectViewProps> = ({
                   <div className="flex items-center justify-between gap-1 font-mono-num">
                     <span className="truncate">
                       {colorGoalMeta
-                        ? `${cfg.targetColorCount} ${colorGoalMeta.shortName}`
+                        ? `${cfg.targetColorCount} ${colorGoalMeta.shortName}${
+                            cfg.secondaryTargetColor !== null
+                              ? ` + ${cfg.secondaryTargetColorCount} ${getGemStyle(cfg.secondaryTargetColor).shortName}`
+                              : ''
+                          }`
                         : `${cfg.rows}×${cfg.cols} · ${cfg.gemTypes} màu`}
                     </span>
                     {(cfg.iceCount > 0 || cfg.stoneCount > 0) && (
                       <span className="text-sky-300 shrink-0">
-                        {cfg.iceCount > 0 ? `${cfg.iceCount + cfg.doubleIceCount} băng` : ''}
-                        {cfg.iceCount > 0 && cfg.stoneCount > 0 ? ' · ' : ''}
-                        {cfg.stoneCount > 0 ? `${cfg.stoneCount} đá` : ''}
+                        {cfg.iceCount > 0 ? `${cfg.iceCount + cfg.doubleIceCount}❄` : ''}
+                        {cfg.iceCount > 0 && cfg.stoneCount > 0 ? ' ' : ''}
+                        {cfg.stoneCount > 0 ? `${cfg.stoneCount}🪨` : ''}
                       </span>
                     )}
                   </div>
@@ -327,7 +331,7 @@ export const DiamondLevelSelectView: React.FC<DiamondLevelSelectViewProps> = ({
         </div>
 
         <footer className="mt-2 pt-5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
-          <span>Ghép từ 3 kim cương giống nhau xếp thẳng hàng để tự phá và kích hoạt chuỗi nổ.</span>
+          <span>100 màn chiến thuật · 5–7 loại kim cương</span>
           <button
             type="button"
             onClick={onTogglePreviewMode}

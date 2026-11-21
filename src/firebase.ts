@@ -25,8 +25,10 @@ import {
 import firebaseConfig from '../firebase-applet-config.json';
 import { DIAMOND_MAX_LEVEL } from './data/diamondLevels';
 import { MAX_LEVEL } from './data/levels';
+import { DEFAULT_TD_UPGRADES, TD_MAX_LEVEL } from './data/tdLevels';
 import { DiamondLevelProgress, DiamondSaveData } from './types/diamond';
 import { LevelProgress, SaveData } from './types/game';
+import { TdLevelProgress, TdSaveData, TdUpgrades } from './types/towerDefense';
 
 const app = initializeApp(firebaseConfig);
 
@@ -236,6 +238,63 @@ export function normalizeDiamondLevelsFromCloud(
   return result;
 }
 
+export function sanitizeTdUpgrades(raw: unknown): TdUpgrades {
+  const src = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  return {
+    archery: clampInt(Number(src.archery ?? DEFAULT_TD_UPGRADES.archery), 0, 3),
+    magic: clampInt(Number(src.magic ?? DEFAULT_TD_UPGRADES.magic), 0, 3),
+    barracks: clampInt(Number(src.barracks ?? DEFAULT_TD_UPGRADES.barracks), 0, 3),
+    economy: clampInt(Number(src.economy ?? DEFAULT_TD_UPGRADES.economy), 0, 3),
+    spells: clampInt(Number(src.spells ?? DEFAULT_TD_UPGRADES.spells), 0, 3),
+  };
+}
+
+export function sanitizeTdLevelsMap(
+  rawLevels: Record<number | string, TdLevelProgress> | undefined
+): Record<string, TdLevelProgress> {
+  const out: Record<string, TdLevelProgress> = {};
+  if (!rawLevels || typeof rawLevels !== 'object') return out;
+
+  const entries = Object.entries(rawLevels)
+    .filter(([key]) => {
+      const n = Number(key);
+      return Number.isInteger(n) && n >= 1 && n <= TD_MAX_LEVEL;
+    })
+    .slice(0, TD_MAX_LEVEL);
+
+  for (const [key, val] of entries) {
+    if (!val || typeof val !== 'object') continue;
+    out[String(Number(key))] = {
+      completed: Boolean(val.completed),
+      stars: clampInt(Number(val.stars ?? 0), 0, 3),
+      bestScore: clampInt(Number(val.bestScore ?? 0), 0, 500000000),
+      bestLivesLeft: clampInt(Number(val.bestLivesLeft ?? 0), 0, 50),
+    };
+  }
+  return out;
+}
+
+export function normalizeTdLevelsFromCloud(
+  raw: unknown
+): Record<number, TdLevelProgress> {
+  const result: Record<number, TdLevelProgress> = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return result;
+
+  for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+    const levelNum = Number(key);
+    if (!Number.isInteger(levelNum) || levelNum < 1 || levelNum > TD_MAX_LEVEL) continue;
+    if (!val || typeof val !== 'object') continue;
+    const item = val as Record<string, unknown>;
+    result[levelNum] = {
+      completed: Boolean(item.completed),
+      stars: clampInt(Number(item.stars ?? 0), 0, 3),
+      bestScore: clampInt(Number(item.bestScore ?? 0), 0, 500000000),
+      bestLivesLeft: clampInt(Number(item.bestLivesLeft ?? 0), 0, 50),
+    };
+  }
+  return result;
+}
+
 /**
  * NOTE: Do NOT await setPersistence() before signInWithPopup() — doing an async operation
  * before opening the OAuth popup forfeits the user-gesture activation token on Safari/Chrome Mobile.
@@ -376,6 +435,52 @@ export async function saveDiamondProgressToCloud(
       highestUnlockedLevel: clampInt(nextSave.highestUnlockedLevel, 1, DIAMOND_MAX_LEVEL),
       totalScore: clampInt(nextSave.totalScore, 0, 500000000),
       levels: sanitizeDiamondLevelsMap(nextSave.levels),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function createTdProfile(
+  uid: string,
+  initialSave: TdSaveData
+): Promise<void> {
+  if (!VALID_UID_REGEX.test(uid) || uid.length > 128) {
+    throw new Error('Invalid user UID format');
+  }
+  const path = `towerDefenseProgress/${uid}`;
+  const docRef = doc(db, 'towerDefenseProgress', uid);
+
+  const payload = {
+    uid,
+    highestUnlockedLevel: clampInt(initialSave.highestUnlockedLevel, 1, TD_MAX_LEVEL),
+    totalScore: clampInt(initialSave.totalScore, 0, 500000000),
+    levels: sanitizeTdLevelsMap(initialSave.levels),
+    upgrades: sanitizeTdUpgrades(initialSave.upgrades),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+
+  try {
+    await setDoc(docRef, payload);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function saveTdProgressToCloud(
+  uid: string,
+  nextSave: TdSaveData
+): Promise<void> {
+  const path = `towerDefenseProgress/${uid}`;
+  const docRef = doc(db, 'towerDefenseProgress', uid);
+  try {
+    await updateDoc(docRef, {
+      highestUnlockedLevel: clampInt(nextSave.highestUnlockedLevel, 1, TD_MAX_LEVEL),
+      totalScore: clampInt(nextSave.totalScore, 0, 500000000),
+      levels: sanitizeTdLevelsMap(nextSave.levels),
+      upgrades: sanitizeTdUpgrades(nextSave.upgrades),
       updatedAt: serverTimestamp(),
     });
   } catch (error) {

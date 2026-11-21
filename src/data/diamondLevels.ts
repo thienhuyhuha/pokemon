@@ -31,8 +31,8 @@ export const GEM_STYLES: GemStyleMeta[] = [
     name: 'Ruby Đỏ',
     shortName: 'Ruby',
     primary: '#EF4444',
-    light: '#FCA5A5',
-    dark: '#991B1B',
+    light: '#FECACA',
+    dark: '#7F1D1D',
     border: '#F87171',
   },
   {
@@ -40,8 +40,8 @@ export const GEM_STYLES: GemStyleMeta[] = [
     name: 'Sapphire Lam',
     shortName: 'Sapphire',
     primary: '#3B82F6',
-    light: '#93C5FD',
-    dark: '#1E40AF',
+    light: '#BFDBFE',
+    dark: '#1E3A8A',
     border: '#60A5FA',
   },
   {
@@ -49,8 +49,8 @@ export const GEM_STYLES: GemStyleMeta[] = [
     name: 'Emerald Lục',
     shortName: 'Emerald',
     primary: '#10B981',
-    light: '#6EE7B7',
-    dark: '#065F46',
+    light: '#A7F3D0',
+    dark: '#064E3B',
     border: '#34D399',
   },
   {
@@ -58,8 +58,8 @@ export const GEM_STYLES: GemStyleMeta[] = [
     name: 'Topaz Vàng',
     shortName: 'Topaz',
     primary: '#F59E0B',
-    light: '#FDE68A',
-    dark: '#92400E',
+    light: '#FEF08A',
+    dark: '#78350F',
     border: '#FBBF24',
   },
   {
@@ -68,7 +68,7 @@ export const GEM_STYLES: GemStyleMeta[] = [
     shortName: 'Amethyst',
     primary: '#A855F7',
     light: '#E9D5FF',
-    dark: '#6B21A8',
+    dark: '#581C87',
     border: '#C084FC',
   },
   {
@@ -76,8 +76,8 @@ export const GEM_STYLES: GemStyleMeta[] = [
     name: 'Ngọc Bích Cyan',
     shortName: 'Aqua',
     primary: '#06B6D4',
-    light: '#A5F3FC',
-    dark: '#155E75',
+    light: '#CFFAFE',
+    dark: '#164E63',
     border: '#22D3EE',
   },
   {
@@ -85,8 +85,8 @@ export const GEM_STYLES: GemStyleMeta[] = [
     name: 'Thạch Anh Hồng',
     shortName: 'Rose',
     primary: '#EC4899',
-    light: '#FBCFE8',
-    dark: '#9D174D',
+    light: '#FCE7F3',
+    dark: '#831843',
     border: '#F472B6',
   },
 ];
@@ -99,55 +99,81 @@ export function getDiamondLevelConfig(level: number): DiamondLevelConfig {
   const lv = Math.max(1, Math.min(DIAMOND_MAX_LEVEL, Math.floor(level)));
   const chapter = Math.ceil(lv / 10);
   const chapterName = DIAMOND_CHAPTER_NAMES[chapter - 1] ?? DIAMOND_CHAPTER_NAMES[0];
+  const isBoss = lv % 10 === 0;
 
-  // Grid size grows smoothly: 7x7 (Lv 1-10) -> 8x8 (Lv 11-50) -> 9x9 (Lv 51-100)
-  const size = lv <= 10 ? 7 : lv <= 50 ? 8 : 9;
+  // Grid expands faster: 7x7 (Lv 1-6) -> 8x8 (Lv 7-30) -> 9x9 (Lv 31-100)
+  const size = lv <= 6 ? 7 : lv <= 30 ? 8 : 9;
 
-  // Gem variety grows: 5 colors (Lv 1-12) -> 6 colors (Lv 13-55) -> 7 colors (Lv 56-100)
-  const gemTypes = lv <= 12 ? 5 : lv <= 55 ? 6 : 7;
+  // Gem variety jumps early to drastically cut lucky random cascades:
+  // 5 colors (Lv 1-4) -> 6 colors (Lv 5-14) -> 7 colors (Lv 15-100)
+  const gemTypes = lv <= 4 ? 5 : lv <= 14 ? 6 : 7;
 
-  // Target score scales upward smoothly while staying realistic per move budget
-  const targetScore = Math.round(1200 + (lv - 1) * 145 + Math.floor((lv - 1) / 10) * 300);
+  // Steep strategic target score (balanced around 32/55/85 pts + combo multipliers)
+  const targetScore = Math.round(
+    2000 +
+      (lv - 1) * 235 +
+      Math.floor((lv - 1) / 10) * 450 +
+      (isBoss ? 1200 : 0)
+  );
 
-  // Move budget tightens gradually at higher tiers
-  let movesLimit = 28;
-  if (lv <= 15) movesLimit = 28 - Math.floor((lv - 1) / 5); // 28..26
-  else if (lv <= 50) movesLimit = 27 - Math.floor((lv - 16) / 12); // 27..25
-  else if (lv <= 80) movesLimit = 25 - Math.floor((lv - 51) / 15); // 25..24
-  else movesLimit = 24 - Math.floor((lv - 81) / 7); // 24..21
+  // Tight move budgets requiring combos, Bombs, Line blasts, and Prisms
+  let movesLimit = 16;
+  if (lv <= 10) movesLimit = 16 - (isBoss ? 1 : 0);
+  else if (lv <= 35) movesLimit = 17 - Math.floor((lv - 11) / 15) - (isBoss ? 1 : 0);
+  else if (lv <= 70) movesLimit = 16 - Math.floor((lv - 36) / 20) - (isBoss ? 1 : 0);
+  else movesLimit = 15 - Math.floor((lv - 71) / 20) - (isBoss ? 1 : 0);
+  movesLimit = Math.max(13, movesLimit);
 
-  // Target specific gem collection introduced from Lv 8 onwards
-  const hasColorGoal = lv >= 8;
+  // Primary color collection starts right at Lv 3
+  const hasColorGoal = lv >= 3;
   const targetColor: GemColorId | null = hasColorGoal
-    ? (((lv * 3) % gemTypes) as GemColorId)
+    ? (((lv * 3 + 1) % gemTypes) as GemColorId)
     : null;
   const targetColorCount = hasColorGoal
-    ? Math.min(48, 12 + Math.floor((lv - 8) * 0.36))
+    ? Math.min(36, 15 + Math.floor((lv - 3) * 0.22) + (isBoss ? 3 : 0))
     : 0;
 
-  // Ice tiles appear from Lv 16 onward; double-layer frost from Lv 46 onward
+  // Secondary color goal joins from Lv 22 onwards
+  const hasSecondaryGoal = lv >= 22 && targetColor !== null;
+  const secondaryTargetColor: GemColorId | null = hasSecondaryGoal
+    ? (((targetColor! + 2 + (lv % 2)) % gemTypes) as GemColorId)
+    : null;
+  const secondaryTargetColorCount = hasSecondaryGoal
+    ? Math.min(28, 12 + Math.floor((lv - 22) * 0.2) + (isBoss ? 2 : 0))
+    : 0;
+
+  // Ice tiles start at Lv 6; double-layer frost starts at Lv 18
   let iceCount = 0;
   let doubleIceCount = 0;
-  if (lv >= 16) {
-    iceCount = Math.min(18, 4 + Math.floor(((lv - 16) / 84) * 14));
+  if (lv >= 6) {
+    iceCount = Math.min(22, 5 + Math.floor(((lv - 6) / 94) * 17));
   }
-  if (lv >= 46) {
-    doubleIceCount = Math.min(8, 2 + Math.floor(((lv - 46) / 54) * 6));
+  if (lv >= 18) {
+    doubleIceCount = Math.min(14, 2 + Math.floor(((lv - 18) / 82) * 12));
   }
 
-  // Stone blockers appear from Lv 35 onward (break adjacent gems to shatter stones)
+  // Stone blockers start at Lv 12; Granite (2-hit) stones start at Lv 36
   let stoneCount = 0;
-  if (lv >= 35) {
-    stoneCount = Math.min(8, 2 + Math.floor(((lv - 35) / 65) * 6));
+  let graniteCount = 0;
+  if (lv >= 12) {
+    stoneCount = Math.min(12, 3 + Math.floor(((lv - 12) / 88) * 9) + (isBoss ? 1 : 0));
+  }
+  if (lv >= 36 && stoneCount > 0) {
+    graniteCount = Math.min(stoneCount, 2 + Math.floor(((lv - 36) / 64) * 5));
   }
 
-  let difficultyLabel = 'Khởi động';
-  if (lv >= 21 && lv <= 45) difficultyLabel = 'Thử thách băng giá';
-  else if (lv >= 46 && lv <= 75) difficultyLabel = 'Chiến thuật đa tầng';
-  else if (lv >= 76) difficultyLabel = 'Siêu cấp bậc thầy';
+  const requireClearStones = stoneCount > 0;
+  const frostSpreadOnMiss = lv >= 28 && iceCount + doubleIceCount > 0;
 
-  const initialHints = lv <= 30 ? 4 : lv <= 70 ? 3 : 2;
-  const initialShuffles = lv <= 30 ? 3 : 2;
+  let difficultyLabel = 'Thử thách cao';
+  if (lv >= 12 && lv <= 27) difficultyLabel = 'Khắc nghiệt';
+  else if (lv >= 28 && lv <= 55) difficultyLabel = 'Băng lan & Đá chắn';
+  else if (lv >= 56 && lv <= 80) difficultyLabel = 'Địa ngục Granite';
+  else if (lv >= 81) difficultyLabel = 'Siêu cấp Vương Miện';
+  if (isBoss) difficultyLabel = `Màn Trùm · ${difficultyLabel}`;
+
+  const initialHints = lv <= 25 ? 2 : 1;
+  const initialShuffles = lv <= 20 ? 2 : 1;
 
   return {
     level: lv,
@@ -158,9 +184,14 @@ export function getDiamondLevelConfig(level: number): DiamondLevelConfig {
     targetScore,
     targetColor,
     targetColorCount,
+    secondaryTargetColor,
+    secondaryTargetColorCount,
     iceCount,
     doubleIceCount,
     stoneCount,
+    graniteCount,
+    requireClearStones,
+    frostSpreadOnMiss,
     initialHints,
     initialShuffles,
     chapter,

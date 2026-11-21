@@ -588,6 +588,198 @@ class SoundManager {
       osc.stop(t + 0.25);
     });
   }
+
+  // ---------- Tower Defense (Vệ Thành Quái Thú) Sound Effects ----------
+
+  public playTdBuild(): void {
+    const audio = this.getSfxContext();
+    if (!audio) return;
+    const { ctx, out } = audio;
+    const now = ctx.currentTime;
+    [220, 330].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      const t = now + i * 0.055;
+      osc.frequency.setValueAtTime(freq, t);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.15, t + 0.07);
+      gain.gain.setValueAtTime(0.14, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+      osc.connect(gain);
+      gain.connect(out);
+      osc.start(t);
+      osc.stop(t + 0.11);
+    });
+  }
+
+  public playTdUpgrade(): void {
+    const audio = this.getSfxContext();
+    if (!audio) return;
+    const { ctx, out } = audio;
+    const now = ctx.currentTime;
+    [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      const t = now + i * 0.045;
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.13, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+      osc.connect(gain);
+      gain.connect(out);
+      osc.start(t);
+      osc.stop(t + 0.19);
+    });
+  }
+
+  public playTdSell(): void {
+    const audio = this.getSfxContext();
+    if (!audio) return;
+    const { ctx, out } = audio;
+    const now = ctx.currentTime;
+    [987.77, 1318.51].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      const t = now + i * 0.05;
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.12, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+      osc.connect(gain);
+      gain.connect(out);
+      osc.start(t);
+      osc.stop(t + 0.16);
+    });
+  }
+
+  public playTdArrow(): void {
+    const audio = this.getSfxContext();
+    if (!audio) return;
+    const { ctx, out } = audio;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(1100, now);
+    osc.frequency.exponentialRampToValueAtTime(420, now + 0.045);
+    gain.gain.setValueAtTime(0.05, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+    osc.connect(gain);
+    gain.connect(out);
+    osc.start(now);
+    osc.stop(now + 0.055);
+  }
+
+  public playTdMagic(): void {
+    const audio = this.getSfxContext();
+    if (!audio) return;
+    const { ctx, out } = audio;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(760, now);
+    osc.frequency.exponentialRampToValueAtTime(1280, now + 0.09);
+    gain.gain.setValueAtTime(0.055, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+    osc.connect(gain);
+    gain.connect(out);
+    osc.start(now);
+    osc.stop(now + 0.12);
+  }
+
+  public playTdCannon(): void {
+    const audio = this.getSfxContext();
+    if (!audio) return;
+    const { ctx, out } = audio;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(175, now);
+    osc.frequency.exponentialRampToValueAtTime(48, now + 0.16);
+    gain.gain.setValueAtTime(0.11, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+    osc.connect(gain);
+    gain.connect(out);
+    osc.start(now);
+    osc.stop(now + 0.19);
+  }
+
+  public playTdMeteor(): void {
+    const audio = this.getSfxContext();
+    if (!audio) return;
+    const { ctx, out } = audio;
+    const now = ctx.currentTime;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(240, now);
+    osc.frequency.exponentialRampToValueAtTime(38, now + 0.38);
+    gain.gain.setValueAtTime(0.22, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+    osc.connect(gain);
+    gain.connect(out);
+    osc.start(now);
+    osc.stop(now + 0.44);
+
+    if (this.noiseBuffer) {
+      const src = ctx.createBufferSource();
+      src.buffer = this.noiseBuffer;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(900, now);
+      const nGain = ctx.createGain();
+      nGain.gain.setValueAtTime(0.18, now);
+      nGain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+      src.connect(filter);
+      filter.connect(nGain);
+      nGain.connect(out);
+      src.start(now);
+      src.stop(now + 0.26);
+    }
+  }
+
+  public playTdWaveHorn(): void {
+    const audio = this.getSfxContext();
+    if (!audio) return;
+    const { ctx, out } = audio;
+    const now = ctx.currentTime;
+    [293.66, 369.99, 440].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      const t = now + i * 0.08;
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.14, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+      osc.connect(gain);
+      gain.connect(out);
+      osc.start(t);
+      osc.stop(t + 0.3);
+    });
+  }
+
+  public playTdLeak(): void {
+    const audio = this.getSfxContext();
+    if (!audio) return;
+    const { ctx, out } = audio;
+    const now = ctx.currentTime;
+    [240, 150].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      const t = now + i * 0.09;
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.14, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+      osc.connect(gain);
+      gain.connect(out);
+      osc.start(t);
+      osc.stop(t + 0.17);
+    });
+  }
 }
 
 export const sound = new SoundManager();

@@ -24,7 +24,7 @@ export function areAdjacentGems(a: GridPos, b: GridPos): boolean {
 
 export function canMoveDiamondCell(cell: DiamondCell | null | undefined): boolean {
   if (!cell) return false;
-  return !cell.stone && cell.ice === 0;
+  return !cell.stone && cell.stoneHp <= 0 && cell.ice === 0;
 }
 
 function randomGemColor(gemTypes: number): GemColorId {
@@ -35,14 +35,15 @@ function createGemCell(
   color: GemColorId,
   special: GemSpecial = 'NONE',
   ice = 0,
-  stone = false
+  stoneHp = 0
 ): DiamondCell {
   return {
     id: genGemId(),
     color,
     special,
     ice,
-    stone,
+    stone: stoneHp > 0,
+    stoneHp,
   };
 }
 
@@ -198,16 +199,12 @@ export function findDiamondMatchGroups(grid: DiamondGrid): MatchGroup[] {
   return groups;
 }
 
-/**
- * Checks if swapping two adjacent movable tiles yields at least one valid match or special combo.
- */
 export function isValidDiamondSwap(grid: DiamondGrid, a: GridPos, b: GridPos): boolean {
   if (!areAdjacentGems(a, b)) return false;
   const cellA = grid[a.r]?.[a.c];
   const cellB = grid[b.r]?.[b.c];
   if (!canMoveDiamondCell(cellA) || !canMoveDiamondCell(cellB)) return false;
 
-  // Special + Prism or Special + Special always works
   if (cellA!.special === 'PRISM' || cellB!.special === 'PRISM') return true;
   if (cellA!.special !== 'NONE' && cellB!.special !== 'NONE') return true;
 
@@ -236,14 +233,16 @@ export function findAnyDiamondMove(grid: DiamondGrid): { a: GridPos; b: GridPos 
 }
 
 export function createDiamondBoard(config: DiamondLevelConfig): DiamondGrid {
-  const { rows, cols, gemTypes, iceCount, doubleIceCount, stoneCount } = config;
+  const { rows, cols, gemTypes, iceCount, doubleIceCount, stoneCount, graniteCount } = config;
 
-  for (let attempt = 0; attempt < 40; attempt++) {
+  let lastGrid: DiamondGrid | null = null;
+
+  for (let attempt = 0; attempt < 60; attempt++) {
     const grid: DiamondGrid = Array.from({ length: rows }, () =>
       Array<DiamondCell | null>(cols).fill(null)
     );
 
-    // Place random stones in interior positions (never blocking top entrance everywhere)
+    // Place stones inside interior rows/cols (rows 1..rows-1, cols 0..cols-1 except top row)
     const candidateStoneCoords: GridPos[] = [];
     for (let r = 1; r < rows - 1; r++) {
       for (let c = 1; c < cols - 1; c++) {
@@ -259,13 +258,17 @@ export function createDiamondBoard(config: DiamondLevelConfig): DiamondGrid {
     }
 
     const pickedStones = candidateStoneCoords.slice(0, stoneCount);
-    const stoneSet = new Set(pickedStones.map((p) => `${p.r},${p.c}`));
+    const stoneHpMap = new Map<string, number>();
+    pickedStones.forEach((p, idx) => {
+      stoneHpMap.set(`${p.r},${p.c}`, idx < graniteCount ? 2 : 1);
+    });
 
-    // Fill gems ensuring ZERO pre-existing 3-in-a-row matches
+    // Fill gems ensuring zero pre-existing 3-in-a-row matches
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        if (stoneSet.has(`${r},${c}`)) {
-          grid[r][c] = createGemCell(0, 'NONE', 0, true);
+        const sHp = stoneHpMap.get(`${r},${c}`) ?? 0;
+        if (sHp > 0) {
+          grid[r][c] = createGemCell(0, 'NONE', 0, sHp);
           continue;
         }
 
@@ -303,11 +306,11 @@ export function createDiamondBoard(config: DiamondLevelConfig): DiamondGrid {
       }
     }
 
-    // Apply ice tiles on non-stone positions (spread across middle/lower board)
+    // Apply ice tiles across rows 1..rows-1 so top row stays nimble
     const iceCandidates: GridPos[] = [];
     for (let r = 1; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        if (!stoneSet.has(`${r},${c}`)) {
+        if (!stoneHpMap.has(`${r},${c}`)) {
           iceCandidates.push({ r, c });
         }
       }
@@ -331,16 +334,21 @@ export function createDiamondBoard(config: DiamondLevelConfig): DiamondGrid {
       }
     }
 
+    lastGrid = grid;
     if (findAnyDiamondMove(grid)) {
       return grid;
     }
   }
 
+  // Fallback without stripping obstacles: reshuffle movable gems until a valid move exists
+  if (lastGrid) {
+    return shuffleDiamondGems(lastGrid, gemTypes);
+  }
+
   return createDiamondBoard({
     ...config,
-    iceCount: 0,
-    doubleIceCount: 0,
-    stoneCount: 0,
+    iceCount: Math.max(0, iceCount - 4),
+    doubleIceCount: Math.max(0, doubleIceCount - 2),
   });
 }
 
@@ -348,31 +356,30 @@ export function shuffleDiamondGems(grid: DiamondGrid, gemTypes: number): Diamond
   const rows = grid.length;
   const cols = rows > 0 ? grid[0].length : 0;
 
-  for (let attempt = 0; attempt < 30; attempt++) {
+  for (let attempt = 0; attempt < 40; attempt++) {
     const next = cloneDiamondGrid(grid);
     const movableCoords: GridPos[] = [];
-    const movableColors: GemColorId[] = [];
+    const movableCells: DiamondCell[] = [];
 
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const cell = next[r][c];
         if (cell && !cell.stone && cell.ice === 0) {
           movableCoords.push({ r, c });
-          movableColors.push(cell.color);
+          movableCells.push(cell);
         }
       }
     }
 
     if (movableCoords.length < 2) return next;
 
-    for (let i = movableColors.length - 1; i > 0; i--) {
+    for (let i = movableCells.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [movableColors[i], movableColors[j]] = [movableColors[j], movableColors[i]];
+      [movableCells[i], movableCells[j]] = [movableCells[j], movableCells[i]];
     }
 
     movableCoords.forEach((pos, idx) => {
-      const c = next[pos.r][pos.c]!;
-      c.color = movableColors[idx];
+      next[pos.r][pos.c] = movableCells[idx];
     });
 
     if (findDiamondMatchGroups(next).length === 0 && findAnyDiamondMove(next)) {
@@ -380,26 +387,94 @@ export function shuffleDiamondGems(grid: DiamondGrid, gemTypes: number): Diamond
     }
   }
 
-  // Fallback: recolor 3 adjacent cells to create a clean move
+  // Fallback: carve a guaranteed valid move cleanly
   const fallback = cloneDiamondGrid(grid);
-  for (let r = 0; r < rows; r++) {
+  for (let r = 0; r + 1 < rows; r++) {
     for (let c = 0; c + 2 < cols; c++) {
       if (
         canMoveDiamondCell(fallback[r][c]) &&
         canMoveDiamondCell(fallback[r][c + 1]) &&
-        canMoveDiamondCell(fallback[r][c + 2])
+        canMoveDiamondCell(fallback[r + 1][c + 2]) &&
+        fallback[r][c + 2] &&
+        !fallback[r][c + 2]!.stone
       ) {
         const col = randomGemColor(gemTypes);
         fallback[r][c]!.color = col;
         fallback[r][c + 1]!.color = col;
-        if (r + 1 < rows && canMoveDiamondCell(fallback[r + 1][c + 2])) {
-          fallback[r + 1][c + 2]!.color = col;
+        fallback[r + 1][c + 2]!.color = col;
+        if (findDiamondMatchGroups(fallback).length === 0 && findAnyDiamondMove(fallback)) {
+          return fallback;
         }
-        return fallback;
       }
     }
   }
   return fallback;
+}
+
+/**
+ * When a frost-spread level finishes a turn without breaking any ice,
+ * freezes 1 movable unfrozen gem bordering an existing ice tile — only if
+ * plenty of movable gems and at least 1 legal move remain.
+ */
+export function trySpreadFrost(
+  grid: DiamondGrid
+): { nextGrid: DiamondGrid; spreadPos: GridPos | null } {
+  const rows = grid.length;
+  const cols = rows > 0 ? grid[0].length : 0;
+
+  let movableCount = 0;
+  const candidates: GridPos[] = [];
+  const seen = new Set<string>();
+  const dirs = [
+    [-1, 0],
+    [1, 0],
+    [0, -1],
+    [0, 1],
+  ];
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cell = grid[r][c];
+      if (canMoveDiamondCell(cell)) movableCount++;
+      if (cell && cell.ice > 0) {
+        for (const [dr, dc] of dirs) {
+          const nr = r + dr;
+          const nc = c + dc;
+          if (nr >= 1 && nr < rows && nc >= 0 && nc < cols) {
+            const neighbor = grid[nr][nc];
+            if (canMoveDiamondCell(neighbor) && neighbor!.special === 'NONE') {
+              const key = `${nr},${nc}`;
+              if (!seen.has(key)) {
+                seen.add(key);
+                candidates.push({ r: nr, c: nc });
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (movableCount < 14 || candidates.length === 0) {
+    return { nextGrid: grid, spreadPos: null };
+  }
+
+  for (let i = candidates.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+  }
+
+  for (const pos of candidates.slice(0, 6)) {
+    const trial = cloneDiamondGrid(grid);
+    if (trial[pos.r][pos.c]) {
+      trial[pos.r][pos.c]!.ice = 1;
+      if (findAnyDiamondMove(trial)) {
+        return { nextGrid: trial, spreadPos: pos };
+      }
+    }
+  }
+
+  return { nextGrid: grid, spreadPos: null };
 }
 
 export interface StepResolutionResult {
@@ -408,6 +483,7 @@ export interface StepResolutionResult {
   clearedByColor: Record<GemColorId, number>;
   iceBroken: number;
   stonesDestroyed: number;
+  stonesDamaged: number;
   specialTriggered: boolean;
   spawnedSpecial: boolean;
   maxGroupSize: number;
@@ -481,7 +557,6 @@ export function resolveDiamondStep(
         const isLineB = cellB.special === 'LINE_H' || cellB.special === 'LINE_V';
 
         if (isBombA && isBombB) {
-          // Mega 5x5 blast
           for (let dr = -2; dr <= 2; dr++) {
             for (let dc = -2; dc <= 2; dc++) {
               const nr = swapContext.b.r + dr;
@@ -492,7 +567,6 @@ export function resolveDiamondStep(
             }
           }
         } else if ((isBombA && isLineB) || (isLineA && isBombB)) {
-          // Giant 3-row + 3-col cross blast
           for (let d = -1; d <= 1; d++) {
             const rr = swapContext.b.r + d;
             if (rr >= 0 && rr < rows) {
@@ -504,7 +578,6 @@ export function resolveDiamondStep(
             }
           }
         } else {
-          // Cross blast (row + col)
           for (let c = 0; c < cols; c++) destroyKeys.add(`${swapContext.b.r},${c}`);
           for (let r = 0; r < rows; r++) destroyKeys.add(`${r},${swapContext.b.c}`);
         }
@@ -549,7 +622,7 @@ export function resolveDiamondStep(
     }
   }
 
-  // 3. Seed special chain-reaction queue from destroyed cells
+  // 3. Seed special chain-reaction queue
   for (const key of destroyKeys) {
     const [rs, cs] = key.split(',');
     const r = Number(rs);
@@ -560,7 +633,6 @@ export function resolveDiamondStep(
     }
   }
 
-  // Propagate chain explosions through specialQueue
   while (specialQueue.length > 0) {
     const pos = specialQueue.shift()!;
     const pKey = `${pos.r},${pos.c}`;
@@ -594,7 +666,6 @@ export function resolveDiamondStep(
         }
       }
     } else if (cell.special === 'PRISM') {
-      // Triggered by cascade/explosion: wipe most common color on board
       const counts = emptyColorCounts();
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
@@ -623,15 +694,16 @@ export function resolveDiamondStep(
     }
   }
 
-  // 4. Destroy stones adjacent to natural matched group cells
+  // 4. Damage/destroy stones adjacent to natural matched group cells OR hit directly by specials
   let stonesDestroyed = 0;
+  let stonesDamaged = 0;
   const dirs = [
     [-1, 0],
     [1, 0],
     [0, -1],
     [0, 1],
   ];
-  const adjacentStoneKeys = new Set<string>();
+  const hitStoneKeys = new Set<string>();
   for (const group of groups) {
     for (const pos of group.cells) {
       for (const [dr, dc] of dirs) {
@@ -640,30 +712,35 @@ export function resolveDiamondStep(
         if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
           const neighbor = working[nr][nc];
           if (neighbor && neighbor.stone) {
-            adjacentStoneKeys.add(`${nr},${nc}`);
+            hitStoneKeys.add(`${nr},${nc}`);
           }
         }
       }
     }
   }
 
-  // Also allow special blasts caught in destroyKeys to break stones
   for (const key of destroyKeys) {
     const [rs, cs] = key.split(',');
     const r = Number(rs);
     const c = Number(cs);
     if (working[r]?.[c]?.stone) {
-      adjacentStoneKeys.add(key);
+      hitStoneKeys.add(key);
     }
   }
 
-  for (const sk of adjacentStoneKeys) {
+  for (const sk of hitStoneKeys) {
     const [rs, cs] = sk.split(',');
     const r = Number(rs);
     const c = Number(cs);
-    if (working[r][c]?.stone) {
-      working[r][c] = null;
-      stonesDestroyed++;
+    const stoneCell = working[r][c];
+    if (stoneCell && stoneCell.stone) {
+      stonesDamaged++;
+      if (stoneCell.stoneHp > 1) {
+        stoneCell.stoneHp -= 1;
+      } else {
+        working[r][c] = null;
+        stonesDestroyed++;
+      }
     }
   }
 
@@ -677,7 +754,7 @@ export function resolveDiamondStep(
       spec.color,
       spec.special,
       existing && existing.ice > 0 ? existing.ice - 1 : 0,
-      false
+      0
     );
   }
 
@@ -718,8 +795,12 @@ export function resolveDiamondStep(
     }
   }
 
-  const basePts = clearedCount * 40 + iceBroken * 90 + stonesDestroyed * 140;
-  const comboBoost = 1 + (comboMultiplier - 1) * 0.35;
+  const basePts =
+    clearedCount * 32 +
+    iceBroken * 55 +
+    stonesDestroyed * 85 +
+    (stonesDamaged - stonesDestroyed) * 40;
+  const comboBoost = 1 + (comboMultiplier - 1) * 0.28;
   const pointsEarned = Math.round(basePts * comboBoost);
 
   return {
@@ -728,6 +809,7 @@ export function resolveDiamondStep(
     clearedByColor,
     iceBroken,
     stonesDestroyed,
+    stonesDamaged,
     specialTriggered,
     spawnedSpecial,
     maxGroupSize,
@@ -736,9 +818,6 @@ export function resolveDiamondStep(
   };
 }
 
-/**
- * Drops gems downward cleanly around anchored stones and spawns fresh gems from the top.
- */
 export function applyDiamondGravityAndRefill(
   grid: DiamondGrid,
   gemTypes: number
@@ -748,8 +827,6 @@ export function applyDiamondGravityAndRefill(
   const next = cloneDiamondGrid(grid);
 
   for (let c = 0; c < cols; c++) {
-    // Segment column by anchored stones so gems never teleport through stones,
-    // and fill every empty cell cleanly from the top of each segment.
     let segmentEnd = rows - 1;
     while (segmentEnd >= 0) {
       if (next[segmentEnd][c]?.stone) {
@@ -762,7 +839,6 @@ export function applyDiamondGravityAndRefill(
       }
       segmentStart += 1;
 
-      // Collect non-null cells in [segmentStart..segmentEnd]
       const surviving: DiamondCell[] = [];
       for (let r = segmentStart; r <= segmentEnd; r++) {
         if (next[r][c]) surviving.push(next[r][c]!);

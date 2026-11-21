@@ -5,6 +5,7 @@ import {
   Lightbulb,
   Maximize2,
   Minimize2,
+  Mountain,
   Music,
   Pause,
   Play,
@@ -24,6 +25,8 @@ import {
 import { GridPos } from '../types/game';
 import {
   applyDiamondGravityAndRefill,
+  areAdjacentGems,
+  canMoveDiamondCell,
   cloneDiamondGrid,
   createDiamondBoard,
   findAnyDiamondMove,
@@ -31,11 +34,12 @@ import {
   isValidDiamondSwap,
   resolveDiamondStep,
   shuffleDiamondGems,
+  trySpreadFrost,
 } from '../utils/diamondEngine';
 import { sound } from '../utils/sound';
 import { DiamondArtwork } from './DiamondArtwork';
 import { DiamondEndModal } from './DiamondEndModal';
-import { DiamondGameBoard } from './DiamondGameBoard';
+import { ActiveSwapVisual, DiamondGameBoard } from './DiamondGameBoard';
 
 interface DiamondArenaStageProps {
   levelConfig: DiamondLevelConfig;
@@ -72,6 +76,17 @@ function countRemainingIce(grid: DiamondGrid): number {
   return count;
 }
 
+function countRemainingStoneHp(grid: DiamondGrid): number {
+  let count = 0;
+  for (let r = 0; r < grid.length; r++) {
+    for (let c = 0; c < grid[r].length; c++) {
+      const cell = grid[r][c];
+      if (cell && cell.stone) count += Math.max(1, cell.stoneHp);
+    }
+  }
+  return count;
+}
+
 export const DiamondArenaStage: React.FC<DiamondArenaStageProps> = ({
   levelConfig,
   runNonce,
@@ -99,12 +114,14 @@ export const DiamondArenaStage: React.FC<DiamondArenaStageProps> = ({
   const [selected, setSelected] = useState<GridPos | null>(null);
   const [hintMove, setHintMove] = useState<{ a: GridPos; b: GridPos } | null>(null);
   const [invalidPair, setInvalidPair] = useState<[GridPos, GridPos] | null>(null);
+  const [activeSwap, setActiveSwap] = useState<ActiveSwapVisual | null>(null);
   const [bursts, setBursts] = useState<GemBurstEffect[]>([]);
   const [floatingScores, setFloatingScores] = useState<DiamondFloatingScore[]>([]);
 
   const [score, setScore] = useState<number>(0);
   const [movesLeft, setMovesLeft] = useState<number>(levelConfig.movesLimit);
   const [colorCollected, setColorCollected] = useState<number>(0);
+  const [colorCollected2, setColorCollected2] = useState<number>(0);
   const [hintsLeft, setHintsLeft] = useState<number>(levelConfig.initialHints);
   const [shufflesLeft, setShufflesLeft] = useState<number>(levelConfig.initialShuffles);
   const [isBusy, setIsBusy] = useState<boolean>(false);
@@ -117,6 +134,7 @@ export const DiamondArenaStage: React.FC<DiamondArenaStageProps> = ({
   const scoreRef = useRef<number>(score);
   const movesRef = useRef<number>(movesLeft);
   const colorRef = useRef<number>(colorCollected);
+  const color2Ref = useRef<number>(colorCollected2);
   const epochRef = useRef<number>(0);
   const toastTimerRef = useRef<number | null>(null);
 
@@ -127,16 +145,19 @@ export const DiamondArenaStage: React.FC<DiamondArenaStageProps> = ({
     scoreRef.current = 0;
     movesRef.current = levelConfig.movesLimit;
     colorRef.current = 0;
+    color2Ref.current = 0;
 
     setGrid(fresh);
     setSelected(null);
     setHintMove(null);
     setInvalidPair(null);
+    setActiveSwap(null);
     setBursts([]);
     setFloatingScores([]);
     setScore(0);
     setMovesLeft(levelConfig.movesLimit);
     setColorCollected(0);
+    setColorCollected2(0);
     setHintsLeft(levelConfig.initialHints);
     setShufflesLeft(levelConfig.initialShuffles);
     setIsBusy(false);
@@ -205,6 +226,43 @@ export const DiamondArenaStage: React.FC<DiamondArenaStageProps> = ({
       const myEpoch = epochRef.current;
 
       if (!isValidDiamondSwap(gridRef.current, a, b)) {
+        const cellA = gridRef.current[a.r]?.[a.c];
+        const cellB = gridRef.current[b.r]?.[b.c];
+        if (areAdjacentGems(a, b) && canMoveDiamondCell(cellA) && canMoveDiamondCell(cellB)) {
+          // Physical swap-out and bounce-back feedback without spending a move
+          setIsBusy(true);
+          setSelected(null);
+          sound.playGemSwap();
+          setActiveSwap({ a: b, b: a, invalid: true });
+
+          const forwardGrid = cloneDiamondGrid(gridRef.current);
+          forwardGrid[a.r][a.c] = cellB!;
+          forwardGrid[b.r][b.c] = cellA!;
+          gridRef.current = forwardGrid;
+          setGrid(forwardGrid);
+
+          await sleep(140);
+          if (epochRef.current !== myEpoch) return;
+
+          sound.playGemInvalid();
+          setInvalidPair([a, b]);
+          setActiveSwap({ a, b, invalid: true });
+
+          const backGrid = cloneDiamondGrid(gridRef.current);
+          backGrid[a.r][a.c] = cellA!;
+          backGrid[b.r][b.c] = cellB!;
+          gridRef.current = backGrid;
+          setGrid(backGrid);
+
+          await sleep(165);
+          if (epochRef.current !== myEpoch) return;
+
+          setInvalidPair(null);
+          setActiveSwap(null);
+          setIsBusy(false);
+          return;
+        }
+
         sound.playGemInvalid();
         setInvalidPair([a, b]);
         window.setTimeout(() => {
@@ -216,6 +274,7 @@ export const DiamondArenaStage: React.FC<DiamondArenaStageProps> = ({
       setIsBusy(true);
       setHintMove(null);
       setSelected(null);
+      setActiveSwap({ a: b, b: a });
       sound.playGemSwap();
 
       const nextMoves = Math.max(0, movesRef.current - 1);
@@ -232,10 +291,13 @@ export const DiamondArenaStage: React.FC<DiamondArenaStageProps> = ({
 
       await sleep(165);
       if (epochRef.current !== myEpoch) return;
+      setActiveSwap(null);
 
       let combo = 1;
       let curScore = scoreRef.current;
       let curColorCollected = colorRef.current;
+      let curColorCollected2 = color2Ref.current;
+      let iceBrokenThisTurn = 0;
       let isFirstSwapStep = true;
 
       while (true) {
@@ -246,10 +308,16 @@ export const DiamondArenaStage: React.FC<DiamondArenaStageProps> = ({
         );
         isFirstSwapStep = false;
 
-        if (res.clearedCount === 0 && !res.spawnedSpecial && res.stonesDestroyed === 0) {
+        if (
+          res.clearedCount === 0 &&
+          !res.spawnedSpecial &&
+          res.stonesDestroyed === 0 &&
+          res.stonesDamaged === 0
+        ) {
           break;
         }
 
+        iceBrokenThisTurn += res.iceBroken;
         curGrid = res.nextGrid;
         gridRef.current = curGrid;
         setGrid(curGrid);
@@ -273,6 +341,15 @@ export const DiamondArenaStage: React.FC<DiamondArenaStageProps> = ({
             curColorCollected += added;
             colorRef.current = curColorCollected;
             setColorCollected(curColorCollected);
+          }
+        }
+
+        if (levelConfig.secondaryTargetColor !== null) {
+          const added2 = res.clearedByColor[levelConfig.secondaryTargetColor] ?? 0;
+          if (added2 > 0) {
+            curColorCollected2 += added2;
+            color2Ref.current = curColorCollected2;
+            setColorCollected2(curColorCollected2);
           }
         }
 
@@ -301,15 +378,13 @@ export const DiamondArenaStage: React.FC<DiamondArenaStageProps> = ({
         if (epochRef.current !== myEpoch) return;
         setBursts([]);
 
-        // Gravity drop + top gem refill
         curGrid = applyDiamondGravityAndRefill(curGrid, levelConfig.gemTypes);
         gridRef.current = curGrid;
         setGrid(curGrid);
 
-        await sleep(195);
+        await sleep(285);
         if (epochRef.current !== myEpoch) return;
 
-        // If cascade created new >=3 matches, loop automatically!
         if (findDiamondMatchGroups(curGrid).length > 0) {
           combo = Math.min(12, combo + 1);
         } else {
@@ -319,20 +394,26 @@ export const DiamondArenaStage: React.FC<DiamondArenaStageProps> = ({
 
       setComboDisplay(1);
 
-      const remainingIce = countRemainingIce(curGrid);
+      let remainingIce = countRemainingIce(curGrid);
+      const remainingStones = countRemainingStoneHp(curGrid);
+
       const scoreMet = curScore >= levelConfig.targetScore;
-      const colorMet =
+      const colorMet1 =
         levelConfig.targetColor === null ||
         curColorCollected >= levelConfig.targetColorCount;
+      const colorMet2 =
+        levelConfig.secondaryTargetColor === null ||
+        curColorCollected2 >= levelConfig.secondaryTargetColorCount;
       const iceMet =
         levelConfig.iceCount + levelConfig.doubleIceCount === 0 || remainingIce === 0;
+      const stonesMet = !levelConfig.requireClearStones || remainingStones === 0;
 
-      if (scoreMet && colorMet && iceMet) {
-        const finalScore = curScore + nextMoves * 150;
+      if (scoreMet && colorMet1 && colorMet2 && iceMet && stonesMet) {
+        const finalScore = curScore + nextMoves * 120;
         const stars =
-          nextMoves >= Math.ceil(levelConfig.movesLimit * 0.32)
+          nextMoves >= Math.ceil(levelConfig.movesLimit * 0.25)
             ? 3
-            : nextMoves >= Math.ceil(levelConfig.movesLimit * 0.14)
+            : nextMoves >= Math.ceil(levelConfig.movesLimit * 0.1)
               ? 2
               : 1;
         scoreRef.current = finalScore;
@@ -343,6 +424,23 @@ export const DiamondArenaStage: React.FC<DiamondArenaStageProps> = ({
         onWinLevel(levelConfig.level, finalScore, stars, nextMoves);
         setIsBusy(false);
         return;
+      }
+
+      // Hardcore mechanic: Frost spreads if player finishes a turn breaking zero ice
+      if (
+        nextMoves > 0 &&
+        levelConfig.frostSpreadOnMiss &&
+        iceBrokenThisTurn === 0 &&
+        remainingIce > 0
+      ) {
+        const spread = trySpreadFrost(curGrid);
+        if (spread.spreadPos) {
+          curGrid = spread.nextGrid;
+          gridRef.current = curGrid;
+          setGrid(curGrid);
+          remainingIce = countRemainingIce(curGrid);
+          showToast('Băng giá lan rộng thêm 1 ô!');
+        }
       }
 
       if (nextMoves <= 0) {
@@ -375,8 +473,13 @@ export const DiamondArenaStage: React.FC<DiamondArenaStageProps> = ({
   );
 
   const remainingIce = countRemainingIce(grid);
+  const remainingStones = countRemainingStoneHp(grid);
   const colorGoalMeta =
     levelConfig.targetColor !== null ? getGemStyle(levelConfig.targetColor) : null;
+  const colorGoalMeta2 =
+    levelConfig.secondaryTargetColor !== null
+      ? getGemStyle(levelConfig.secondaryTargetColor)
+      : null;
   const scorePct = Math.min(100, Math.round((score / levelConfig.targetScore) * 100));
 
   return (
@@ -431,10 +534,20 @@ export const DiamondArenaStage: React.FC<DiamondArenaStageProps> = ({
 
             {colorGoalMeta && (
               <div className="rounded-md bg-[#0F172A]/60 px-0.5 py-1 flex flex-col items-center gap-0.5 text-center leading-tight">
-                <DiamondArtwork color={colorGoalMeta.id} className="w-4 h-4" />
+                <DiamondArtwork color={colorGoalMeta.id} className="w-3.5 h-3.5" />
                 <div className="font-mono-num text-[9px] font-bold text-emerald-300">
                   {Math.min(colorCollected, levelConfig.targetColorCount)}/
                   {levelConfig.targetColorCount}
+                </div>
+              </div>
+            )}
+
+            {colorGoalMeta2 && (
+              <div className="rounded-md bg-[#0F172A]/60 px-0.5 py-1 flex flex-col items-center gap-0.5 text-center leading-tight">
+                <DiamondArtwork color={colorGoalMeta2.id} className="w-3.5 h-3.5" />
+                <div className="font-mono-num text-[9px] font-bold text-amber-300">
+                  {Math.min(colorCollected2, levelConfig.secondaryTargetColorCount)}/
+                  {levelConfig.secondaryTargetColorCount}
                 </div>
               </div>
             )}
@@ -447,6 +560,15 @@ export const DiamondArenaStage: React.FC<DiamondArenaStageProps> = ({
                 </div>
               </div>
             )}
+
+            {levelConfig.requireClearStones && (
+              <div className="rounded-md bg-[#0F172A]/60 px-0.5 py-1 flex flex-col items-center gap-0.5 text-center leading-tight">
+                <Mountain className="w-3.5 h-3.5 text-amber-300" />
+                <div className="font-mono-num text-[9px] font-bold text-amber-200">
+                  {remainingStones}
+                </div>
+              </div>
+            )}
           </aside>
 
           {/* Center Board */}
@@ -456,6 +578,7 @@ export const DiamondArenaStage: React.FC<DiamondArenaStageProps> = ({
               selected={selected}
               hintMove={hintMove}
               invalidPair={invalidPair}
+              activeSwap={activeSwap}
               bursts={bursts}
               floatingScores={floatingScores}
               isPaused={isPaused}
@@ -631,7 +754,7 @@ export const DiamondArenaStage: React.FC<DiamondArenaStageProps> = ({
                 </div>
 
                 {colorGoalMeta && (
-                  <div className="flex items-center gap-2 bg-[#0F172A]/45 px-3 py-1 rounded-lg border border-cyan-950/60">
+                  <div className="flex items-center gap-2 bg-[#0F172A]/45 px-2.5 py-1 rounded-lg border border-cyan-950/60">
                     <DiamondArtwork color={colorGoalMeta.id} className="w-5 h-5" />
                     <span className="font-mono-num text-xs font-bold text-emerald-300">
                       {Math.min(colorCollected, levelConfig.targetColorCount)}/
@@ -640,11 +763,30 @@ export const DiamondArenaStage: React.FC<DiamondArenaStageProps> = ({
                   </div>
                 )}
 
+                {colorGoalMeta2 && (
+                  <div className="flex items-center gap-2 bg-[#0F172A]/45 px-2.5 py-1 rounded-lg border border-cyan-950/60">
+                    <DiamondArtwork color={colorGoalMeta2.id} className="w-5 h-5" />
+                    <span className="font-mono-num text-xs font-bold text-amber-300">
+                      {Math.min(colorCollected2, levelConfig.secondaryTargetColorCount)}/
+                      {levelConfig.secondaryTargetColorCount}
+                    </span>
+                  </div>
+                )}
+
                 {(levelConfig.iceCount > 0 || remainingIce > 0) && (
-                  <div className="flex items-center gap-1.5 bg-[#0F172A]/45 px-3 py-1 rounded-lg border border-cyan-950/60">
+                  <div className="flex items-center gap-1.5 bg-[#0F172A]/45 px-2.5 py-1 rounded-lg border border-cyan-950/60">
                     <Snowflake className="w-4 h-4 text-sky-300" />
                     <span className="font-mono-num text-xs font-bold text-sky-200">
-                      {remainingIce} băng
+                      {remainingIce}
+                    </span>
+                  </div>
+                )}
+
+                {levelConfig.requireClearStones && (
+                  <div className="flex items-center gap-1.5 bg-[#0F172A]/45 px-2.5 py-1 rounded-lg border border-cyan-950/60">
+                    <Mountain className="w-4 h-4 text-amber-300" />
+                    <span className="font-mono-num text-xs font-bold text-amber-200">
+                      {remainingStones}
                     </span>
                   </div>
                 )}
@@ -746,6 +888,7 @@ export const DiamondArenaStage: React.FC<DiamondArenaStageProps> = ({
               selected={selected}
               hintMove={hintMove}
               invalidPair={invalidPair}
+              activeSwap={activeSwap}
               bursts={bursts}
               floatingScores={floatingScores}
               isPaused={isPaused}

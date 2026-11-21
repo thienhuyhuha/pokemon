@@ -68,6 +68,21 @@
   }
 }
 
+@keyframes gemLand {
+  0% {
+    transform: translateY(-2px) scaleX(0.96) scaleY(1.05);
+  }
+  42% {
+    transform: translateY(2px) scaleX(1.07) scaleY(0.91);
+  }
+  74% {
+    transform: translateY(-1px) scaleX(0.98) scaleY(1.03);
+  }
+  100% {
+    transform: translateY(0) scaleX(1) scaleY(1);
+  }
+}
+
 .animate-pop-match {
   animation: popMatch 210ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
@@ -80,10 +95,160 @@
   animation: floatScore 650ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+.animate-gem-land {
+  animation: gemLand 210ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: center bottom;
+}
+
+@keyframes tdBobWalk {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  25% { transform: translateY(-2.6px) rotate(-2.2deg); }
+  75% { transform: translateY(-2.2px) rotate(2.2deg); }
+}
+
+@keyframes tdPounceRun {
+  0%, 100% { transform: translateY(0px) scaleX(1) scaleY(1); }
+  50% { transform: translateY(-3.8px) scaleX(1.06) scaleY(0.95); }
+}
+
+@keyframes tdHeavyStomp {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  30% { transform: translateY(-1.8px) rotate(-3deg); }
+  50% { transform: translateY(0.8px) scaleX(1.04) scaleY(0.96); }
+  80% { transform: translateY(-1.8px) rotate(3deg); }
+}
+
+@keyframes tdWingFlap {
+  0%, 100% { transform: scaleY(1) translateY(0px); }
+  50% { transform: scaleY(0.42) translateY(2px); }
+}
+
+@keyframes tdFloatOrb {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes tdBannerWave {
+  0%, 100% { transform: skewY(0deg); }
+  50% { transform: skewY(-7deg); }
+}
+
+@keyframes tdPulseGlow {
+  0%, 100% { opacity: 0.55; transform: scale(0.94); }
+  50% { opacity: 1; transform: scale(1.12); }
+}
+
+@keyframes tdSpinSlow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes tdAttackLunge {
+  0% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+  22% { transform: translate(-4.5px, 1.5px) rotate(-14deg) scale(0.92, 1.07); }
+  50% { transform: translate(9.5px, -2.5px) rotate(17deg) scale(1.14, 0.9); }
+  78% { transform: translate(3px, 0px) rotate(5deg) scale(1.03, 0.98); }
+  100% { transform: translate(0px, 0px) rotate(0deg) scale(1, 1); }
+}
+
+@keyframes tdSlashArcSweep {
+  0% { transform: translate(2px, -6px) rotate(-52deg) scale(0.55); opacity: 0.15; }
+  35% { transform: translate(11px, -3px) rotate(8deg) scale(1.15); opacity: 1; }
+  100% { transform: translate(16px, 2px) rotate(52deg) scale(1.3); opacity: 0; }
+}
+
+@keyframes tdIdleBreathe {
+  0%, 100% { transform: translateY(0px) scaleY(1); }
+  50% { transform: translateY(-0.8px) scaleY(1.03); }
+}
+
+@keyframes tdHitRecoil {
+  0% { transform: translateX(0px) scale(1, 1); }
+  35% { transform: translateX(-3px) scale(0.92, 1.06); }
+  100% { transform: translateX(0px) scale(1, 1); }
+}
+
+@keyframes tdTorchFlicker {
+  0%, 100% { transform: scaleY(1) scaleX(1); opacity: 0.9; }
+  50% { transform: scaleY(1.18) scaleX(0.9); opacity: 1; }
+}
+
+.td-anim-walk {
+  animation: tdBobWalk 400ms ease-in-out infinite;
+}
+
+.td-anim-pounce {
+  animation: tdPounceRun 310ms ease-in-out infinite;
+}
+
+.td-anim-stomp {
+  animation: tdHeavyStomp 640ms ease-in-out infinite;
+}
+
+.td-anim-wing {
+  animation: tdWingFlap 300ms ease-in-out infinite;
+  transform-origin: 0px -10px;
+}
+
+.td-anim-orb {
+  animation: tdFloatOrb 1.7s ease-in-out infinite;
+}
+
+.td-anim-banner {
+  animation: tdBannerWave 1.3s ease-in-out infinite;
+}
+
+.td-anim-glow {
+  animation: tdPulseGlow 1.4s ease-in-out infinite;
+}
+
+.td-anim-spin {
+  animation: tdSpinSlow 5.5s linear infinite;
+}
+
+.td-anim-lunge {
+  animation: tdAttackLunge 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: 0px 4px;
+}
+
+.td-anim-slash-arc {
+  animation: tdSlashArcSweep 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: 4px -4px;
+}
+
+.td-anim-idle {
+  animation: tdIdleBreathe 2.2s ease-in-out infinite;
+  transform-origin: 0px 8px;
+}
+
+.td-anim-hit {
+  animation: tdHitRecoil 140ms ease-out;
+  transform-origin: 0px 4px;
+}
+
+.td-anim-torch {
+  animation: tdTorchFlicker 480ms ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-pop-match,
   .animate-shake-invalid,
-  .animate-float-score {
+  .animate-float-score,
+  .animate-gem-land,
+  .td-anim-walk,
+  .td-anim-pounce,
+  .td-anim-stomp,
+  .td-anim-wing,
+  .td-anim-orb,
+  .td-anim-banner,
+  .td-anim-glow,
+  .td-anim-spin,
+  .td-anim-lunge,
+  .td-anim-slash-arc,
+  .td-anim-idle,
+  .td-anim-hit,
+  .td-anim-torch {
     animation: none !important;
   }
 }

@@ -22,7 +22,10 @@ import { EndRoundModal } from './components/EndRoundModal';
 import { GameBoard } from './components/GameBoard';
 import { LevelSelectView } from './components/LevelSelectView';
 import { PokeballIcon } from './components/PokeballIcon';
+import { TdEndModal } from './components/TdEndModal';
+import { TdLevelSelectView } from './components/TdLevelSelectView';
 import { TitleScreen } from './components/TitleScreen';
+import { TowerDefenseArenaStage } from './components/TowerDefenseArenaStage';
 import { DIAMOND_MAX_LEVEL, getDiamondLevelConfig } from './data/diamondLevels';
 import {
   formatDuration,
@@ -30,20 +33,25 @@ import {
   MAX_LEVEL,
 } from './data/levels';
 import { preloadAllGameAssets } from './data/pokemonSprites';
+import { getTdLevelConfig, TD_MAX_LEVEL } from './data/tdLevels';
 import {
   auth,
   checkGoogleRedirectResult,
   CloudSyncStatus,
   createDiamondProfile,
   createPlayerProfile,
+  createTdProfile,
   db,
   handleFirestoreError,
   normalizeDiamondLevelsFromCloud,
   normalizeLevelsFromCloud,
+  normalizeTdLevelsFromCloud,
   OperationType,
+  sanitizeTdUpgrades,
   saveDiamondProgressToCloud,
   savePlayerProgressToCloud,
   savePlayerSoundToCloud,
+  saveTdProgressToCloud,
   signInWithGoogle,
   signInWithGoogleRedirect,
   signOutPlayer,
@@ -61,6 +69,7 @@ import {
   PoppingTile,
   SaveData,
 } from './types/game';
+import { TdLevelConfig, TdSaveData, TdUpgrades } from './types/towerDefense';
 import {
   canRequestFullscreen,
   enterGameFullscreenAndLandscape,
@@ -69,21 +78,28 @@ import {
 import {
   clearGuestDiamondSave,
   clearGuestSaveData,
+  clearGuestTdSave,
   clearRememberedAccount,
   DEFAULT_DIAMOND_SAVE,
   DEFAULT_SAVE,
+  DEFAULT_TD_SAVE,
   getRememberedAccount,
   loadGuestDiamondSave,
   loadGuestSaveData,
+  loadGuestTdSave,
   loadPlayerDiamondSave,
   loadPlayerLocalSave,
+  loadPlayerTdSave,
   mergeDiamondSaveData,
   mergeSaveData,
+  mergeTdSaveData,
   RememberedAccount,
   saveGuestDiamondSave,
   saveGuestSaveData,
+  saveGuestTdSave,
   savePlayerDiamondSave,
   savePlayerLocalSave,
+  savePlayerTdSave,
   setRememberedAccount,
 } from './utils/localAccountCache';
 import {
@@ -170,6 +186,12 @@ export default function App() {
       ? (loadPlayerDiamondSave(remembered.uid) ?? loadGuestDiamondSave())
       : loadGuestDiamondSave();
   });
+  const [tdSaveData, setTdSaveData] = useState<TdSaveData>(() => {
+    const remembered = getRememberedAccount();
+    return remembered
+      ? (loadPlayerTdSave(remembered.uid) ?? loadGuestTdSave())
+      : loadGuestTdSave();
+  });
   const [bgmEnabled, setBgmEnabled] = useState<boolean>(() => sound.bgmEnabled);
 
   // Creator/Admin preview mode (session-only; regular players must unlock sequentially)
@@ -181,6 +203,16 @@ export default function App() {
     getDiamondLevelConfig(1)
   );
   const [diamondRunNonce, setDiamondRunNonce] = useState<number>(0);
+  const [tdLevelConfig, setTdLevelConfig] = useState<TdLevelConfig>(() => getTdLevelConfig(1));
+  const [tdRunNonce, setTdRunNonce] = useState<number>(0);
+  const [tdResultModal, setTdResultModal] = useState<{
+    type: 'WIN' | 'LOSE';
+    level: number;
+    score: number;
+    stars: number;
+    livesLeft: number;
+    enemiesSlain: number;
+  } | null>(null);
   const [board, setBoard] = useState<BoardGrid>([]);
   const [selected, setSelected] = useState<GridPos | null>(null);
   const [hintPair, setHintPair] = useState<{ a: GridPos; b: GridPos } | null>(null);
@@ -204,6 +236,7 @@ export default function App() {
 
   const saveDataRef = useRef<SaveData>(saveData);
   const diamondSaveRef = useRef<DiamondSaveData>(diamondSaveData);
+  const tdSaveRef = useRef<TdSaveData>(tdSaveData);
   const boardRef = useRef<BoardGrid>(board);
   const selectedRef = useRef<GridPos | null>(selected);
   const gameStateRef = useRef<GameState>(gameState);
@@ -216,9 +249,11 @@ export default function App() {
   const rememberedAccountRef = useRef<RememberedAccount | null>(rememberedAccount);
   const creatingProfileUidRef = useRef<string | null>(null);
   const creatingDiamondUidRef = useRef<string | null>(null);
+  const creatingTdUidRef = useRef<string | null>(null);
   const identitySyncedUidRef = useRef<string | null>(null);
   const mergeSyncedUidRef = useRef<string | null>(null);
   const mergeDiamondSyncedUidRef = useRef<string | null>(null);
+  const mergeTdSyncedUidRef = useRef<string | null>(null);
 
   const lastMatchAtRef = useRef<number>(0);
   const effectTimersRef = useRef<Set<number>>(new Set());
@@ -232,6 +267,10 @@ export default function App() {
   useEffect(() => {
     diamondSaveRef.current = diamondSaveData;
   }, [diamondSaveData]);
+
+  useEffect(() => {
+    tdSaveRef.current = tdSaveData;
+  }, [tdSaveData]);
 
   useEffect(() => {
     boardRef.current = board;
@@ -334,12 +373,14 @@ export default function App() {
     if (activeUid) {
       savePlayerLocalSave(activeUid, saveData);
       savePlayerDiamondSave(activeUid, diamondSaveData);
+      savePlayerTdSave(activeUid, tdSaveData);
       return;
     }
     if (!authReady) return;
     saveGuestSaveData(saveData);
     saveGuestDiamondSave(diamondSaveData);
-  }, [authReady, user, rememberedAccount, saveData, diamondSaveData]);
+    saveGuestTdSave(tdSaveData);
+  }, [authReady, user, rememberedAccount, saveData, diamondSaveData, tdSaveData]);
 
   // Listen for Firebase Auth state changes
   useEffect(() => {
@@ -350,9 +391,11 @@ export default function App() {
       if (!nextUser) {
         creatingProfileUidRef.current = null;
         creatingDiamondUidRef.current = null;
+        creatingTdUidRef.current = null;
         identitySyncedUidRef.current = null;
         mergeSyncedUidRef.current = null;
         mergeDiamondSyncedUidRef.current = null;
+        mergeTdSyncedUidRef.current = null;
 
         const remembered = getRememberedAccount();
         if (remembered) {
@@ -361,17 +404,21 @@ export default function App() {
           const cached = loadPlayerLocalSave(remembered.uid) ?? DEFAULT_SAVE;
           const cachedDiamond =
             loadPlayerDiamondSave(remembered.uid) ?? DEFAULT_DIAMOND_SAVE;
+          const cachedTd = loadPlayerTdSave(remembered.uid) ?? DEFAULT_TD_SAVE;
           sound.setEnabled(cached.soundEnabled);
           setSaveData(cached);
           setDiamondSaveData(cachedDiamond);
+          setTdSaveData(cachedTd);
         } else {
           setRememberedAccountState(null);
           setSyncStatus('local');
           const guest = loadGuestSaveData();
           const guestDiamond = loadGuestDiamondSave();
+          const guestTd = loadGuestTdSave();
           sound.setEnabled(guest.soundEnabled);
           setSaveData(guest);
           setDiamondSaveData(guestDiamond);
+          setTdSaveData(guestTd);
         }
         return;
       }
@@ -396,6 +443,10 @@ export default function App() {
       const cachedDiamond = loadPlayerDiamondSave(nextUser.uid);
       if (cachedDiamond) {
         setDiamondSaveData(cachedDiamond);
+      }
+      const cachedTd = loadPlayerTdSave(nextUser.uid);
+      if (cachedTd) {
+        setTdSaveData(cachedTd);
       }
     });
     return () => unsub();
@@ -607,6 +658,88 @@ export default function App() {
     };
   }, [authReady, user]);
 
+  // Attach Firestore real-time listener for Vệ Thành Quái Thú (Tower Defense) progress
+  useEffect(() => {
+    if (!authReady || !user) return;
+
+    const path = `towerDefenseProgress/${user.uid}`;
+    const docRef = doc(db, 'towerDefenseProgress', user.uid);
+    let active = true;
+
+    const unsubscribe = onSnapshot(
+      docRef,
+      (snap) => {
+        if (!active) return;
+
+        if (snap.exists()) {
+          const data = snap.data();
+          const cloudSave: TdSaveData = {
+            highestUnlockedLevel: Math.max(
+              1,
+              Math.min(TD_MAX_LEVEL, Number(data.highestUnlockedLevel) || 1)
+            ),
+            totalScore: Math.max(0, Number(data.totalScore) || 0),
+            levels: normalizeTdLevelsFromCloud(data.levels),
+            upgrades: sanitizeTdUpgrades(data.upgrades),
+          };
+
+          const localCached = loadPlayerTdSave(user.uid);
+          const { merged, cloudNeedsUpdate } = mergeTdSaveData(cloudSave, localCached);
+
+          setTdSaveData(merged);
+          savePlayerTdSave(user.uid, merged);
+
+          if (cloudNeedsUpdate && mergeTdSyncedUidRef.current !== user.uid) {
+            mergeTdSyncedUidRef.current = user.uid;
+            void saveTdProgressToCloud(user.uid, merged).catch(() => {
+              // Offline cache will retry automatically via Firestore persistent cache
+            });
+          }
+          return;
+        }
+
+        if (creatingTdUidRef.current === user.uid) return;
+        creatingTdUidRef.current = user.uid;
+
+        const existingLocal = loadPlayerTdSave(user.uid);
+        const guest = loadGuestTdSave();
+        const hasGuestProgress =
+          guest.highestUnlockedLevel > 1 ||
+          Object.keys(guest.levels).length > 0 ||
+          Object.values(guest.upgrades).some((v) => v > 0);
+        const initialSave = existingLocal ?? (hasGuestProgress ? guest : DEFAULT_TD_SAVE);
+
+        void createTdProfile(user.uid, initialSave)
+          .then(() => {
+            if (!active) return;
+            if (!existingLocal && hasGuestProgress) {
+              clearGuestTdSave();
+            }
+            savePlayerTdSave(user.uid, initialSave);
+            setTdSaveData(initialSave);
+          })
+          .catch(() => {
+            if (!active) return;
+            creatingTdUidRef.current = null;
+          });
+      },
+      (error) => {
+        if (!active) return;
+        if (error.message.includes('Quota exceeded')) return;
+        try {
+          handleFirestoreError(error, OperationType.GET, path);
+        } catch (wrapped) {
+          setFatalError(wrapped instanceof Error ? wrapped : new Error(String(wrapped)));
+        }
+      }
+    );
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [authReady, user]);
+
   const handleSignIn = useCallback(
     async (forceSelectAccount = false) => {
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -680,9 +813,11 @@ export default function App() {
       await signOutPlayer();
       const guest = loadGuestSaveData();
       const guestDiamond = loadGuestDiamondSave();
+      const guestTd = loadGuestTdSave();
       sound.setEnabled(guest.soundEnabled);
       setSaveData(guest);
       setDiamondSaveData(guestDiamond);
+      setTdSaveData(guestTd);
       setSyncStatus('local');
       setGameState('TITLE_MENU');
     } catch {
@@ -800,6 +935,121 @@ export default function App() {
     []
   );
 
+  const startTdLevel = useCallback(
+    (levelNum: number) => {
+      if (!isPreviewMode && levelNum > tdSaveRef.current.highestUnlockedLevel) {
+        return;
+      }
+      sound.unlock();
+      void enterGameFullscreenAndLandscape();
+      clearPendingTimers();
+      const cfg = getTdLevelConfig(levelNum);
+      setTdLevelConfig(cfg);
+      setTdRunNonce((n) => n + 1);
+      setTdResultModal(null);
+      setActiveGame('TOWER_DEFENSE');
+      setGameState('PLAYING');
+    },
+    [clearPendingTimers, isPreviewMode]
+  );
+
+  const handleTdWinLevel = useCallback(
+    (
+      level: number,
+      finalScore: number,
+      stars: number,
+      livesLeft: number,
+      enemiesSlain: number
+    ) => {
+      setTdResultModal({
+        type: 'WIN',
+        level,
+        score: finalScore,
+        stars,
+        livesLeft,
+        enemiesSlain,
+      });
+      setGameState('ROUND_SUMMARY');
+
+      const prevSave = tdSaveRef.current;
+      if (level > prevSave.highestUnlockedLevel) return;
+
+      const prevLv = prevSave.levels[level];
+      const bestScore = Math.max(prevLv?.bestScore ?? 0, finalScore);
+      const bestStars = Math.max(prevLv?.stars ?? 0, stars);
+      const bestLivesLeft = Math.max(prevLv?.bestLivesLeft ?? 0, livesLeft);
+      const scoreDelta = prevLv ? Math.max(0, finalScore - prevLv.bestScore) : finalScore;
+
+      const nextSave: TdSaveData = {
+        highestUnlockedLevel: Math.min(
+          TD_MAX_LEVEL,
+          Math.max(prevSave.highestUnlockedLevel, level + 1)
+        ),
+        totalScore: prevSave.totalScore + scoreDelta,
+        levels: {
+          ...prevSave.levels,
+          [level]: {
+            completed: true,
+            stars: bestStars,
+            bestScore,
+            bestLivesLeft,
+          },
+        },
+        upgrades: prevSave.upgrades,
+      };
+
+      setTdSaveData(nextSave);
+
+      const activeUser = userRef.current;
+      const activeUid = activeUser?.uid ?? rememberedAccountRef.current?.uid ?? null;
+      if (activeUid) {
+        savePlayerTdSave(activeUid, nextSave);
+      } else {
+        saveGuestTdSave(nextSave);
+      }
+      if (activeUser) {
+        void saveTdProgressToCloud(activeUser.uid, nextSave).catch(() => {
+          // Persisted locally and queued via Firestore persistent cache
+        });
+      }
+    },
+    []
+  );
+
+  const handleTdLoseLevel = useCallback((enemiesSlain: number, finalScore: number) => {
+    setTdResultModal((prev) => ({
+      type: 'LOSE',
+      level: prev?.level ?? tdLevelConfig.level,
+      score: finalScore,
+      stars: 0,
+      livesLeft: 0,
+      enemiesSlain,
+    }));
+    setGameState('GAME_OVER');
+  }, [tdLevelConfig.level]);
+
+  const handleUpdateTdUpgrades = useCallback((nextUpgrades: TdUpgrades) => {
+    const prevSave = tdSaveRef.current;
+    const nextSave: TdSaveData = {
+      ...prevSave,
+      upgrades: nextUpgrades,
+    };
+    setTdSaveData(nextSave);
+
+    const activeUser = userRef.current;
+    const activeUid = activeUser?.uid ?? rememberedAccountRef.current?.uid ?? null;
+    if (activeUid) {
+      savePlayerTdSave(activeUid, nextSave);
+    } else {
+      saveGuestTdSave(nextSave);
+    }
+    if (activeUser) {
+      void saveTdProgressToCloud(activeUser.uid, nextSave).catch(() => {
+        // Offline cache will retry automatically
+      });
+    }
+  }, []);
+
   const handleExitToLevels = useCallback(() => {
     clearPendingTimers();
     void exitGameFullscreenAndUnlock();
@@ -834,7 +1084,7 @@ export default function App() {
     }, 1000);
 
     return () => window.clearInterval(interval);
-  }, [gameState]);
+  }, [activeGame, gameState]);
 
   const handleToggleSound = useCallback(() => {
     sound.unlock();
@@ -1153,6 +1403,7 @@ export default function App() {
         onSelectGame={setActiveGame}
         saveData={saveData}
         diamondSaveData={diamondSaveData}
+        tdSaveData={tdSaveData}
         activeAccount={activeAccount}
         hasLiveCloudAuth={Boolean(user)}
         authReady={authReady}
@@ -1165,12 +1416,20 @@ export default function App() {
         onSignInRedirect={handleSignInRedirect}
         onSignOut={handleSignOut}
         onStartCurrentLevel={() => startLevel(saveData.highestUnlockedLevel)}
-        onOpenLevelSelect={() => setGameState('LEVEL_SELECT')}
+        onOpenLevelSelect={() => {
+          setActiveGame('CHIBIMON');
+          setGameState('LEVEL_SELECT');
+        }}
         onStartDiamondCurrentLevel={() =>
           startDiamondLevel(diamondSaveData.highestUnlockedLevel)
         }
         onOpenDiamondLevelSelect={() => {
           setActiveGame('DIAMOND');
+          setGameState('LEVEL_SELECT');
+        }}
+        onStartTdCurrentLevel={() => startTdLevel(tdSaveData.highestUnlockedLevel)}
+        onOpenTdLevelSelect={() => {
+          setActiveGame('TOWER_DEFENSE');
           setGameState('LEVEL_SELECT');
         }}
         onToggleSound={handleToggleSound}
@@ -1180,6 +1439,30 @@ export default function App() {
   }
 
   if (gameState === 'LEVEL_SELECT') {
+    if (activeGame === 'TOWER_DEFENSE') {
+      return (
+        <TdLevelSelectView
+          saveData={tdSaveData}
+          activeAccount={activeAccount}
+          hasLiveCloudAuth={Boolean(user)}
+          authReady={authReady}
+          authLoading={authLoading}
+          syncStatus={syncStatus}
+          isPreviewMode={isPreviewMode}
+          soundEnabled={saveData.soundEnabled}
+          bgmEnabled={bgmEnabled}
+          onSignIn={handleSignIn}
+          onSignOut={handleSignOut}
+          onSelectLevel={(lv) => startTdLevel(lv)}
+          onUpdateUpgrades={handleUpdateTdUpgrades}
+          onTogglePreviewMode={handleTogglePreviewMode}
+          onToggleSound={handleToggleSound}
+          onToggleBgm={handleToggleBgm}
+          onBack={() => setGameState('TITLE_MENU')}
+        />
+      );
+    }
+
     if (activeGame === 'DIAMOND') {
       return (
         <DiamondLevelSelectView
@@ -1233,7 +1516,49 @@ export default function App() {
   const fsSupported = canRequestFullscreen();
 
   const stageContent =
-    activeGame === 'DIAMOND' ? (
+    activeGame === 'TOWER_DEFENSE' ? (
+      <>
+        <TowerDefenseArenaStage
+          levelConfig={tdLevelConfig}
+          runNonce={tdRunNonce}
+          upgrades={tdSaveData.upgrades}
+          isPaused={gameState === 'PAUSED'}
+          isCompactLandscape={viewport.isCompactLandscape}
+          isFullscreen={viewport.isFullscreen}
+          fsSupported={fsSupported}
+          soundEnabled={saveData.soundEnabled}
+          bgmEnabled={bgmEnabled}
+          onTogglePause={() =>
+            setGameState((s) => (s === 'PLAYING' ? 'PAUSED' : 'PLAYING'))
+          }
+          onResume={() => setGameState('PLAYING')}
+          onExitToLevels={handleExitToLevels}
+          onToggleFullscreen={handleToggleFullscreen}
+          onToggleSound={handleToggleSound}
+          onToggleBgm={handleToggleBgm}
+          onReplay={() => startTdLevel(tdLevelConfig.level)}
+          onWinLevel={handleTdWinLevel}
+          onLoseLevel={handleTdLoseLevel}
+        />
+
+        {(gameState === 'ROUND_SUMMARY' || gameState === 'GAME_OVER') && tdResultModal && (
+          <TdEndModal
+            type={tdResultModal.type}
+            level={tdLevelConfig.level}
+            stageName={tdLevelConfig.name}
+            score={tdResultModal.score}
+            stars={tdResultModal.stars}
+            livesLeft={tdResultModal.livesLeft}
+            startingLives={tdLevelConfig.startingLives}
+            enemiesSlain={tdResultModal.enemiesSlain}
+            isPreviewMode={isPreviewMode && tdLevelConfig.level > tdSaveData.highestUnlockedLevel}
+            onReplay={() => startTdLevel(tdLevelConfig.level)}
+            onNextLevel={() => startTdLevel(Math.min(TD_MAX_LEVEL, tdLevelConfig.level + 1))}
+            onLevelSelect={handleExitToLevels}
+          />
+        )}
+      </>
+    ) : activeGame === 'DIAMOND' ? (
       <DiamondArenaStage
         levelConfig={diamondLevelConfig}
         runNonce={diamondRunNonce}

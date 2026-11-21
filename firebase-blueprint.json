@@ -114,6 +114,55 @@
         "createdAt",
         "updatedAt"
       ]
+    },
+    "TowerDefenseProfile": {
+      "title": "TowerDefenseProfile",
+      "description": "Stores a single authenticated player's Vệ Thành Quái Thú (Tower Defense) campaign progression, star upgrades, and per-stage records.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Authentication UID of the player.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "highestUnlockedLevel": {
+          "type": "integer",
+          "description": "Highest Tower Defense stage unlocked by the player (1 to 30)."
+        },
+        "totalScore": {
+          "type": "integer",
+          "description": "Cumulative best score across completed Tower Defense stages."
+        },
+        "levels": {
+          "type": "object",
+          "description": "Map of stage numbers ('1'..'30') to TdLevelProgress objects containing completed, stars, bestScore, and bestLivesLeft."
+        },
+        "upgrades": {
+          "type": "object",
+          "description": "Map of 5 upgrade track levels (archery, magic, barracks, economy, spells), each integer 0..3."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the Tower Defense progression record was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the Tower Defense progression record was last updated."
+        }
+      },
+      "required": [
+        "uid",
+        "highestUnlockedLevel",
+        "totalScore",
+        "levels",
+        "upgrades",
+        "createdAt",
+        "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -128,6 +177,12 @@
         "$ref": "#/entities/DiamondProfile"
       },
       "description": "Private Kim Cương 100 player progression document owned strictly by the matching Firebase Auth user."
+    },
+    "/towerDefenseProgress/{userId}": {
+      "schema": {
+        "$ref": "#/entities/TowerDefenseProfile"
+      },
+      "description": "Private Vệ Thành Quái Thú (Tower Defense) player progression document owned strictly by the matching Firebase Auth user."
     }
   }
 }

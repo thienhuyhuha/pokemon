@@ -162,7 +162,68 @@ service cloud.firestore {
         ]);
     }
 
-    // 5. Private Per-Player Progression Collections
+    // 5. TowerDefenseProfile Validation Blueprint (Vệ Thành Quái Thú)
+    function isValidTdUpgrades(up) {
+      return up is map
+        && up.keys().hasAll(['archery', 'magic', 'barracks', 'economy', 'spells'])
+        && up.keys().hasOnly(['archery', 'magic', 'barracks', 'economy', 'spells'])
+        && up.archery is int && up.archery >= 0 && up.archery <= 3
+        && up.magic is int && up.magic >= 0 && up.magic <= 3
+        && up.barracks is int && up.barracks >= 0 && up.barracks <= 3
+        && up.economy is int && up.economy >= 0 && up.economy <= 3
+        && up.spells is int && up.spells >= 0 && up.spells <= 3;
+    }
+
+    function isValidTowerDefenseProfile(data, userId) {
+      return data.keys().hasAll([
+          'uid',
+          'highestUnlockedLevel',
+          'totalScore',
+          'levels',
+          'upgrades',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid',
+          'highestUnlockedLevel',
+          'totalScore',
+          'levels',
+          'upgrades',
+          'createdAt',
+          'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.uid == userId
+        && data.highestUnlockedLevel is int
+        && data.highestUnlockedLevel >= 1
+        && data.highestUnlockedLevel <= 30
+        && data.totalScore is int
+        && data.totalScore >= 0
+        && data.totalScore <= 500000000
+        && data.levels is map
+        && data.levels.size() <= 30
+        && isValidTdUpgrades(data.upgrades)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isTdProgressUpdateAction() {
+      return isImmutableProfilePreserved()
+        && incoming().highestUnlockedLevel >= existing().highestUnlockedLevel
+        && incoming().highestUnlockedLevel <= incoming().levels.size() + 1
+        && incoming().totalScore >= existing().totalScore
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'highestUnlockedLevel',
+          'totalScore',
+          'levels',
+          'upgrades',
+          'updatedAt'
+        ]);
+    }
+
+    // 6. Private Per-Player Progression Collections
     match /users/{userId} {
       allow get: if isOwner(userId) && isValidId(userId);
       allow list: if false;
@@ -199,6 +260,24 @@ service cloud.firestore {
         && isValidId(userId)
         && isValidDiamondProfile(incoming(), userId)
         && isDiamondProgressUpdateAction();
+
+      allow delete: if false;
+    }
+
+    match /towerDefenseProgress/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isOwner(userId)
+        && isValidId(userId)
+        && isValidTowerDefenseProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isOwner(userId)
+        && isValidId(userId)
+        && isValidTowerDefenseProfile(incoming(), userId)
+        && isTdProgressUpdateAction();
 
       allow delete: if false;
     }

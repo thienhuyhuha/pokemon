@@ -1,7 +1,14 @@
 import { DIAMOND_MAX_LEVEL } from '../data/diamondLevels';
 import { MAX_LEVEL } from '../data/levels';
+import {
+  DEFAULT_TD_UPGRADES,
+  getSpentUpgradeStars,
+  getTotalStarsEarnedInTd,
+  TD_MAX_LEVEL,
+} from '../data/tdLevels';
 import { DiamondLevelProgress, DiamondSaveData } from '../types/diamond';
 import { LevelProgress, SaveData } from '../types/game';
+import { TdLevelProgress, TdSaveData, TdUpgrades } from '../types/towerDefense';
 
 export interface RememberedAccount {
   uid: string;
@@ -18,6 +25,9 @@ const PLAYER_SAVE_PREFIX = 'chibimon_200_player_save_v1_';
 const DIAMOND_GUEST_KEY = 'chibimon_diamond_100_guest_v1';
 const DIAMOND_PLAYER_PREFIX = 'chibimon_diamond_100_player_v1_';
 
+const TD_GUEST_KEY = 'chibimon_td_15_guest_v1';
+const TD_PLAYER_PREFIX = 'chibimon_td_15_player_v1_';
+
 export const DEFAULT_SAVE: SaveData = {
   highestUnlockedLevel: 1,
   totalScore: 0,
@@ -29,6 +39,13 @@ export const DEFAULT_DIAMOND_SAVE: DiamondSaveData = {
   highestUnlockedLevel: 1,
   totalScore: 0,
   levels: {},
+};
+
+export const DEFAULT_TD_SAVE: TdSaveData = {
+  highestUnlockedLevel: 1,
+  totalScore: 0,
+  levels: {},
+  upgrades: { ...DEFAULT_TD_UPGRADES },
 };
 
 function sanitizeLevelsRecord(raw: unknown): Record<number, LevelProgress> {
@@ -369,3 +386,174 @@ export function mergeDiamondSaveData(
     cloudNeedsUpdate,
   };
 }
+
+// ---------- Tower Defense (Vệ Thành Quái Thú - 15 Stages) Local Cache & Merge ----------
+
+function sanitizeTdUpgradesLocal(raw: unknown): TdUpgrades {
+  const src = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const clamp = (v: unknown) => Math.max(0, Math.min(3, Math.floor(Number(v ?? 0) || 0)));
+  return {
+    archery: clamp(src.archery),
+    magic: clamp(src.magic),
+    barracks: clamp(src.barracks),
+    economy: clamp(src.economy),
+    spells: clamp(src.spells),
+  };
+}
+
+function sanitizeTdLevelsRecord(raw: unknown): Record<number, TdLevelProgress> {
+  const result: Record<number, TdLevelProgress> = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return result;
+
+  for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+    const levelNum = Number(key);
+    if (!Number.isInteger(levelNum) || levelNum < 1 || levelNum > TD_MAX_LEVEL) continue;
+    if (!val || typeof val !== 'object') continue;
+    const item = val as Record<string, unknown>;
+    result[levelNum] = {
+      completed: Boolean(item.completed),
+      stars: Math.max(0, Math.min(3, Math.floor(Number(item.stars ?? 0) || 0))),
+      bestScore: Math.max(0, Math.floor(Number(item.bestScore ?? 0) || 0)),
+      bestLivesLeft: Math.max(0, Math.min(50, Math.floor(Number(item.bestLivesLeft ?? 0) || 0))),
+    };
+  }
+  return result;
+}
+
+function parseTdSaveString(raw: string | null): TdSaveData | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<TdSaveData>;
+    return {
+      highestUnlockedLevel: Math.max(
+        1,
+        Math.min(TD_MAX_LEVEL, Math.floor(parsed.highestUnlockedLevel ?? 1))
+      ),
+      totalScore: Math.max(0, Math.floor(parsed.totalScore ?? 0)),
+      levels: sanitizeTdLevelsRecord(parsed.levels),
+      upgrades: sanitizeTdUpgradesLocal(parsed.upgrades),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function loadGuestTdSave(): TdSaveData {
+  try {
+    return parseTdSaveString(localStorage.getItem(TD_GUEST_KEY)) ?? DEFAULT_TD_SAVE;
+  } catch {
+    return DEFAULT_TD_SAVE;
+  }
+}
+
+export function saveGuestTdSave(data: TdSaveData): void {
+  try {
+    localStorage.setItem(TD_GUEST_KEY, JSON.stringify(data));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+export function clearGuestTdSave(): void {
+  try {
+    localStorage.setItem(TD_GUEST_KEY, JSON.stringify(DEFAULT_TD_SAVE));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+export function loadPlayerTdSave(uid: string): TdSaveData | null {
+  try {
+    return parseTdSaveString(localStorage.getItem(`${TD_PLAYER_PREFIX}${uid}`));
+  } catch {
+    return null;
+  }
+}
+
+export function savePlayerTdSave(uid: string, data: TdSaveData): void {
+  try {
+    localStorage.setItem(`${TD_PLAYER_PREFIX}${uid}`, JSON.stringify(data));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+export function mergeTdSaveData(
+  cloudSave: TdSaveData,
+  localSave: TdSaveData | null
+): { merged: TdSaveData; cloudNeedsUpdate: boolean } {
+  if (!localSave) {
+    return { merged: cloudSave, cloudNeedsUpdate: false };
+  }
+
+  let cloudNeedsUpdate = false;
+  const mergedLevels: Record<number, TdLevelProgress> = { ...cloudSave.levels };
+
+  for (const [key, localLv] of Object.entries(localSave.levels)) {
+    const levelNum = Number(key);
+    const cloudLv = mergedLevels[levelNum];
+    if (!cloudLv) {
+      mergedLevels[levelNum] = localLv;
+      cloudNeedsUpdate = true;
+      continue;
+    }
+
+    const completed = cloudLv.completed || localLv.completed;
+    const stars = Math.max(cloudLv.stars, localLv.stars);
+    const bestScore = Math.max(cloudLv.bestScore, localLv.bestScore);
+    const bestLivesLeft = Math.max(cloudLv.bestLivesLeft, localLv.bestLivesLeft);
+
+    if (
+      completed !== cloudLv.completed ||
+      stars !== cloudLv.stars ||
+      bestScore !== cloudLv.bestScore ||
+      bestLivesLeft !== cloudLv.bestLivesLeft
+    ) {
+      mergedLevels[levelNum] = {
+        completed,
+        stars,
+        bestScore,
+        bestLivesLeft,
+      };
+      cloudNeedsUpdate = true;
+    }
+  }
+
+  const maxAllowedUnlocked = Math.min(TD_MAX_LEVEL, Object.keys(mergedLevels).length + 1);
+  const highestUnlockedLevel = Math.min(
+    maxAllowedUnlocked,
+    Math.max(cloudSave.highestUnlockedLevel, localSave.highestUnlockedLevel)
+  );
+  if (highestUnlockedLevel > cloudSave.highestUnlockedLevel) {
+    cloudNeedsUpdate = true;
+  }
+
+  const summedBestScores = Object.values(mergedLevels).reduce(
+    (sum, lv) => sum + (lv.bestScore || 0),
+    0
+  );
+  const totalScore = Math.max(cloudSave.totalScore, localSave.totalScore, summedBestScores);
+  if (totalScore > cloudSave.totalScore) {
+    cloudNeedsUpdate = true;
+  }
+
+  const totalStars = getTotalStarsEarnedInTd(mergedLevels);
+  const cloudSpent = getSpentUpgradeStars(cloudSave.upgrades);
+  const localSpent = getSpentUpgradeStars(localSave.upgrades);
+  let mergedUpgrades = { ...cloudSave.upgrades };
+  if (localSpent <= totalStars && localSpent > cloudSpent) {
+    mergedUpgrades = { ...localSave.upgrades };
+    cloudNeedsUpdate = true;
+  }
+
+  return {
+    merged: {
+      highestUnlockedLevel,
+      totalScore,
+      levels: mergedLevels,
+      upgrades: mergedUpgrades,
+    },
+    cloudNeedsUpdate,
+  };
+}
+

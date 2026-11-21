@@ -6,6 +6,17 @@ import sheet4 from '../assets/images/mon_sheet_set4_1795064519615.jpg';
 import sheet5 from '../assets/images/mon_sheet_set5_1795064519959.jpg';
 import stadiumTurf from '../assets/images/mon_stadium_turf_1795064520201.jpg';
 import heroWorldBanner from '../assets/images/pokemon_hero_world_1795064302567.jpg';
+import chibimonCover from '../assets/images/chibimon_game_cover_1795248690410.jpg';
+import diamondCover from '../assets/images/diamond_game_cover_1795248689446.jpg';
+import diamondArenaBg from '../assets/images/diamond_arena_bg_1795248689449.jpg';
+import tdCover from '../assets/images/td_game_cover_1795249307768.jpg';
+import tdMapForest from '../assets/images/td_map_forest_1795249308988.jpg';
+import tdMapDesert from '../assets/images/td_map_desert_1795252085520.jpg';
+import tdMapVolcano from '../assets/images/td_map_volcano_1795249308021.jpg';
+import tdMapIce from '../assets/images/td_map_ice_1795249307640.jpg';
+import tdMapAbyss from '../assets/images/td_map_abyss_1795252087933.jpg';
+import tdMapSky from '../assets/images/td_map_sky_1795252086372.jpg';
+import { preloadTdAnimeSprites } from '../utils/tdAnimeSprites';
 
 export interface PokemonSpecies {
   id: number;
@@ -21,6 +32,16 @@ export interface PokemonSpecies {
 export const SPRITE_SHEETS = [sheet1, sheet2, sheet3, sheet4, sheet5];
 export const STADIUM_TURF_URL = stadiumTurf;
 export const HERO_WORLD_URL = heroWorldBanner;
+export const CHIBIMON_COVER_URL = chibimonCover;
+export const DIAMOND_COVER_URL = diamondCover;
+export const DIAMOND_ARENA_BG_URL = diamondArenaBg;
+export const TD_COVER_URL = tdCover;
+export const TD_MAP_FOREST_URL = tdMapForest;
+export const TD_MAP_DESERT_URL = tdMapDesert;
+export const TD_MAP_VOLCANO_URL = tdMapVolcano;
+export const TD_MAP_ICE_URL = tdMapIce;
+export const TD_MAP_ABYSS_URL = tdMapAbyss;
+export const TD_MAP_SKY_URL = tdMapSky;
 
 const sheetLoadedSet = new Set<string>();
 const sheetFailedSet = new Set<string>();
@@ -32,14 +53,29 @@ function notifySheetListeners() {
 }
 
 /**
- * Eagerly fetches and decodes all 5 sprite sheets + stadium backgrounds once at startup
- * so every monster tier (1..45) stays cached in browser & Service Worker for true offline play.
+ * Eagerly fetches and decodes all 5 sprite sheets + cover/arena backgrounds once at startup
+ * so every asset stays cached in browser & Service Worker for true offline play.
  */
 export function preloadAllGameAssets(): void {
   if (typeof window === 'undefined' || preloadStarted) return;
   preloadStarted = true;
+  preloadTdAnimeSprites();
 
-  const urls = [...SPRITE_SHEETS, STADIUM_TURF_URL, HERO_WORLD_URL];
+  const urls = [
+    ...SPRITE_SHEETS,
+    STADIUM_TURF_URL,
+    HERO_WORLD_URL,
+    CHIBIMON_COVER_URL,
+    DIAMOND_COVER_URL,
+    DIAMOND_ARENA_BG_URL,
+    TD_COVER_URL,
+    TD_MAP_FOREST_URL,
+    TD_MAP_DESERT_URL,
+    TD_MAP_VOLCANO_URL,
+    TD_MAP_ICE_URL,
+    TD_MAP_ABYSS_URL,
+    TD_MAP_SKY_URL,
+  ];
   urls.forEach((url) => {
     const img = new Image();
     img.onload = () => {
