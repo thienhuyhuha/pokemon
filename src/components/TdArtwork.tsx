@@ -1,5 +1,5 @@
 import React from 'react';
-import { getMythicPathConfig } from '../data/tdLevels';
+import { getMythicPathConfig, TD_MYTHIC_PATHS } from '../data/tdLevels';
 import {
   TdBranchId,
   TdEnemyType,
@@ -196,11 +196,12 @@ interface TdTowerSpriteProps {
 function renderHeroPedestal(
   type: TdTowerType,
   level: TdTowerLevel,
-  branch: TdBranchId | null
+  branch: TdBranchId | null,
+  mythicAccent?: string | null
 ) {
   let bodyFill = 'url(#tdPedestalStoneGrad)';
   let trimColor = '#FACC15';
-  let auraColor = '#FACC15';
+  let auraColor = mythicAccent ?? '#FACC15';
 
   if (type === 'ARCHER') {
     bodyFill =
@@ -343,6 +344,149 @@ function renderHeroPedestal(
           )}
         </g>
       )}
+
+      {/* Lv10+ Imperial & Mythic Ascension Pillars */}
+      {level >= 10 && (
+        <g>
+          <path d="M-24,8 L-27,-8 L-21,-5 L-19,8 Z" fill="url(#tdGoldGrad)" stroke="#0F172A" strokeWidth="1.1" />
+          <path d="M24,8 L27,-8 L21,-5 L19,8 Z" fill="url(#tdGoldGrad)" stroke="#0F172A" strokeWidth="1.1" />
+          <ellipse
+            cx="0"
+            cy="11"
+            rx="26.5"
+            ry="9.2"
+            fill="none"
+            stroke={auraColor}
+            strokeWidth={level >= 11 ? '2' : '1.4'}
+            opacity="0.9"
+          />
+        </g>
+      )}
+    </g>
+  );
+}
+
+/**
+ * 4 drastically distinct visual transformations for Lv10 -> Lv11+ Mythic Evolutions
+ * so every specialization looks noticeably different and awesome in both preview and combat.
+ */
+function renderMythicFormBack(variantIndex: number, accentColor: string) {
+  if (variantIndex === 0) {
+    // Form 0: Seraphic Cyber-Bladed Energy Wings
+    return (
+      <g className="pointer-events-none">
+        <g className="td-anim-wing">
+          <path
+            d="M-6,-18 C-18,-36 -33,-41 -39,-31 C-32,-23 -30,-17 -37,-10 C-27,-11 -18,-9 -8,-12 Z"
+            fill={accentColor}
+            fillOpacity="0.48"
+            stroke="#FFFFFF"
+            strokeWidth="1.3"
+          />
+          <path
+            d="M-5,-16 C-15,-29 -27,-33 -32,-25 C-26,-19 -24,-15 -29,-10 C-21,-10 -14,-9 -7,-12 Z"
+            fill={accentColor}
+            opacity="0.88"
+          />
+          <path
+            d="M6,-18 C18,-36 33,-41 39,-31 C32,-23 30,-17 37,-10 C27,-11 18,-9 8,-12 Z"
+            fill={accentColor}
+            fillOpacity="0.48"
+            stroke="#FFFFFF"
+            strokeWidth="1.3"
+          />
+          <path
+            d="M5,-16 C15,-29 27,-33 32,-25 C26,-19 24,-15 29,-10 C21,-10 14,-9 7,-12 Z"
+            fill={accentColor}
+            opacity="0.88"
+          />
+        </g>
+      </g>
+    );
+  }
+
+  if (variantIndex === 1) {
+    // Form 1: Imperial Crossed Giant Relic Blades + Horned Crown Crest
+    return (
+      <g className="pointer-events-none">
+        <g opacity="0.94">
+          <path d="M-23,-40 L-17,-43 L16,4 L12,7 Z" fill="url(#tdSteelGrad)" stroke={accentColor} strokeWidth="1.3" />
+          <path d="M23,-40 L17,-43 L-16,4 L-12,7 Z" fill="url(#tdSteelGrad)" stroke={accentColor} strokeWidth="1.3" />
+          <polygon points="-24,-41 -29,-47 -18,-44" fill={accentColor} stroke="#FFFFFF" strokeWidth="0.9" />
+          <polygon points="24,-41 29,-47 18,-44" fill={accentColor} stroke="#FFFFFF" strokeWidth="0.9" />
+        </g>
+        <path
+          d="M-12,-41 L-7,-49 L0,-43 L7,-49 L12,-41 L7,-37 L-7,-37 Z"
+          fill="url(#tdGoldGrad)"
+          stroke={accentColor}
+          strokeWidth="1.3"
+          className="td-anim-glow"
+        />
+      </g>
+    );
+  }
+
+  if (variantIndex === 2) {
+    // Form 2: Elemental Double-Helix Shock Rings + Twin Hovering Drone Familiars
+    return (
+      <g className="pointer-events-none">
+        <g transform="translate(0, -18) rotate(-24)">
+          <ellipse cx="0" cy="0" rx="28" ry="9" fill="none" stroke={accentColor} strokeWidth="2.1" strokeDasharray="7 4" opacity="0.9" />
+        </g>
+        <g transform="translate(0, -18) rotate(24)">
+          <ellipse cx="0" cy="0" rx="28" ry="9" fill="none" stroke="#FEF08A" strokeWidth="1.8" strokeDasharray="5 5" opacity="0.82" />
+        </g>
+        <g className="td-anim-orb">
+          <polygon points="-25,-28 -21,-22 -25,-16 -29,-22" fill={accentColor} stroke="#FFFFFF" strokeWidth="1.1" />
+          <circle cx="-25" cy="-22" r="2.2" fill="#FFFFFF" />
+          <polygon points="25,-28 29,-22 25,-16 21,-22" fill={accentColor} stroke="#FFFFFF" strokeWidth="1.1" />
+          <circle cx="25" cy="-22" r="2.2" fill="#FFFFFF" />
+        </g>
+      </g>
+    );
+  }
+
+  // Form 3: Cosmic Mandala Sun-Wheel + Seraphic Flame Halo
+  return (
+    <g className="pointer-events-none">
+      <g transform="translate(0, -21)">
+        <g className="td-anim-spin">
+          <circle cx="0" cy="0" r="23" fill={accentColor} fillOpacity="0.14" stroke={accentColor} strokeWidth="2" strokeDasharray="6 3" />
+          <circle cx="0" cy="0" r="17" fill="none" stroke="#FEF08A" strokeWidth="1.4" strokeDasharray="3 4" />
+          <polygon
+            points="0,-29 3,-19 0,-15 -3,-19"
+            fill={accentColor}
+            stroke="#FFFFFF"
+            strokeWidth="0.9"
+          />
+          <polygon
+            points="0,29 3,19 0,15 -3,19"
+            fill={accentColor}
+            stroke="#FFFFFF"
+            strokeWidth="0.9"
+          />
+          <polygon
+            points="-29,0 -19,3 -15,0 -19,-3"
+            fill={accentColor}
+            stroke="#FFFFFF"
+            strokeWidth="0.9"
+          />
+          <polygon
+            points="29,0 19,3 15,0 19,-3"
+            fill={accentColor}
+            stroke="#FFFFFF"
+            strokeWidth="0.9"
+          />
+          <polygon
+            points="-20,-20 -12,-15 -11,-11 -15,-12"
+            fill="#FEF08A"
+          />
+          <polygon
+            points="20,-20 15,-12 11,-11 12,-15"
+            fill="#FEF08A"
+          />
+        </g>
+      </g>
     </g>
   );
 }
@@ -923,6 +1067,10 @@ export const TdTowerSprite: React.FC<TdTowerSpriteProps> = React.memo(
   ({ type, level, branch, mythicPath = null, facingAngle = 0, recoil = 0, windup = 0 }) => {
     const animeSrc = useTdAnimeSprite(resolveHeroAnimeKey(type, level, branch));
     const mythicCfg = getMythicPathConfig(type, mythicPath);
+    const mythicIndex = mythicPath
+      ? TD_MYTHIC_PATHS[type].findIndex((p) => p.id === mythicPath)
+      : -1;
+    const isMythicForm = Boolean(mythicCfg && mythicIndex >= 0 && level >= 11);
     const k = Math.min(1, Math.max(0, recoil / 0.28));
     const w = Math.min(1, Math.max(0, windup));
     const firing = k > 0.02;
@@ -983,11 +1131,11 @@ export const TdTowerSprite: React.FC<TdTowerSpriteProps> = React.memo(
 
       const sizeW =
         level >= 20
-          ? 77
+          ? 81
           : level >= 15
-            ? 74
+            ? 77
             : level >= 11
-              ? 72
+              ? 74
               : level >= 7
                 ? 70
                 : level === 6
@@ -1047,6 +1195,20 @@ export const TdTowerSprite: React.FC<TdTowerSpriteProps> = React.memo(
         <g>
           {/* Soft Ground Contact Shadow */}
           <ellipse cx="0" cy="14.5" rx={level >= 5 ? 25 : level >= 3 ? 23 : 20} ry="7.8" fill="#020617" opacity="0.52" />
+
+          {/* Imperial Dais Ring at Lv10+ */}
+          {level >= 10 && (
+            <ellipse
+              cx="0"
+              cy="12.8"
+              rx={level >= 15 ? 35 : 32}
+              ry="11.6"
+              fill={auraColor}
+              fillOpacity={isMythicForm ? 0.16 : 0.1}
+              stroke={auraColor}
+              strokeWidth={isMythicForm ? '2' : '1.4'}
+            />
+          )}
 
           {/* Level Evolution Magic Ring */}
           {level >= 2 && (
@@ -1127,9 +1289,17 @@ export const TdTowerSprite: React.FC<TdTowerSpriteProps> = React.memo(
             </g>
           )}
 
+          {/* Distinct 4-Path Mythic Transformation Gear & Wings (Lv11+) */}
+          {isMythicForm && renderMythicFormBack(mythicIndex, auraColor)}
+
           {/* Crisp Transparent Anime Hero with Windup Anticipation & Follow-Through Spring */}
           <g
             transform={`translate(0, 14) translate(${shiftX}, ${shiftY}) rotate(${leanDeg}) scale(${aimRight * stretchX}, ${stretchY}) translate(0, -14)`}
+            style={
+              isMythicForm
+                ? { filter: `drop-shadow(0 0 5px ${auraColor})` }
+                : undefined
+            }
           >
             <image
               href={animeSrc}
@@ -1419,7 +1589,8 @@ export const TdTowerSprite: React.FC<TdTowerSpriteProps> = React.memo(
 
       return (
         <g transform={`scale(${scaleBoost})`}>
-          {renderHeroPedestal(type, level, branch)}
+          {renderHeroPedestal(type, level, branch, mythicCfg?.accentColor)}
+          {isMythicForm && renderMythicFormBack(mythicIndex, mythicCfg!.accentColor)}
 
           {level === 1 &&
             renderArcherHero({
@@ -2196,11 +2367,20 @@ interface TdEnemySpriteProps {
   slowed: boolean;
   poisoned: boolean;
   burned?: boolean;
+  enraged?: boolean;
   facingLeft: boolean;
   isAttacking?: boolean;
   isHealing?: boolean;
   hideHud?: boolean;
 }
+
+const BOSS_ENEMY_SET = new Set<TdEnemyType>([
+  'BOSS',
+  'PLAGUE_HYDRA',
+  'ABYSS_OVERLORD',
+  'DRAGON_EMPEROR',
+  'DOOM_COLOSSUS',
+]);
 
 export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
   ({
@@ -2210,6 +2390,7 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
     slowed,
     poisoned,
     burned = false,
+    enraged = false,
     facingLeft,
     isAttacking = false,
     isHealing = false,
@@ -2217,76 +2398,120 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
   }) => {
     const animeSrc = useTdAnimeSprite(resolveEnemyAnimeKey(type));
     const flip = facingLeft ? -1 : 1;
-    const isFlying = type === 'WYVERN' || type === 'HARPY';
-    const barW =
-      type === 'BOSS' ? 46 : type === 'MINIBOSS' ? 38 : type === 'GOLEM' || type === 'KNIGHT_DARK' ? 32 : 24;
-    const barY =
-      type === 'BOSS'
-        ? -48
-        : type === 'MINIBOSS'
-          ? -40
-          : type === 'GOLEM' || type === 'KNIGHT_DARK' || isFlying
-            ? -34
+    const isFlying = type === 'WYVERN' || type === 'HARPY' || type === 'SHADOW_REAPER';
+    const isBoss = BOSS_ENEMY_SET.has(type);
+    const isTitan = type === 'VOID_TITAN' || type === 'BROOD_MOTHER';
+    const isMite = type === 'MITE';
+
+    const barW = isBoss
+      ? 62
+      : type === 'MINIBOSS' || isTitan
+        ? 40
+        : type === 'GOLEM' || type === 'KNIGHT_DARK'
+          ? 32
+          : isMite
+            ? 18
+            : 24;
+    const barY = isBoss
+      ? -74
+      : type === 'MINIBOSS' || isTitan
+        ? -44
+        : type === 'GOLEM' || type === 'KNIGHT_DARK' || isFlying
+          ? -35
+          : isMite
+            ? -21
             : -28;
     const animClass = isAttacking
       ? 'td-anim-lunge'
-      : type === 'WOLF' || type === 'SPIDER'
+      : type === 'WOLF' || type === 'SPIDER' || type === 'BROODLING' || isMite
         ? 'td-anim-pounce'
-        : type === 'GOLEM' || type === 'BOSS' || type === 'MINIBOSS' || type === 'KNIGHT_DARK'
+        : type === 'GOLEM' || isBoss || type === 'MINIBOSS' || type === 'KNIGHT_DARK' || isTitan
           ? 'td-anim-stomp'
           : 'td-anim-walk';
 
+    const baseFilter =
+      isMite
+        ? 'hue-rotate(-28deg) saturate(1.45) contrast(1.1)'
+        : enraged
+          ? 'drop-shadow(0 0 6px #EF4444) saturate(1.3)'
+          : undefined;
+
+    const combinedFilter =
+      poisoned && hitFlash
+        ? 'sepia(0.92) hue-rotate(74deg) saturate(2.9) brightness(1.42)'
+        : poisoned
+          ? 'sepia(0.92) hue-rotate(74deg) saturate(2.7) brightness(0.96)'
+          : hitFlash
+            ? 'brightness(1.55) saturate(1.25)'
+            : baseFilter;
+
     if (animeSrc) {
       const boxSize = hideHud
-        ? type === 'BOSS'
+        ? isBoss
           ? 48
-          : type === 'MINIBOSS'
+          : type === 'MINIBOSS' || isTitan
             ? 46
-            : 42
-        : type === 'BOSS'
-          ? 74
-          : type === 'MINIBOSS'
-            ? 58
-            : type === 'GOLEM' || type === 'KNIGHT_DARK'
-              ? 48
-              : isFlying || type === 'ORC' || type === 'SHAMAN' || type === 'NECRO'
-                ? 42
-                : 35;
-      const anchorY = hideHud ? 12 : isFlying ? 4 : type === 'BOSS' ? 14 : 12;
+            : isMite
+              ? 30
+              : 42
+        : type === 'DRAGON_EMPEROR' || type === 'ABYSS_OVERLORD' || type === 'DOOM_COLOSSUS'
+          ? 106
+          : type === 'PLAGUE_HYDRA' || type === 'BOSS'
+            ? 96
+            : type === 'MINIBOSS' || type === 'BROOD_MOTHER' || type === 'VOID_TITAN'
+              ? 56
+              : type === 'GOLEM' || type === 'KNIGHT_DARK' || type === 'SHADOW_REAPER'
+                ? 48
+                : isFlying || type === 'ORC' || type === 'SHAMAN' || type === 'NECRO'
+                  ? 42
+                  : type === 'BROODLING'
+                    ? 32
+                    : isMite
+                      ? 23
+                      : 35;
+      const anchorY = hideHud ? 12 : isFlying ? 4 : isBoss ? 18 : isMite ? 9 : 12;
 
       return (
         <g>
+          {/* Dread Boss Aura Ring */}
+          {isBoss && !hideHud && (
+            <ellipse
+              cx="0"
+              cy="14"
+              rx={enraged ? 38 : 34}
+              ry="12.5"
+              fill={enraged ? '#EF4444' : '#7F1D1D'}
+              fillOpacity={enraged ? 0.34 : 0.24}
+              stroke={enraged ? '#FCA5A5' : '#EF4444'}
+              strokeWidth={enraged ? '2.4' : '1.8'}
+              strokeDasharray="6 4"
+              className="td-anim-glow"
+            />
+          )}
+
           <ellipse
             cx="0"
-            cy={isFlying && !hideHud ? 16 : 11.5}
-            rx={type === 'BOSS' ? 21 : type === 'MINIBOSS' ? 17 : type === 'GOLEM' ? 15 : 11}
-            ry={type === 'BOSS' ? 8 : 4.6}
+            cy={isFlying && !hideHud ? 16 : isBoss ? 16 : 11.5}
+            rx={isBoss ? 30 : type === 'MINIBOSS' || isTitan ? 18 : type === 'GOLEM' ? 15 : isMite ? 8 : 11}
+            ry={isBoss ? 10 : isMite ? 3.5 : 4.6}
             fill="#020617"
-            opacity="0.5"
+            opacity="0.54"
           />
 
           <g
             transform={`scale(${flip}, 1)`}
             className={hitFlash ? 'td-anim-hit' : undefined}
-            style={
-              poisoned && hitFlash
-                ? { filter: 'sepia(0.92) hue-rotate(74deg) saturate(2.9) brightness(1.42)' }
-                : poisoned
-                  ? { filter: 'sepia(0.92) hue-rotate(74deg) saturate(2.7) brightness(0.96)' }
-                  : hitFlash
-                    ? { filter: 'brightness(1.55) saturate(1.25)' }
-                    : undefined
-            }
+            style={combinedFilter ? { filter: combinedFilter } : undefined}
           >
             <g className={animClass}>
               {isHealing && (
                 <circle
                   cx="0"
                   cy="-10"
-                  r="22"
-                  fill={type === 'NECRO' ? '#C084FC' : '#2DD4BF'}
+                  r={isBoss ? 38 : 22}
+                  fill={type === 'NECRO' || type === 'SHADOW_REAPER' ? '#C084FC' : '#2DD4BF'}
                   opacity="0.28"
-                  stroke={type === 'NECRO' ? '#C084FC' : '#2DD4BF'}
+                  stroke={type === 'NECRO' || type === 'SHADOW_REAPER' ? '#C084FC' : '#2DD4BF'}
                   strokeWidth="2"
                 />
               )}
@@ -2310,8 +2535,8 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
           {slowed && (
             <circle
               cx="0"
-              cy="-4"
-              r={type === 'BOSS' ? 26 : 15.5}
+              cy={isBoss ? -18 : -4}
+              r={isBoss ? 36 : 15.5}
               fill="none"
               stroke="#38BDF8"
               strokeWidth="2"
@@ -2323,15 +2548,15 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
               <ellipse
                 cx="0"
                 cy="9"
-                rx={type === 'BOSS' ? 22 : 14}
-                ry={type === 'BOSS' ? 8 : 5}
+                rx={isBoss ? 30 : 14}
+                ry={isBoss ? 10 : 5}
                 fill="#22C55E"
                 opacity="0.28"
               />
               <circle
                 cx="0"
-                cy="-4"
-                r={type === 'BOSS' ? 23 : 14.5}
+                cy={isBoss ? -18 : -4}
+                r={isBoss ? 33 : 14.5}
                 fill="none"
                 stroke="#4ADE80"
                 strokeWidth="2"
@@ -2346,8 +2571,8 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
               <ellipse
                 cx="0"
                 cy="10"
-                rx={type === 'BOSS' ? 22 : 14}
-                ry={type === 'BOSS' ? 7 : 4.5}
+                rx={isBoss ? 30 : 14}
+                ry={isBoss ? 9 : 4.5}
                 fill="#F97316"
                 opacity="0.34"
               />
@@ -2362,20 +2587,38 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
                 x={-barW / 2}
                 y={barY}
                 width={barW}
-                height="4.8"
-                rx="1.6"
+                height={isBoss ? '6.2' : '4.8'}
+                rx="1.8"
                 fill="#0F172A"
-                stroke="#0F172A"
-                strokeWidth="1"
+                stroke={isBoss ? (enraged ? '#EF4444' : '#FACC15') : '#0F172A'}
+                strokeWidth={isBoss ? '1.3' : '1'}
               />
               <rect
-                x={-barW / 2 + 0.6}
-                y={barY + 0.6}
-                width={Math.max(0, (barW - 1.2) * hpRatio)}
-                height="3.6"
+                x={-barW / 2 + 0.7}
+                y={barY + 0.7}
+                width={Math.max(0, (barW - 1.4) * hpRatio)}
+                height={isBoss ? '4.8' : '3.6'}
                 rx="1"
-                fill={hpRatio > 0.5 ? '#22C55E' : hpRatio > 0.25 ? '#FACC15' : '#EF4444'}
+                fill={
+                  isBoss
+                    ? enraged
+                      ? '#EF4444'
+                      : '#F97316'
+                    : hpRatio > 0.5
+                      ? '#22C55E'
+                      : hpRatio > 0.25
+                        ? '#FACC15'
+                        : '#EF4444'
+                }
               />
+              {isBoss && (
+                <polygon
+                  points={`${-barW / 2 - 5},${barY + 5} ${-barW / 2 - 2},${barY - 2} ${-barW / 2 + 1},${barY + 5}`}
+                  fill="#FACC15"
+                  stroke="#0F172A"
+                  strokeWidth="0.9"
+                />
+              )}
             </>
           )}
         </g>
@@ -2387,8 +2630,8 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
         <ellipse
           cx="0"
           cy={isFlying ? 18 : 11.5}
-          rx={type === 'BOSS' ? 22 : type === 'MINIBOSS' ? 18 : type === 'GOLEM' ? 16 : 11.5}
-          ry={type === 'BOSS' ? 8.5 : 5}
+          rx={isBoss ? 30 : type === 'MINIBOSS' || isTitan ? 18 : type === 'GOLEM' ? 16 : isMite ? 8 : 11.5}
+          ry={isBoss ? 10 : 5}
           fill="#020617"
           opacity="0.52"
         />
@@ -2765,9 +3008,13 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
             </g>
           )}
 
-          {/* 12. BOSS — Abyssal Demon Overlord with Magma Core, Curved Crown Horns & Hellblade */}
-          {type === 'BOSS' && (
-            <g className={animClass}>
+          {/* 12. BOSS & NEW SCARY MONSTERS / GIANT BOSSES FALLBACKS */}
+          {(type === 'BOSS' ||
+            type === 'ABYSS_OVERLORD' ||
+            type === 'DRAGON_EMPEROR' ||
+            type === 'PLAGUE_HYDRA' ||
+            type === 'DOOM_COLOSSUS') && (
+            <g className={animClass} transform="scale(1.32)">
               {/* Sweeping Demon Mantle */}
               <path d="M-21,-13 C-25,-2 -28,6 -27,12 C-10,10.5 10,10.5 27,12 C28,6 25,-2 21,-13 Z" fill="#450A0A" stroke="#0F172A" strokeWidth="1.8" />
               {/* Armored Demon Greaves */}
@@ -2776,12 +3023,12 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
               {/* Sculpted Molten Dread-Armor Torso */}
               <path
                 d="M-20,6 C-22.5,-5 -21.5,-16 -18,-23 C-8,-26.5 8,-26.5 18,-23 C21.5,-16 22.5,-5 20,6 C8,9 -8,9 -20,6 Z"
-                fill="url(#tdBossArmorGrad)"
+                fill={type === 'PLAGUE_HYDRA' ? 'url(#tdShamanRobeGrad)' : 'url(#tdBossArmorGrad)'}
                 stroke="#0F172A"
                 strokeWidth="2.2"
               />
-              {/* Glowing Lava Fissures */}
-              <path d="M-12,-14 L-4,-8 M12,-14 L4,-8" stroke="#FB923C" strokeWidth="2.1" strokeLinecap="round" />
+              {/* Glowing Lava / Venom Fissures */}
+              <path d="M-12,-14 L-4,-8 M12,-14 L4,-8" stroke={type === 'PLAGUE_HYDRA' ? '#4ADE80' : '#FB923C'} strokeWidth="2.1" strokeLinecap="round" />
               {/* Jagged Obsidian Shoulder Armor */}
               <path d="M-25,-18 C-23,-25 -16,-28 -11,-15 L-21,-10 Z" fill="#334155" stroke="#0F172A" strokeWidth="1.8" />
               <path d="M25,-18 C23,-25 16,-28 11,-15 L21,-10 Z" fill="#334155" stroke="#0F172A" strokeWidth="1.8" />
@@ -2797,6 +3044,41 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
               <g transform={isAttacking ? 'translate(4, 2) rotate(36 20 0)' : ''}>
                 <path d="M19,2 C24,-8 28,-16 31,-23 C33,-19 33,-16 33,-14 C29,-6 25,1 23,5 Z" fill="#FB923C" stroke="#FEF08A" strokeWidth="1.4" />
               </g>
+            </g>
+          )}
+
+          {(type === 'BROOD_MOTHER' || type === 'BROODLING' || type === 'MITE') && (
+            <g
+              className={animClass}
+              transform={`scale(${type === 'BROOD_MOTHER' ? 1.38 : type === 'BROODLING' ? 0.92 : 0.65})`}
+            >
+              <path d="M-4,-2 L-16,-11 L-20,5 M-2,2 L-15,0 L-17,11 M4,-2 L16,-11 L20,5 M2,2 L15,0 L17,11" fill="none" stroke="#0F172A" strokeWidth="2.8" strokeLinecap="round" />
+              <path d="M-4,-2 L-16,-11 L-20,5 M-2,2 L-15,0 L-17,11 M4,-2 L16,-11 L20,5 M2,2 L15,0 L17,11" fill="none" stroke="#A855F7" strokeWidth="1.3" strokeLinecap="round" />
+              <ellipse cx="-3" cy="-4" rx="11" ry="8" fill="#3B0764" stroke="#0F172A" strokeWidth="1.6" />
+              <circle cx="6" cy="-2" r="6" fill="#1E1B4B" stroke="#0F172A" strokeWidth="1.4" />
+              <circle cx="8" cy="-3.5" r="1.8" fill="#FB7185" />
+              <circle cx="10.5" cy="-1.5" r="1.5" fill="#FB7185" />
+            </g>
+          )}
+
+          {type === 'SHADOW_REAPER' && (
+            <g className={animClass} transform="translate(0, -10)">
+              <path d="M-12,11 L-7,-12 L7,-12 L12,11 L0,6 Z" fill="#090D16" stroke="#EF4444" strokeWidth="1.5" />
+              <circle cx="0" cy="-14" r="6.5" fill="#1E1B4B" stroke="#0F172A" strokeWidth="1.4" />
+              <circle cx="-2.2" cy="-14" r="1.6" fill="#EF4444" />
+              <circle cx="2.2" cy="-14" r="1.6" fill="#EF4444" />
+              <line x1="10" y1="10" x2="13" y2="-18" stroke="#334155" strokeWidth="2.5" />
+              <path d="M13,-18 C20,-24 25,-20 24,-12 C18,-14 14,-14 13,-13 Z" fill="#FB7185" stroke="#FFFFFF" strokeWidth="1" />
+            </g>
+          )}
+
+          {type === 'VOID_TITAN' && (
+            <g className={animClass} transform="scale(1.16)">
+              <path d="M-16,6 L-15,-18 L0,-24 L15,-18 L16,6 Z" fill="#1E1B4B" stroke="#0F172A" strokeWidth="2" />
+              <path d="M-9,-14 L-4,-6 L-7,0 M9,-14 L4,-6 L7,0" fill="none" stroke="#C084FC" strokeWidth="1.8" strokeLinecap="round" />
+              <polygon points="0,-14 6,-6 0,2 -6,-6" fill="#E879F9" stroke="#FFFFFF" strokeWidth="1" className="td-anim-glow" />
+              <circle cx="-3.5" cy="-17" r="1.9" fill="#E879F9" />
+              <circle cx="3.5" cy="-17" r="1.9" fill="#E879F9" />
             </g>
           )}
         </g>
@@ -3136,7 +3418,7 @@ export const TdTowerPreview: React.FC<{
   mythicPath?: TdMythicPathId | null;
   className?: string;
 }> = React.memo(({ type, level = 1, branch = null, mythicPath = null, className = 'w-11 h-11' }) => (
-  <svg viewBox="-32 -50 64 70" className={`${className} overflow-visible select-none pointer-events-none`}>
+  <svg viewBox="-42 -54 84 76" className={`${className} overflow-visible select-none pointer-events-none`}>
     <TdSharedArtworkDefs />
     <TdTowerSprite type={type} level={level} branch={branch} mythicPath={mythicPath} facingAngle={-0.35} />
   </svg>

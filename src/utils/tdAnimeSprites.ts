@@ -4,6 +4,8 @@ import tdHeroesSheet2 from '../assets/images/td_anime_heroes_2_1795252934353.jpg
 import tdGuardsSheet from '../assets/images/td_anime_guards_1795252933143.jpg';
 import tdMonstersSheet1 from '../assets/images/td_anime_monsters_1_1795252933896.jpg';
 import tdMonstersSheet2 from '../assets/images/td_anime_monsters_2_1795252934093.jpg';
+import tdMonstersSheet3 from '../assets/images/td_anime_monsters_3_1795385842256.jpg';
+import tdBossesSheet1 from '../assets/images/td_anime_bosses_1_1795385842176.jpg';
 import tdUnlockHeroesSheet from '../assets/images/td_anime_unlock_heroes_1795383985515.jpg';
 import { TdBranchId, TdEnemyType, TdTowerLevel, TdTowerType } from '../types/towerDefense';
 
@@ -45,7 +47,16 @@ export type TdAnimeSpriteKey =
   | 'ENEMY_NECRO'
   | 'ENEMY_KNIGHT_DARK'
   | 'ENEMY_MINIBOSS'
-  | 'ENEMY_BOSS';
+  | 'ENEMY_BOSS'
+  | 'ENEMY_BROOD_MOTHER'
+  | 'ENEMY_BROODLING'
+  | 'ENEMY_MITE'
+  | 'ENEMY_SHADOW_REAPER'
+  | 'ENEMY_VOID_TITAN'
+  | 'ENEMY_ABYSS_OVERLORD'
+  | 'ENEMY_DRAGON_EMPEROR'
+  | 'ENEMY_PLAGUE_HYDRA'
+  | 'ENEMY_DOOM_COLOSSUS';
 
 interface CropDef {
   sheet: string;
@@ -130,6 +141,19 @@ const SPRITE_CROPS: Record<TdAnimeSpriteKey, CropDef> = {
   ENEMY_KNIGHT_DARK: { sheet: tdMonstersSheet2, x: 0.0, y: 0.348, w: 0.38, h: 0.325 },
   ENEMY_MINIBOSS: { sheet: tdMonstersSheet2, x: 0.0, y: 0.665, w: 0.48, h: 0.335 },
   ENEMY_BOSS: { sheet: tdMonstersSheet2, x: 0.44, y: 0.35, w: 0.56, h: 0.65 },
+
+  // Monsters Sheet 3 (Scary Splitters, Flying Reaper, Void Titan)
+  ENEMY_BROOD_MOTHER: grid2Inset(tdMonstersSheet3, 0, 0),
+  ENEMY_BROODLING: grid2Inset(tdMonstersSheet3, 0, 1),
+  ENEMY_MITE: grid2Inset(tdMonstersSheet3, 0, 1),
+  ENEMY_SHADOW_REAPER: grid2Inset(tdMonstersSheet3, 1, 0),
+  ENEMY_VOID_TITAN: grid2Inset(tdMonstersSheet3, 1, 1),
+
+  // Bosses Sheet 1 (Giant Multi-Ability Bosses)
+  ENEMY_ABYSS_OVERLORD: grid2Inset(tdBossesSheet1, 0, 0),
+  ENEMY_DRAGON_EMPEROR: grid2Inset(tdBossesSheet1, 0, 1),
+  ENEMY_PLAGUE_HYDRA: grid2Inset(tdBossesSheet1, 1, 0),
+  ENEMY_DOOM_COLOSSUS: grid2Inset(tdBossesSheet1, 1, 1),
 };
 
 const processedSpriteCache = new Map<TdAnimeSpriteKey, string>();
@@ -350,6 +374,8 @@ export const TD_ANIME_SHEET_URLS = [
   tdGuardsSheet,
   tdMonstersSheet1,
   tdMonstersSheet2,
+  tdMonstersSheet3,
+  tdBossesSheet1,
 ];
 
 export function preloadTdAnimeSprites(): void {
@@ -441,6 +467,24 @@ export function resolveEnemyAnimeKey(type: TdEnemyType): TdAnimeSpriteKey {
       return 'ENEMY_MINIBOSS';
     case 'BOSS':
       return 'ENEMY_BOSS';
+    case 'BROOD_MOTHER':
+      return 'ENEMY_BROOD_MOTHER';
+    case 'BROODLING':
+      return 'ENEMY_BROODLING';
+    case 'MITE':
+      return 'ENEMY_MITE';
+    case 'SHADOW_REAPER':
+      return 'ENEMY_SHADOW_REAPER';
+    case 'VOID_TITAN':
+      return 'ENEMY_VOID_TITAN';
+    case 'ABYSS_OVERLORD':
+      return 'ENEMY_ABYSS_OVERLORD';
+    case 'DRAGON_EMPEROR':
+      return 'ENEMY_DRAGON_EMPEROR';
+    case 'PLAGUE_HYDRA':
+      return 'ENEMY_PLAGUE_HYDRA';
+    case 'DOOM_COLOSSUS':
+      return 'ENEMY_DOOM_COLOSSUS';
   }
 }
 

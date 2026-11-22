@@ -1349,11 +1349,11 @@ export const TD_ENEMIES: Record<TdEnemyType, TdEnemySpec> = {
   GOBLIN: {
     type: 'GOBLIN',
     name: 'Yêu Tinh Rừng',
-    baseHp: 62,
-    speed: 55,
+    baseHp: 76,
+    speed: 56,
     armor: 0,
     magicResist: 0,
-    bounty: 10,
+    bounty: 11,
     lifeCost: 1,
     flying: false,
     radius: 13,
@@ -1362,11 +1362,11 @@ export const TD_ENEMIES: Record<TdEnemyType, TdEnemySpec> = {
   WOLF: {
     type: 'WOLF',
     name: 'Sói Huyết Tốc',
-    baseHp: 82,
-    speed: 96,
-    armor: 0,
+    baseHp: 102,
+    speed: 98,
+    armor: 0.04,
     magicResist: 0.1,
-    bounty: 13,
+    bounty: 14,
     lifeCost: 1,
     flying: false,
     radius: 14,
@@ -1375,11 +1375,11 @@ export const TD_ENEMIES: Record<TdEnemyType, TdEnemySpec> = {
   SPIDER: {
     type: 'SPIDER',
     name: 'Nhện Độc Hắc Ám',
-    baseHp: 96,
-    speed: 84,
-    armor: 0.05,
+    baseHp: 118,
+    speed: 86,
+    armor: 0.08,
     magicResist: 0.25,
-    bounty: 14,
+    bounty: 15,
     lifeCost: 1,
     flying: false,
     radius: 14,
@@ -1388,11 +1388,11 @@ export const TD_ENEMIES: Record<TdEnemyType, TdEnemySpec> = {
   ORC: {
     type: 'ORC',
     name: 'Orc Cuồng Chiến',
-    baseHp: 175,
-    speed: 48,
-    armor: 0.25,
-    magicResist: 0.08,
-    bounty: 18,
+    baseHp: 225,
+    speed: 49,
+    armor: 0.28,
+    magicResist: 0.1,
+    bounty: 20,
     lifeCost: 2,
     flying: false,
     radius: 16,
@@ -1401,11 +1401,11 @@ export const TD_ENEMIES: Record<TdEnemyType, TdEnemySpec> = {
   WYVERN: {
     type: 'WYVERN',
     name: 'Quỷ Dơi Wyvern',
-    baseHp: 130,
-    speed: 70,
-    armor: 0.1,
-    magicResist: 0.1,
-    bounty: 18,
+    baseHp: 165,
+    speed: 72,
+    armor: 0.12,
+    magicResist: 0.12,
+    bounty: 20,
     lifeCost: 1,
     flying: true,
     radius: 15,
@@ -1414,11 +1414,11 @@ export const TD_ENEMIES: Record<TdEnemyType, TdEnemySpec> = {
   HARPY: {
     type: 'HARPY',
     name: 'Yêu Nữ Cánh Lửa',
-    baseHp: 155,
-    speed: 86,
-    armor: 0.08,
-    magicResist: 0.22,
-    bounty: 21,
+    baseHp: 195,
+    speed: 88,
+    armor: 0.1,
+    magicResist: 0.24,
+    bounty: 23,
     lifeCost: 2,
     flying: true,
     radius: 15,
@@ -1427,11 +1427,11 @@ export const TD_ENEMIES: Record<TdEnemyType, TdEnemySpec> = {
   GOLEM: {
     type: 'GOLEM',
     name: 'Golem Giáp Đá',
-    baseHp: 320,
-    speed: 34,
-    armor: 0.65,
-    magicResist: 0,
-    bounty: 28,
+    baseHp: 410,
+    speed: 35,
+    armor: 0.66,
+    magicResist: 0.05,
+    bounty: 31,
     lifeCost: 2,
     flying: false,
     radius: 19,
@@ -1440,69 +1440,219 @@ export const TD_ENEMIES: Record<TdEnemyType, TdEnemySpec> = {
   SHAMAN: {
     type: 'SHAMAN',
     name: 'Phù Thủy Hồi Máu',
-    baseHp: 195,
-    speed: 45,
-    armor: 0.05,
+    baseHp: 245,
+    speed: 46,
+    armor: 0.08,
     magicResist: 0.6,
-    bounty: 24,
+    bounty: 27,
     lifeCost: 2,
     flying: false,
     healsAllies: true,
+    cleansesAllies: true,
     radius: 16,
     accentColor: '#2DD4BF',
   },
   NECRO: {
     type: 'NECRO',
     name: 'Pháp Sư Tử Linh',
-    baseHp: 245,
-    speed: 42,
-    armor: 0.12,
+    baseHp: 305,
+    speed: 43,
+    armor: 0.14,
     magicResist: 0.68,
-    bounty: 30,
+    bounty: 34,
     lifeCost: 2,
     flying: false,
     healsAllies: true,
+    cleansesAllies: true,
     radius: 17,
     accentColor: '#C084FC',
   },
   KNIGHT_DARK: {
     type: 'KNIGHT_DARK',
     name: 'Hắc Kỵ Sĩ Thép',
-    baseHp: 390,
-    speed: 38,
+    baseHp: 495,
+    speed: 39,
     armor: 0.72,
-    magicResist: 0.15,
-    bounty: 36,
+    magicResist: 0.18,
+    bounty: 40,
     lifeCost: 3,
     flying: false,
     radius: 19,
     accentColor: '#64748B',
   },
+  BROOD_MOTHER: {
+    type: 'BROOD_MOTHER',
+    name: 'Nữ Hoàng Nhện Quỷ',
+    baseHp: 390,
+    speed: 44,
+    armor: 0.22,
+    magicResist: 0.26,
+    bounty: 34,
+    lifeCost: 3,
+    flying: false,
+    splitIntoType: 'BROODLING',
+    splitCount: 3,
+    radius: 22,
+    accentColor: '#C084FC',
+  },
+  BROODLING: {
+    type: 'BROODLING',
+    name: 'Nhện Quỷ Con',
+    baseHp: 118,
+    speed: 78,
+    armor: 0.08,
+    magicResist: 0.12,
+    bounty: 10,
+    lifeCost: 1,
+    flying: false,
+    splitIntoType: 'MITE',
+    splitCount: 2,
+    radius: 13,
+    accentColor: '#A855F7',
+  },
+  MITE: {
+    type: 'MITE',
+    name: 'Bọ Hắc Ám Nhỏ',
+    baseHp: 48,
+    speed: 98,
+    armor: 0.02,
+    magicResist: 0.05,
+    bounty: 5,
+    lifeCost: 1,
+    flying: false,
+    radius: 9,
+    accentColor: '#FB7185',
+  },
+  SHADOW_REAPER: {
+    type: 'SHADOW_REAPER',
+    name: 'Tử Thần Hắc Ám',
+    baseHp: 295,
+    speed: 68,
+    armor: 0.15,
+    magicResist: 0.58,
+    bounty: 38,
+    lifeCost: 3,
+    flying: true,
+    healsAllies: true,
+    cleansesAllies: true,
+    radius: 18,
+    accentColor: '#F43F5E',
+  },
+  VOID_TITAN: {
+    type: 'VOID_TITAN',
+    name: 'Titan Hư Không',
+    baseHp: 620,
+    speed: 34,
+    armor: 0.68,
+    magicResist: 0.42,
+    bounty: 54,
+    lifeCost: 4,
+    flying: false,
+    selfRegenPct: 0.026,
+    cleansesAllies: true,
+    radius: 22,
+    accentColor: '#A855F7',
+  },
   MINIBOSS: {
     type: 'MINIBOSS',
     name: 'Chiến Tướng Hộ Vệ',
-    baseHp: 680,
-    speed: 34,
-    armor: 0.48,
-    magicResist: 0.3,
-    bounty: 65,
+    baseHp: 850,
+    speed: 35,
+    armor: 0.5,
+    magicResist: 0.34,
+    bounty: 76,
     lifeCost: 4,
     flying: false,
-    radius: 22,
+    selfRegenPct: 0.01,
+    radius: 23,
     accentColor: '#F59E0B',
   },
   BOSS: {
     type: 'BOSS',
     name: 'Ma Vương Khổng Lồ',
-    baseHp: 1950,
+    baseHp: 2350,
     speed: 26,
-    armor: 0.42,
-    magicResist: 0.35,
-    bounty: 180,
+    armor: 0.48,
+    magicResist: 0.4,
+    bounty: 220,
     lifeCost: 10,
     flying: false,
-    radius: 26,
+    isBoss: true,
+    healsAllies: true,
+    cleansesAllies: true,
+    summonInterval: 10.5,
+    radius: 33,
     accentColor: '#FACC15',
+  },
+  PLAGUE_HYDRA: {
+    type: 'PLAGUE_HYDRA',
+    name: 'Tam Đầu Độc Long Hydra',
+    baseHp: 2550,
+    speed: 27,
+    armor: 0.46,
+    magicResist: 0.48,
+    bounty: 250,
+    lifeCost: 12,
+    flying: false,
+    isBoss: true,
+    healsAllies: true,
+    cleansesAllies: true,
+    selfRegenPct: 0.016,
+    splitIntoType: 'BROODLING',
+    splitCount: 3,
+    radius: 34,
+    accentColor: '#4ADE80',
+  },
+  ABYSS_OVERLORD: {
+    type: 'ABYSS_OVERLORD',
+    name: 'Ác Ma Chúa Tể Vực Thẳm',
+    baseHp: 2950,
+    speed: 26,
+    armor: 0.52,
+    magicResist: 0.44,
+    bounty: 295,
+    lifeCost: 14,
+    flying: false,
+    isBoss: true,
+    healsAllies: true,
+    cleansesAllies: true,
+    summonInterval: 8.5,
+    radius: 36,
+    accentColor: '#EF4444',
+  },
+  DRAGON_EMPEROR: {
+    type: 'DRAGON_EMPEROR',
+    name: 'Hắc Long Hoàng Đế',
+    baseHp: 3350,
+    speed: 29,
+    armor: 0.5,
+    magicResist: 0.52,
+    bounty: 340,
+    lifeCost: 15,
+    flying: false,
+    isBoss: true,
+    healsAllies: true,
+    cleansesAllies: true,
+    summonInterval: 9.0,
+    radius: 36,
+    accentColor: '#F97316',
+  },
+  DOOM_COLOSSUS: {
+    type: 'DOOM_COLOSSUS',
+    name: 'Chiến Giáp Địa Ngục',
+    baseHp: 3750,
+    speed: 24,
+    armor: 0.68,
+    magicResist: 0.38,
+    bounty: 370,
+    lifeCost: 16,
+    flying: false,
+    isBoss: true,
+    selfRegenPct: 0.022,
+    cleansesAllies: true,
+    summonInterval: 9.5,
+    radius: 36,
+    accentColor: '#FB923C',
   },
 };
 
@@ -1512,6 +1662,18 @@ function makeWave(
   earlyBonusBase = 18
 ): TdWaveConfig {
   return { waveNumber, groups, earlyBonusBase };
+}
+
+function pickBossTypeForWave(waveNumber: number, stageLevel: number): TdEnemyType {
+  const pool: TdEnemyType[] = [
+    'BOSS',
+    'PLAGUE_HYDRA',
+    'ABYSS_OVERLORD',
+    'DOOM_COLOSSUS',
+    'DRAGON_EMPEROR',
+  ];
+  const idx = (Math.floor(waveNumber / 5) + stageLevel) % pool.length;
+  return pool[idx];
 }
 
 function buildWavesForStage(level: number, pathCount: number): TdWaveConfig[] {
@@ -1528,24 +1690,26 @@ function buildWavesForStage(level: number, pathCount: number): TdWaveConfig[] {
 
   for (let w = 1; w <= totalWaves; w++) {
     const groups: TdWaveGroup[] = [];
-    // +50% base HP from Wave 3 onward; +10%/wave up to Wave 10 then +4.6%/wave through Wave 100
+    // Every 10 waves (Wave 11, 21, 31...), monster HP & armor surge +58% AND gold bounty surges +62%!
+    const tier10 = Math.floor((w - 1) / 10);
     const wave3Boost = w >= 3 ? 1.5 : 1.0;
-    const waveCompounding =
-      Math.pow(1.1, Math.min(w, 10) - 1) * Math.pow(1.046, Math.max(0, w - 10));
-    const waveScale = stageHpScale * wave3Boost * waveCompounding;
+    const tier10HpBoost = Math.pow(1.58, tier10);
+    const intraWaveCompounding =
+      Math.pow(1.075, Math.min(w, 10) - 1) * Math.pow(1.016, Math.max(0, w - 10));
+    const waveScale = stageHpScale * wave3Boost * tier10HpBoost * intraWaveCompounding;
 
     // Monotonic per-wave speed, armor, magicResist, and bounty escalation across 100 waves
     const waveSpeedMult = Number(
-      (stageSpeedMult * (1 + Math.min(0.4, (w - 1) * 0.004))).toFixed(3)
+      (stageSpeedMult * (1 + Math.min(0.42, (w - 1) * 0.0042))).toFixed(3)
     );
     const waveArmorBonus = Number(
-      Math.min(0.45, (w - 1) * 0.0042 + (level - 1) * 0.0035).toFixed(3)
+      Math.min(0.48, tier10 * 0.048 + (w - 1) * 0.0018 + (level - 1) * 0.003).toFixed(3)
     );
     const waveMagicResistBonus = Number(
-      Math.min(0.42, (w - 1) * 0.0038 + (level - 1) * 0.0032).toFixed(3)
+      Math.min(0.44, tier10 * 0.044 + (w - 1) * 0.0016 + (level - 1) * 0.0028).toFixed(3)
     );
     const waveBountyMult = Number(
-      (1 + (w - 1) * 0.038 + (level - 1) * 0.015).toFixed(3)
+      ((1 + tier10 * 0.62) * (1 + (w - 1) * 0.028 + (level - 1) * 0.015)).toFixed(3)
     );
     const waveInterval = Math.max(0.24, (0.54 - Math.min(0.22, w * 0.0022)) * intervalScale);
 
@@ -1596,18 +1760,29 @@ function buildWavesForStage(level: number, pathCount: number): TdWaveConfig[] {
       }
     } else if (w === totalWaves) {
       // Wave 100 Grand Finale Climax (ALWAYS the strongest wave of the stage!)
-      const finalMult = 1.45 + Math.floor((level - 1) / 5) * 0.06;
-      const finalBossCount = isMilestoneBossStage
-        ? 4 + Math.floor(level / 6)
-        : 2 + Math.floor(level / 8);
+      const finalMult = 1.48 + Math.floor((level - 1) / 5) * 0.06;
+      const elderBossCount = isMilestoneBossStage ? 2 + Math.floor(level / 10) : 1 + Math.floor(level / 12);
 
       groups.push({
-        enemyType: 'BOSS',
-        count: finalBossCount,
-        interval: 2.1,
-        delay: 1.2,
+        enemyType: 'DRAGON_EMPEROR',
+        count: elderBossCount,
+        interval: 2.4,
+        delay: 1.5,
         pathIndex: 0,
-        hpMult: waveScale * (1.42 + level * 0.015),
+        hpMult: waveScale * (1.45 + level * 0.015),
+        speedMult: waveSpeedMult,
+        armorBonus: waveArmorBonus,
+        magicResistBonus: waveMagicResistBonus,
+        bountyMult: waveBountyMult * 1.5,
+      });
+
+      groups.push({
+        enemyType: 'ABYSS_OVERLORD',
+        count: 1 + Math.floor(level / 8),
+        interval: 2.2,
+        delay: 1.1,
+        pathIndex: secondPath,
+        hpMult: waveScale * finalMult,
         speedMult: waveSpeedMult,
         armorBonus: waveArmorBonus,
         magicResistBonus: waveMagicResistBonus,
@@ -1615,63 +1790,50 @@ function buildWavesForStage(level: number, pathCount: number): TdWaveConfig[] {
       });
 
       groups.push({
-        enemyType: 'MINIBOSS',
-        count: 4 + Math.floor(level / 5),
-        interval: 0.9 * intervalScale,
-        delay: 0.8,
-        pathIndex: secondPath,
-        hpMult: waveScale * finalMult,
-        speedMult: waveSpeedMult,
-        armorBonus: waveArmorBonus,
-        magicResistBonus: waveMagicResistBonus,
-        bountyMult: waveBountyMult * 1.25,
-      });
-
-      groups.push({
-        enemyType: 'KNIGHT_DARK',
-        count: 10 + Math.floor(level / 2.5),
-        interval: 0.55 * intervalScale,
-        delay: 0.4,
-        pathIndex: secondPath,
-        hpMult: waveScale * finalMult,
-        speedMult: waveSpeedMult,
-        armorBonus: waveArmorBonus,
-        magicResistBonus: waveMagicResistBonus,
-        bountyMult: waveBountyMult,
-      });
-
-      groups.push({
-        enemyType: 'ORC',
-        count: 16 + Math.floor(level / 2),
-        interval: 0.36 * intervalScale,
-        delay: 0,
-        pathIndex: 0,
-        hpMult: waveScale * finalMult,
-        speedMult: waveSpeedMult,
-        armorBonus: waveArmorBonus,
-        magicResistBonus: waveMagicResistBonus,
-        bountyMult: waveBountyMult,
-      });
-
-      groups.push({
-        enemyType: 'GOLEM',
-        count: 8 + Math.floor(level / 3),
-        interval: 0.65 * intervalScale,
-        delay: 0.7,
+        enemyType: 'PLAGUE_HYDRA',
+        count: 1 + Math.floor(level / 10),
+        interval: 2.3,
+        delay: 1.9,
         pathIndex: altPath,
         hpMult: waveScale * finalMult,
         speedMult: waveSpeedMult,
         armorBonus: waveArmorBonus,
         magicResistBonus: waveMagicResistBonus,
-        bountyMult: waveBountyMult,
+        bountyMult: waveBountyMult * 1.35,
       });
 
       groups.push({
-        enemyType: 'NECRO',
-        count: 6 + Math.floor(level / 4),
-        interval: 0.72 * intervalScale,
-        delay: 1.6,
+        enemyType: 'VOID_TITAN',
+        count: 5 + Math.floor(level / 4),
+        interval: 0.8 * intervalScale,
+        delay: 0.6,
         pathIndex: 0,
+        hpMult: waveScale * finalMult,
+        speedMult: waveSpeedMult,
+        armorBonus: waveArmorBonus,
+        magicResistBonus: waveMagicResistBonus,
+        bountyMult: waveBountyMult * 1.2,
+      });
+
+      groups.push({
+        enemyType: 'BROOD_MOTHER',
+        count: 5 + Math.floor(level / 5),
+        interval: 0.72 * intervalScale,
+        delay: 0.9,
+        pathIndex: secondPath,
+        hpMult: waveScale * finalMult,
+        speedMult: waveSpeedMult,
+        armorBonus: waveArmorBonus,
+        magicResistBonus: waveMagicResistBonus,
+        bountyMult: waveBountyMult * 1.15,
+      });
+
+      groups.push({
+        enemyType: 'SHADOW_REAPER',
+        count: 7 + Math.floor(level / 4),
+        interval: 0.58 * intervalScale,
+        delay: 1.4,
+        pathIndex: secondPath,
         hpMult: waveScale * finalMult,
         speedMult: waveSpeedMult,
         armorBonus: waveArmorBonus,
@@ -1680,11 +1842,11 @@ function buildWavesForStage(level: number, pathCount: number): TdWaveConfig[] {
       });
 
       groups.push({
-        enemyType: 'HARPY',
-        count: 14 + Math.floor(level / 2.5),
-        interval: 0.34 * intervalScale,
-        delay: 1.8,
-        pathIndex: secondPath,
+        enemyType: 'KNIGHT_DARK',
+        count: 10 + Math.floor(level / 2.5),
+        interval: 0.52 * intervalScale,
+        delay: 0.4,
+        pathIndex: altPath,
         hpMult: waveScale * finalMult,
         speedMult: waveSpeedMult,
         armorBonus: waveArmorBonus,
@@ -1694,47 +1856,51 @@ function buildWavesForStage(level: number, pathCount: number): TdWaveConfig[] {
 
       if (pathCount >= 3) {
         groups.push({
-          enemyType: 'WOLF',
-          count: 16 + Math.floor(level / 3),
-          interval: 0.28 * intervalScale,
-          delay: 1.1,
+          enemyType: 'DOOM_COLOSSUS',
+          count: 1 + Math.floor(level / 12),
+          interval: 2.5,
+          delay: 1.8,
           pathIndex: thirdPath,
           hpMult: waveScale * finalMult,
           speedMult: waveSpeedMult,
           armorBonus: waveArmorBonus,
           magicResistBonus: waveMagicResistBonus,
-          bountyMult: waveBountyMult,
+          bountyMult: waveBountyMult * 1.4,
         });
       }
     } else {
-      const swarmRotation: TdEnemyType[] = ['GOBLIN', 'WOLF', 'SPIDER', 'ORC'];
+      const swarmRotation: TdEnemyType[] =
+        w >= 14
+          ? ['GOBLIN', 'WOLF', 'SPIDER', 'ORC', 'BROOD_MOTHER']
+          : ['GOBLIN', 'WOLF', 'SPIDER', 'ORC'];
       const leadType = swarmRotation[(w + level) % swarmRotation.length];
 
       // Boss Spawns across Waves 1..99:
-      // Milestone stages (5, 10, 15, 20, 25, 30) deploy Bosses every 5 waves; regular stages every 10 waves.
+      // Milestone stages (5, 10, 15, 20, 25, 30) deploy Giant Bosses every 5 waves; regular stages every 10 waves.
       const isBossWave = isMilestoneBossStage
         ? w % 5 === 0
         : w >= 10 && w % 10 === 0;
 
       if (isBossWave) {
+        const bossType = pickBossTypeForWave(w, level);
         const bossCount = isMilestoneBossStage
-          ? 1 + Math.floor(w / 30) + Math.floor(level / 15)
+          ? 1 + Math.floor(w / 32) + Math.floor(level / 16)
           : 1 + Math.floor(w / 45) + Math.floor(level / 18);
         groups.push({
-          enemyType: 'BOSS',
+          enemyType: bossType,
           count: bossCount,
           interval: 2.6,
           delay: 1.2,
           pathIndex: w % 2 === 0 ? 0 : secondPath,
-          hpMult: waveScale * (1.14 + Math.min(0.32, w * 0.003) + level * 0.006),
+          hpMult: waveScale * (1.16 + Math.min(0.32, w * 0.003) + level * 0.006),
           speedMult: waveSpeedMult,
           armorBonus: waveArmorBonus,
           magicResistBonus: waveMagicResistBonus,
-          bountyMult: waveBountyMult * 1.25,
+          bountyMult: waveBountyMult * 1.3,
         });
       }
 
-      // Miniboss Champions appear every 5 waves (and frequently in Waves 60+)
+      // Miniboss Champions appear every 5 waves (and frequently in Waves 55+)
       if (w % 5 === 0 || (w >= 55 && w % 3 === 0)) {
         const miniCount = 1 + Math.floor(w / 22) + Math.floor(level / 10);
         groups.push({
@@ -1751,8 +1917,25 @@ function buildWavesForStage(level: number, pathCount: number): TdWaveConfig[] {
         });
       }
 
-      // Lead Infantry Swarm (capped sensibly per group for 60fps clarity)
-      const leadCount = Math.min(22, 7 + Math.floor(w * 0.16) + Math.floor(level / 3));
+      // Brood Mother Splitters (3 Broodlings -> 2 Mites each!) starting Wave 4+
+      if (w >= 4 && (w % 2 === 0 || w >= 20)) {
+        const broodCount = Math.min(8, 1 + Math.floor(w / 14) + Math.floor(level / 7));
+        groups.push({
+          enemyType: 'BROOD_MOTHER',
+          count: broodCount,
+          interval: Math.max(0.6, 1.1 * intervalScale),
+          delay: 0.7,
+          pathIndex: altPath,
+          hpMult: waveScale,
+          speedMult: waveSpeedMult,
+          armorBonus: waveArmorBonus,
+          magicResistBonus: waveMagicResistBonus,
+          bountyMult: waveBountyMult,
+        });
+      }
+
+      // Lead Infantry Swarm
+      const leadCount = Math.min(20, 7 + Math.floor(w * 0.14) + Math.floor(level / 3));
       groups.push({
         enemyType: leadType,
         count: leadCount,
@@ -1769,7 +1952,7 @@ function buildWavesForStage(level: number, pathCount: number): TdWaveConfig[] {
       // Multi-lane Flank Squad
       if ((pathCount >= 2 && w >= 2) || w >= 12) {
         const flankType = swarmRotation[(w + level + 1) % swarmRotation.length];
-        const flankCount = Math.min(18, 5 + Math.floor(w * 0.13) + Math.floor(level / 4));
+        const flankCount = Math.min(16, 5 + Math.floor(w * 0.12) + Math.floor(level / 4));
         groups.push({
           enemyType: flankType,
           count: flankCount,
@@ -1784,11 +1967,15 @@ function buildWavesForStage(level: number, pathCount: number): TdWaveConfig[] {
         });
       }
 
-      // Heavy Armored Vanguard (Golem / Dark Knight)
+      // Heavy Armored Vanguard (Golem / Dark Knight / Void Titan)
       if (w >= 2 && (level >= 2 || w >= 4)) {
         const tankType: TdEnemyType =
-          w >= 20 || (level >= 7 && w % 2 === 0) ? 'KNIGHT_DARK' : 'GOLEM';
-        const tankCount = Math.min(12, 1 + Math.floor(w / 10) + Math.floor(level / 5));
+          w >= 11 && w % 3 === 2
+            ? 'VOID_TITAN'
+            : w >= 20 || (level >= 7 && w % 2 === 0)
+              ? 'KNIGHT_DARK'
+              : 'GOLEM';
+        const tankCount = Math.min(11, 1 + Math.floor(w / 10) + Math.floor(level / 5));
         groups.push({
           enemyType: tankType,
           count: tankCount,
@@ -1803,11 +1990,15 @@ function buildWavesForStage(level: number, pathCount: number): TdWaveConfig[] {
         });
       }
 
-      // Aerial Squadron (Wyvern / Harpy)
+      // Aerial Squadron (Wyvern / Harpy / Flying Shadow Reaper)
       if (w >= 3 && (level >= 2 || w >= 5)) {
         const airType: TdEnemyType =
-          w >= 24 || (level >= 5 && w % 2 === 1) ? 'HARPY' : 'WYVERN';
-        const airCount = Math.min(16, 3 + Math.floor(w / 8) + Math.floor(level / 5));
+          w >= 7 && w % 4 === 3
+            ? 'SHADOW_REAPER'
+            : w >= 24 || (level >= 5 && w % 2 === 1)
+              ? 'HARPY'
+              : 'WYVERN';
+        const airCount = Math.min(15, 3 + Math.floor(w / 8) + Math.floor(level / 5));
         groups.push({
           enemyType: airType,
           count: airCount,
@@ -1826,7 +2017,7 @@ function buildWavesForStage(level: number, pathCount: number): TdWaveConfig[] {
       if (w >= 5 || (w >= 4 && level >= 3)) {
         const supportType: TdEnemyType =
           w >= 18 || (level >= 6 && w % 2 === 0) ? 'NECRO' : 'SHAMAN';
-        const supportCount = Math.min(9, 1 + Math.floor(w / 14) + Math.floor(level / 7));
+        const supportCount = Math.min(8, 1 + Math.floor(w / 14) + Math.floor(level / 7));
         groups.push({
           enemyType: supportType,
           count: supportCount,
@@ -1843,11 +2034,12 @@ function buildWavesForStage(level: number, pathCount: number): TdWaveConfig[] {
 
       // Extra Third-Lane Assault on Waves 25+
       if (w >= 25 && (pathCount >= 3 || w % 2 === 0)) {
-        const bonusType: TdEnemyType = w % 3 === 0 ? 'KNIGHT_DARK' : 'ORC';
+        const bonusType: TdEnemyType =
+          w % 4 === 0 ? 'VOID_TITAN' : w % 3 === 0 ? 'KNIGHT_DARK' : 'ORC';
         groups.push({
           enemyType: bonusType,
-          count: Math.min(14, 3 + Math.floor((w - 20) / 8) + Math.floor(level / 6)),
-          interval: Math.max(0.36, 0.65 * intervalScale),
+          count: Math.min(12, 3 + Math.floor((w - 20) / 8) + Math.floor(level / 6)),
+          interval: Math.max(0.38, 0.65 * intervalScale),
           delay: 1.5,
           pathIndex: thirdPath,
           hpMult: waveScale * 1.06,

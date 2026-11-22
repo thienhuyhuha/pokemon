@@ -7,7 +7,6 @@ import {
   Flag,
   Flame,
   Heart,
-  Lock,
   Maximize2,
   Minimize2,
   Music,
@@ -495,6 +494,127 @@ function getSoldierFormationPos(rallyX: number, rallyY: number, slot: number): T
   };
 }
 
+function finalizeEnemyDeath(
+  w: WorldState,
+  upg: TdUpgrades,
+  lvl: TdLevelConfig,
+  enemy: TdEnemyEntity,
+  sourceTowerId?: string
+) {
+  if (enemy.isDeadProcessed) return;
+  enemy.isDeadProcessed = true;
+
+  const bountyMult = upg.economy >= 5 ? 1.25 : upg.economy >= 2 ? 1.12 : 1;
+  const earnedGold = Math.round(enemy.bounty * bountyMult);
+  w.gold += earnedGold;
+  w.score += enemy.bounty * 12;
+  w.enemiesSlain += 1;
+
+  if (sourceTowerId) {
+    const tw = w.towers.find((t) => t.id === sourceTowerId);
+    if (tw) tw.kills += 1;
+  }
+
+  // Free engaging soldier
+  if (enemy.blockedBySoldierId) {
+    const s = w.soldiers.find((sol) => sol.id === enemy.blockedBySoldierId);
+    if (s && s.engagedEnemyId === enemy.id) {
+      s.engagedEnemyId = null;
+    }
+    enemy.blockedBySoldierId = null;
+  }
+
+  w.effects.push({
+    id: `fx-${w.idCounter++}`,
+    kind: 'GOLD',
+    x: enemy.x,
+    y: enemy.y - 12,
+    radius: 12,
+    label: `+${earnedGold}`,
+    ttl: 0.75,
+    maxTtl: 0.75,
+  });
+
+  // Multi-tier Split on Death (e.g. Brood Mother -> 3 Broodlings -> 2 Mites each!)
+  if (!enemy.hasSplit && enemy.splitIntoType && enemy.splitCount > 0) {
+    enemy.hasSplit = true;
+    const parentSpec = TD_ENEMIES[enemy.type];
+    const childSpec = TD_ENEMIES[enemy.splitIntoType];
+    const hpRatio = Math.max(1, enemy.maxHp / Math.max(1, parentSpec.baseHp));
+    const speedRatio = Math.max(0.8, enemy.speed / Math.max(1, parentSpec.speed));
+    const tier10 = Math.floor(w.waveIndex / 10);
+    const childMaxHp = Math.max(18, Math.round(childSpec.baseHp * hpRatio * 0.92));
+    const childBounty = Math.max(
+      2,
+      Math.round(childSpec.bounty * (enemy.bountyMult ?? 1))
+    );
+    const count = enemy.splitCount;
+
+    for (let c = 0; c < count; c++) {
+      const ang = (c / count) * Math.PI * 2 + 0.4;
+      const spread = count >= 3 ? 13 : 10;
+      const cx = Math.max(20, Math.min(TD_VIEWBOX_W - 20, enemy.x + Math.cos(ang) * spread));
+      const cy = Math.max(20, Math.min(TD_VIEWBOX_H - 20, enemy.y + Math.sin(ang) * (spread * 0.65)));
+      w.enemies.push({
+        id: `en-${w.idCounter++}`,
+        type: childSpec.type,
+        pathIndex: enemy.pathIndex,
+        waypointIndex: enemy.waypointIndex,
+        x: cx,
+        y: cy,
+        hp: childMaxHp,
+        maxHp: childMaxHp,
+        speed: childSpec.speed * speedRatio,
+        armor: Math.min(0.84, childSpec.armor * (1 + tier10 * 0.08) + tier10 * 0.03),
+        magicResist: Math.min(0.82, childSpec.magicResist * (1 + tier10 * 0.06) + tier10 * 0.025),
+        bounty: childBounty,
+        bountyMult: enemy.bountyMult,
+        lifeCost: childSpec.lifeCost,
+        flying: childSpec.flying,
+        healsAllies: Boolean(childSpec.healsAllies),
+        cleansesAllies: Boolean(childSpec.cleansesAllies),
+        selfRegenPct: childSpec.selfRegenPct ?? 0,
+        isBoss: Boolean(childSpec.isBoss),
+        summonTimer: childSpec.summonInterval ?? 0,
+        splitIntoType: childSpec.splitIntoType,
+        splitCount: childSpec.splitCount ?? 0,
+        radius: childSpec.radius,
+        facingLeft: enemy.facingLeft,
+        blockedBySoldierId: null,
+        attackTimer: 0.4,
+        attackAnimTimer: 0,
+        healAnimTimer: 0,
+        slowTimer: 0,
+        slowPct: 0,
+        poisonTimer: 0,
+        poisonDps: 0,
+        poisonTickTimer: 0,
+        burnTimer: 0,
+        burnDps: 0,
+        burnTickTimer: 0,
+        healAuraTimer: 2.2,
+        hitFlashTimer: 0.14,
+        distanceTraveled: Math.max(0, enemy.distanceTraveled - 4 + c),
+      });
+    }
+
+    const pathPt = lvl.paths[enemy.pathIndex]?.[0];
+    if (pathPt || true) {
+      w.effects.push({
+        id: `fx-${w.idCounter++}`,
+        kind: 'HIT',
+        x: enemy.x,
+        y: enemy.y - 6,
+        radius: 18,
+        label: `TÁCH x${count}!`,
+        color: childSpec.accentColor,
+        ttl: 0.55,
+        maxTtl: 0.55,
+      });
+    }
+  }
+}
+
 function createInitialWorld(levelConfig: TdLevelConfig, upgrades: TdUpgrades): WorldState {
   const startGoldBonus = (upgrades.economy >= 1 ? 60 : 0) + (upgrades.economy >= 4 ? 100 : 0);
   const startLivesBonus =
@@ -692,6 +812,19 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
     w.spawnQueue = queue;
     w.waveClock = 0;
     w.wavePhase = 'SPAWNING';
+    if (waveCfg.waveNumber > 1 && waveCfg.waveNumber % 10 === 1) {
+      const startPt = lvl.paths[0][0];
+      w.effects.push({
+        id: `fx-${w.idCounter++}`,
+        kind: 'GOLD',
+        x: Math.min(TD_VIEWBOX_W - 150, startPt.x + 120),
+        y: Math.max(42, startPt.y - 24),
+        radius: 20,
+        label: `Đợt ${waveCfg.waveNumber}: Quái +Máu/Giáp & +Vàng!`,
+        ttl: 2.2,
+        maxTtl: 2.2,
+      });
+    }
     sound.playTdWaveHorn();
   }, []);
 
@@ -710,8 +843,9 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
     ) => {
       if (enemy.hp <= 0) return;
       const upg = upgradesRef.current;
+      const lvl = levelRef.current;
       const bossMult =
-        upg.lethality >= 4 && (enemy.type === 'BOSS' || enemy.type === 'MINIBOSS') ? 1.15 : 1;
+        upg.lethality >= 4 && (enemy.isBoss || enemy.type === 'MINIBOSS') ? 1.15 : 1;
       const adjDmg = rawDmg * bossMult;
       const truePct = Math.min(1, Math.max(0, pierceOpts?.trueDamagePct ?? 0));
       const truePart = adjDmg * truePct;
@@ -728,36 +862,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
       enemy.hitFlashTimer = 0.12;
 
       if (enemy.hp <= 0) {
-        const bountyMult = upg.economy >= 5 ? 1.25 : upg.economy >= 2 ? 1.12 : 1;
-        const earnedGold = Math.round(enemy.bounty * bountyMult);
-        w.gold += earnedGold;
-        w.score += enemy.bounty * 12;
-        w.enemiesSlain += 1;
-
-        if (sourceTowerId) {
-          const tw = w.towers.find((t) => t.id === sourceTowerId);
-          if (tw) tw.kills += 1;
-        }
-
-        // Free engaging soldier
-        if (enemy.blockedBySoldierId) {
-          const s = w.soldiers.find((sol) => sol.id === enemy.blockedBySoldierId);
-          if (s && s.engagedEnemyId === enemy.id) {
-            s.engagedEnemyId = null;
-          }
-          enemy.blockedBySoldierId = null;
-        }
-
-        w.effects.push({
-          id: `fx-${w.idCounter++}`,
-          kind: 'GOLD',
-          x: enemy.x,
-          y: enemy.y - 12,
-          radius: 12,
-          label: `+${earnedGold}`,
-          ttl: 0.75,
-          maxTtl: 0.75,
-        });
+        finalizeEnemyDeath(w, upg, lvl, enemy, sourceTowerId);
       }
     };
 
@@ -798,6 +903,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
           const start = path[0];
           const jitterY = (Math.random() - 0.5) * 10;
           const maxHp = Math.round(spec.baseHp * nxt.hpMult);
+          const tier10 = Math.floor(w.waveIndex / 10);
           w.enemies.push({
             id: `en-${w.idCounter++}`,
             type: nxt.enemyType,
@@ -808,12 +914,19 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             hp: maxHp,
             maxHp,
             speed: spec.speed * nxt.speedMult,
-            armor: Math.min(0.85, spec.armor + nxt.armorBonus),
-            magicResist: Math.min(0.82, spec.magicResist + nxt.magicResistBonus),
+            armor: Math.min(0.86, spec.armor * (1 + tier10 * 0.08) + nxt.armorBonus),
+            magicResist: Math.min(0.84, spec.magicResist * (1 + tier10 * 0.06) + nxt.magicResistBonus),
             bounty: Math.round(spec.bounty * nxt.bountyMult),
+            bountyMult: nxt.bountyMult,
             lifeCost: spec.lifeCost,
             flying: spec.flying,
             healsAllies: Boolean(spec.healsAllies),
+            cleansesAllies: Boolean(spec.cleansesAllies),
+            selfRegenPct: spec.selfRegenPct ?? 0,
+            isBoss: Boolean(spec.isBoss),
+            summonTimer: spec.summonInterval ? spec.summonInterval * 0.65 : 0,
+            splitIntoType: spec.splitIntoType,
+            splitCount: spec.splitCount ?? 0,
             radius: spec.radius,
             facingLeft: false,
             blockedBySoldierId: null,
@@ -1092,19 +1205,128 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
           }
         }
 
-        // Shaman & Necro heal aura (heals allies AND cleanses poison & slow!)
-        if (e.healsAllies) {
+        // Self-regeneration & Boss Enrage (<50% HP)
+        if (e.selfRegenPct > 0 && e.hp > 0 && e.hp < e.maxHp) {
+          e.hp = Math.min(e.maxHp, e.hp + e.maxHp * e.selfRegenPct * dt);
+        }
+        if (e.isBoss && !e.enraged && e.hp > 0 && e.hp <= e.maxHp * 0.5) {
+          e.enraged = true;
+          e.speed *= 1.25;
+          w.effects.push({
+            id: `fx-${w.idCounter++}`,
+            kind: 'FIRE_BLAST',
+            x: e.x,
+            y: e.y - 10,
+            radius: 36,
+            ttl: 0.45,
+            maxTtl: 0.45,
+          });
+          w.effects.push({
+            id: `fx-${w.idCounter++}`,
+            kind: 'HIT',
+            x: e.x,
+            y: e.y - 24,
+            radius: 20,
+            label: 'CUỒNG NỘ!',
+            color: '#EF4444',
+            ttl: 0.9,
+            maxTtl: 0.9,
+          });
+        }
+
+        // Boss Summon Minions Ability
+        if (e.isBoss && e.summonTimer > 0 && w.enemies.length < 140) {
+          e.summonTimer -= dt;
+          if (e.summonTimer <= 0) {
+            const bossSpec = TD_ENEMIES[e.type];
+            e.summonTimer = bossSpec.summonInterval ?? 9.5;
+            const summonType: TdEnemyType =
+              e.type === 'ABYSS_OVERLORD'
+                ? 'SHADOW_REAPER'
+                : e.type === 'DOOM_COLOSSUS'
+                  ? 'WOLF'
+                  : e.type === 'DRAGON_EMPEROR'
+                    ? 'WYVERN'
+                    : 'BROODLING';
+            const sumSpec = TD_ENEMIES[summonType];
+            const ratio = Math.max(1, e.maxHp / Math.max(1, bossSpec.baseHp));
+            const sumHp = Math.max(60, Math.round(sumSpec.baseHp * ratio * 0.55));
+            const tier10 = Math.floor(w.waveIndex / 10);
+            for (let m = 0; m < 2; m++) {
+              const offset = m === 0 ? -14 : 14;
+              w.enemies.push({
+                id: `en-${w.idCounter++}`,
+                type: summonType,
+                pathIndex: e.pathIndex,
+                waypointIndex: e.waypointIndex,
+                x: Math.max(20, Math.min(TD_VIEWBOX_W - 20, e.x + offset)),
+                y: Math.max(20, Math.min(TD_VIEWBOX_H - 20, e.y + (m === 0 ? -8 : 8))),
+                hp: sumHp,
+                maxHp: sumHp,
+                speed: sumSpec.speed * (1 + tier10 * 0.03),
+                armor: Math.min(0.8, sumSpec.armor + tier10 * 0.03),
+                magicResist: Math.min(0.8, sumSpec.magicResist + tier10 * 0.03),
+                bounty: Math.max(4, Math.round(sumSpec.bounty * (e.bountyMult ?? 1) * 0.7)),
+                bountyMult: e.bountyMult,
+                lifeCost: sumSpec.lifeCost,
+                flying: sumSpec.flying,
+                healsAllies: Boolean(sumSpec.healsAllies),
+                cleansesAllies: Boolean(sumSpec.cleansesAllies),
+                selfRegenPct: sumSpec.selfRegenPct ?? 0,
+                isBoss: false,
+                summonTimer: 0,
+                splitIntoType: sumSpec.splitIntoType,
+                splitCount: sumSpec.splitCount ?? 0,
+                radius: sumSpec.radius,
+                facingLeft: e.facingLeft,
+                blockedBySoldierId: null,
+                attackTimer: 0.5,
+                attackAnimTimer: 0,
+                healAnimTimer: 0,
+                slowTimer: 0,
+                slowPct: 0,
+                poisonTimer: 0,
+                poisonDps: 0,
+                poisonTickTimer: 0,
+                burnTimer: 0,
+                burnDps: 0,
+                burnTickTimer: 0,
+                healAuraTimer: 2.2,
+                hitFlashTimer: 0.15,
+                distanceTraveled: e.distanceTraveled,
+              });
+            }
+            w.effects.push({
+              id: `fx-${w.idCounter++}`,
+              kind: 'HIT',
+              x: e.x,
+              y: e.y - 26,
+              radius: 22,
+              label: 'TRIỆU HỒI!',
+              color: '#FACC15',
+              ttl: 0.75,
+              maxTtl: 0.75,
+            });
+          }
+        }
+
+        // Heal & Cleanse Aura (heals allies AND cleanses poison, slow & burn!)
+        if (e.healsAllies || e.cleansesAllies) {
           e.healAuraTimer -= dt;
           if (e.healAuraTimer <= 0) {
-            e.healAuraTimer = 2.8;
+            e.healAuraTimer = e.isBoss ? 4.2 : 2.8;
             e.healAnimTimer = 0.48;
             let cleansedAny = false;
+            let healedAny = false;
+            const pulseRadius = e.isBoss ? 135 : 112;
             for (const ally of w.enemies) {
-              if (ally.hp > 0 && dist(e.x, e.y, ally.x, ally.y) <= 110) {
-                if (ally.hp < ally.maxHp) {
-                  ally.hp = Math.min(ally.maxHp, ally.hp + ally.maxHp * 0.14);
+              if (ally.hp > 0 && dist(e.x, e.y, ally.x, ally.y) <= pulseRadius) {
+                if ((e.healsAllies || ally.id === e.id) && ally.hp < ally.maxHp) {
+                  const healRate = e.isBoss && ally.id === e.id ? 0.045 : 0.14;
+                  ally.hp = Math.min(ally.maxHp, ally.hp + ally.maxHp * healRate);
+                  healedAny = true;
                 }
-                if (ally.poisonTimer > 0 || ally.slowTimer > 0) {
+                if (ally.poisonTimer > 0 || ally.slowTimer > 0 || ally.burnTimer > 0) {
                   cleansedAny = true;
                 }
                 ally.poisonTimer = 0;
@@ -1113,73 +1335,102 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                 ally.poisonSourceTowerId = undefined;
                 ally.slowTimer = 0;
                 ally.slowPct = 0;
+                ally.burnTimer = 0;
+                ally.burnDps = 0;
+                ally.burnTickTimer = 0;
+                ally.burnSourceTowerId = undefined;
               }
             }
-            w.effects.push({
-              id: `fx-${w.idCounter++}`,
-              kind: 'HEAL',
-              x: e.x,
-              y: e.y,
-              radius: 88,
-              label: cleansedAny ? 'GIẢI ĐỘC!' : undefined,
-              ttl: 0.52,
-              maxTtl: 0.52,
-            });
+            if (cleansedAny || healedAny) {
+              w.effects.push({
+                id: `fx-${w.idCounter++}`,
+                kind: 'HEAL',
+                x: e.x,
+                y: e.y,
+                radius: e.isBoss ? 105 : 88,
+                label: cleansedAny ? 'GIẢI HIỆU ỨNG!' : 'HỒI MÁU!',
+                ttl: 0.55,
+                maxTtl: 0.55,
+              });
+            }
           }
         }
 
-        // Non-blocking melee swipe against nearby guards while marching past
+        // Non-blocking melee swipe (or Boss AoE Shockwave Slam!) against nearby guards while marching
         if (e.attackTimer > 0) e.attackTimer -= dt;
         if (!e.flying && e.attackTimer <= 0) {
-          let nearestGuard: TdSoldierEntity | null = null;
-          let guardDist = 28;
+          const reach = e.isBoss ? 62 : 28;
+          const guardsHit: TdSoldierEntity[] = [];
           for (const sol of w.soldiers) {
             if (sol.isDead || sol.hp <= 0) continue;
-            const dSol = dist(e.x, e.y, sol.x, sol.y);
-            if (dSol <= guardDist) {
-              guardDist = dSol;
-              nearestGuard = sol;
+            if (dist(e.x, e.y, sol.x, sol.y) <= reach) {
+              guardsHit.push(sol);
             }
           }
-          if (nearestGuard) {
-            e.attackTimer = e.type === 'BOSS' ? 1.1 : e.type === 'MINIBOSS' ? 1.0 : 0.95;
+          if (guardsHit.length > 0) {
+            const targetsToHit = e.isBoss
+              ? guardsHit
+              : [
+                  guardsHit.reduce((best, cur) =>
+                    dist(e.x, e.y, cur.x, cur.y) < dist(e.x, e.y, best.x, best.y) ? cur : best
+                  ),
+                ];
+            e.attackTimer = e.isBoss ? 1.15 : e.type === 'MINIBOSS' || e.type === 'VOID_TITAN' ? 1.0 : 0.95;
             e.attackAnimTimer = 0.28;
-            const baseEnemyAttackDmg =
-              e.type === 'BOSS'
-                ? 58
-                : e.type === 'MINIBOSS'
-                  ? 36
+            const baseEnemyAttackDmg = e.isBoss
+              ? e.enraged
+                ? 82
+                : 64
+              : e.type === 'MINIBOSS' || e.type === 'VOID_TITAN'
+                ? 40
+                : e.type === 'BROOD_MOTHER'
+                  ? 30
                   : e.type === 'KNIGHT_DARK' || e.type === 'GOLEM'
                     ? 26
                     : e.type === 'ORC'
-                      ? 19
-                      : e.type === 'WOLF' || e.type === 'SPIDER'
-                        ? 14
+                      ? 20
+                      : e.type === 'WOLF' || e.type === 'SPIDER' || e.type === 'BROODLING'
+                        ? 15
                         : 11;
             const enemyAttackDmg = baseEnemyAttackDmg * (1 + (lvl.level - 1) * 0.045 + w.waveIndex * 0.025);
             const citadelMitigation = upg.citadel >= 5 ? 0.75 : 1;
-            const netDmg = Math.max(2, enemyAttackDmg * (1 - nearestGuard.armor) * citadelMitigation);
-            nearestGuard.hp -= netDmg;
-            w.effects.push({
-              id: `fx-${w.idCounter++}`,
-              kind: 'MONSTER_HIT',
-              x: nearestGuard.x,
-              y: nearestGuard.y - 4,
-              radius: e.type === 'BOSS' ? 20 : e.type === 'GOLEM' ? 16 : 12,
-              facingLeft: e.facingLeft,
-              ttl: 0.22,
-              maxTtl: 0.22,
-            });
-            if (nearestGuard.hp <= 0) {
-              nearestGuard.hp = 0;
-              nearestGuard.isDead = true;
-              nearestGuard.engagedEnemyId = null;
-              const parentBarracks = nearestGuard.towerId
-                ? w.towers.find((t) => t.id === nearestGuard.towerId)
-                : undefined;
-              nearestGuard.respawnTimer = parentBarracks
-                ? getEffectiveTowerStats(parentBarracks, upg).soldierRespawn
-                : 5.0;
+
+            if (e.isBoss) {
+              w.effects.push({
+                id: `fx-${w.idCounter++}`,
+                kind: 'EXPLOSION',
+                x: e.x,
+                y: e.y,
+                radius: 56,
+                ttl: 0.28,
+                maxTtl: 0.28,
+              });
+            }
+
+            for (const gHit of targetsToHit) {
+              const netDmg = Math.max(2, enemyAttackDmg * (1 - gHit.armor) * citadelMitigation);
+              gHit.hp -= netDmg;
+              w.effects.push({
+                id: `fx-${w.idCounter++}`,
+                kind: 'MONSTER_HIT',
+                x: gHit.x,
+                y: gHit.y - 4,
+                radius: e.isBoss ? 22 : e.type === 'GOLEM' ? 16 : 12,
+                facingLeft: e.facingLeft,
+                ttl: 0.22,
+                maxTtl: 0.22,
+              });
+              if (gHit.hp <= 0) {
+                gHit.hp = 0;
+                gHit.isDead = true;
+                gHit.engagedEnemyId = null;
+                const parentBarracks = gHit.towerId
+                  ? w.towers.find((t) => t.id === gHit.towerId)
+                  : undefined;
+                gHit.respawnTimer = parentBarracks
+                  ? getEffectiveTowerStats(parentBarracks, upg).soldierRespawn
+                  : 5.0;
+              }
             }
           }
         }
@@ -1915,21 +2166,13 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
         const radius = 104;
         w.meteorCd = METEOR_BASE_CD * cdScale;
 
-        for (const en of w.enemies) {
+        for (const en of [...w.enemies]) {
           if (en.hp <= 0) continue;
           if (dist(pt.x, pt.y, en.x, en.y) <= radius) {
-            const mult = upg.economy >= 5 ? 1.25 : upg.economy >= 2 ? 1.12 : 1;
             en.hp -= dmg;
             en.hitFlashTimer = 0.25;
             if (en.hp <= 0) {
-              const earned = Math.round(en.bounty * mult);
-              w.gold += earned;
-              w.score += en.bounty * 12;
-              w.enemiesSlain += 1;
-              if (en.blockedBySoldierId) {
-                const s = w.soldiers.find((sol) => sol.id === en.blockedBySoldierId);
-                if (s) s.engagedEnemyId = null;
-              }
+              finalizeEnemyDeath(w, upg, levelConfig, en);
             }
           }
         }
@@ -2352,6 +2595,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                 slowed={e.slowTimer > 0}
                 poisoned={e.poisonTimer > 0}
                 burned={e.burnTimer > 0}
+                enraged={Boolean(e.enraged)}
                 facingLeft={e.facingLeft}
                 isAttacking={e.attackAnimTimer > 0}
                 isHealing={e.healAnimTimer > 0}
@@ -2827,100 +3071,82 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
         );
       })()}
 
-      {/* Build Hero Dock Popover (All 10 Hero Classes, with Stage Unlocks) */}
-      {selectedPad && (
-        <div
-          onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 w-[96%] max-w-3xl max-h-[75vh] overflow-y-auto rounded-2xl bg-[#0F172A]/95 backdrop-blur-md border-2 border-amber-400/80 p-2.5 sm:p-3 shadow-2xl"
-        >
-          <div className="flex items-center justify-between gap-2 mb-2 px-1">
-            <span className="text-xs font-extrabold text-amber-300">
-              Chọn Binh Chủng ({unlockedSet.size}/10 đã mở) · Vàng: {snap.gold}g
-            </span>
-            <button
-              type="button"
-              onClick={() => setSelectedPadId(null)}
-              aria-label="Đóng bảng chọn binh chủng"
-              className="p-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white cursor-pointer"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 sm:gap-2">
-            {TD_TOWER_BUILD_ORDER.map((tType) => {
-              const cfg = TD_TOWERS[tType];
-              const isUnlocked = unlockedSet.has(tType);
-              const cost = getDiscountedTdCost(cfg.tiers[0].cost, upgrades);
-              const canAfford = isUnlocked && snap.gold >= cost;
-              const shortTitle =
-                tType === 'ARCHER'
-                  ? 'Cung Thủ'
-                  : tType === 'BARRACKS'
-                    ? 'Vệ Binh'
-                    : tType === 'MAGE'
-                      ? 'Pháp Sư'
-                      : tType === 'ARTILLERY'
-                        ? 'Pháo Thủ'
-                        : tType === 'ASSASSIN'
-                          ? 'Sát Thủ'
-                          : tType === 'VALKYRIE'
-                            ? 'Thánh Nữ'
-                            : tType === 'KNIGHT_GUARD'
-                              ? 'Long Kỵ Sĩ'
-                              : tType === 'PYROMANCER'
-                                ? 'Hỏa Pháp Sư'
-                                : tType === 'MECHANIST'
-                                  ? 'Cơ Giới Sư'
-                                  : 'Thời Không';
-              return (
-                <button
-                  key={tType}
-                  type="button"
-                  disabled={!canAfford}
-                  onClick={() => handleBuildTower(selectedPad.id, tType)}
-                  className={`relative rounded-xl p-1.5 sm:p-2 border flex flex-col items-center gap-0.5 transition-all ${
-                    !isUnlocked
-                      ? 'bg-slate-950/85 border-slate-800 opacity-60 cursor-not-allowed'
-                      : canAfford
+      {/* Compact Build Hero Dock Popover (Shows ONLY Unlocked Buildable Units) */}
+      {selectedPad && (() => {
+        const buildableTowers = TD_TOWER_BUILD_ORDER.filter((t) => unlockedSet.has(t));
+        return (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 w-fit max-w-[96%] max-h-[65vh] overflow-y-auto rounded-xl bg-[#0F172A]/95 backdrop-blur-md border border-amber-400/80 p-2 shadow-2xl"
+          >
+            <div className="flex items-center justify-between gap-3 mb-1.5 px-1">
+              <span className="text-[11px] font-extrabold text-amber-300 font-mono-num">
+                Xây Binh Chủng ({buildableTowers.length}) · Vàng: {snap.gold}g
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedPadId(null)}
+                aria-label="Đóng bảng chọn binh chủng"
+                className="p-1 rounded-md bg-slate-800 text-slate-300 hover:text-white cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-1.5">
+              {buildableTowers.map((tType) => {
+                const cfg = TD_TOWERS[tType];
+                const cost = getDiscountedTdCost(cfg.tiers[0].cost, upgrades);
+                const canAfford = snap.gold >= cost;
+                const shortTitle =
+                  tType === 'ARCHER'
+                    ? 'Cung Thủ'
+                    : tType === 'BARRACKS'
+                      ? 'Vệ Binh'
+                      : tType === 'MAGE'
+                        ? 'Pháp Sư'
+                        : tType === 'ARTILLERY'
+                          ? 'Pháo Thủ'
+                          : tType === 'ASSASSIN'
+                            ? 'Sát Thủ'
+                            : tType === 'VALKYRIE'
+                              ? 'Thánh Nữ'
+                              : tType === 'KNIGHT_GUARD'
+                                ? 'Long Kỵ Sĩ'
+                                : tType === 'PYROMANCER'
+                                  ? 'Hỏa Pháp Sư'
+                                  : tType === 'MECHANIST'
+                                    ? 'Cơ Giới Sư'
+                                    : 'Thời Không';
+                return (
+                  <button
+                    key={tType}
+                    type="button"
+                    disabled={!canAfford}
+                    onClick={() => handleBuildTower(selectedPad.id, tType)}
+                    className={`w-[78px] sm:w-[86px] rounded-lg p-1.5 border flex flex-col items-center gap-0.5 transition-all ${
+                      canAfford
                         ? 'bg-[#1E293B] hover:bg-slate-700 border-amber-400/60 cursor-pointer'
                         : 'bg-slate-900/70 border-slate-800 opacity-45 cursor-not-allowed'
-                  }`}
-                >
-                  {cfg.unlockStage && (
-                    <span
-                      className={`absolute top-1 right-1 px-1 py-0.5 rounded text-[9px] font-bold leading-none ${
-                        isUnlocked
-                          ? 'bg-emerald-950/90 text-emerald-300 border border-emerald-600/50'
-                          : 'bg-slate-900 text-amber-300 border border-slate-700'
-                      }`}
-                    >
-                      {isUnlocked ? 'Mới' : `Ải ${cfg.unlockStage}`}
-                    </span>
-                  )}
-                  <div className="w-11 h-10 sm:w-12 sm:h-11 flex items-center justify-center">
-                    <TdTowerPreview type={tType} level={1} className="w-10 h-10 sm:w-11 sm:h-11" />
-                  </div>
-                  <div className="text-[11px] font-bold text-white leading-tight truncate max-w-full">
-                    {shortTitle}
-                  </div>
-                  {isUnlocked ? (
-                    <span className="font-mono-num text-[11px] font-extrabold text-[#FACC15]">
+                    }`}
+                  >
+                    <div className="w-9 h-9 flex items-center justify-center">
+                      <TdTowerPreview type={tType} level={1} className="w-9 h-9" />
+                    </div>
+                    <div className="text-[10px] font-bold text-white leading-tight truncate max-w-full">
+                      {shortTitle}
+                    </div>
+                    <span className="font-mono-num text-[10px] font-extrabold text-[#FACC15]">
                       {cost}g
                     </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-slate-400">
-                      <Lock className="w-2.5 h-2.5" />
-                      Qua Ải {cfg.unlockStage}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
-      {/* Built Hero Squad Inspector / Visual Evolution / Lv10 Mythic / Rally / Sell Popover */}
+      {/* Compact Built Hero Inspector / Evolution / Lv10 Mythic / Rally / Sell Popover */}
       {selectedTower && (() => {
         const branchCfg = selectedTower.branch
           ? TD_TOWERS[selectedTower.type].branches.find((b) => b.id === selectedTower.branch)
@@ -2933,21 +3159,21 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
         return (
           <div
             onClick={(e) => e.stopPropagation()}
-            className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 w-[96%] max-w-2xl max-h-[78vh] overflow-y-auto rounded-2xl bg-[#0F172A]/95 backdrop-blur-md border-2 border-sky-400/80 p-2.5 sm:p-3 shadow-2xl flex flex-col gap-2"
+            className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 w-[95%] max-w-xl max-h-[68vh] overflow-y-auto rounded-xl bg-[#0F172A]/95 backdrop-blur-md border border-sky-400/80 p-2 shadow-2xl flex flex-col gap-1.5"
           >
-            <div className="flex items-center justify-between gap-2.5">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-11 h-11 rounded-xl bg-[#1E293B] border border-slate-700 flex items-center justify-center shrink-0">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-9 h-9 rounded-lg bg-[#1E293B] border border-slate-700 flex items-center justify-center shrink-0">
                   <TdTowerPreview
                     type={selectedTower.type}
                     level={selectedTower.level}
                     branch={selectedTower.branch}
                     mythicPath={selectedTower.mythicPath}
-                    className="w-10 h-10"
+                    className="w-9 h-9"
                   />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs sm:text-sm font-extrabold text-white truncate flex items-center gap-1.5">
+                  <div className="text-xs font-extrabold text-white truncate flex items-center gap-1.5">
                     <span className="truncate">
                       {mythicCfg
                         ? mythicCfg.name
@@ -2959,26 +3185,26 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                       Cấp {selectedTower.level}/{TD_MAX_TOWER_LEVEL}
                     </span>
                   </div>
-                  <div className="text-[11px] text-slate-400 font-mono-num leading-snug">
+                  <div className="text-[10px] text-slate-300 font-mono-num leading-tight truncate">
                     {(() => {
                       if (selectedTower.type === 'BARRACKS') {
-                        const pierceStr = eff.armorPiercePct > 0 ? ` · Xuyên giáp ${Math.round(eff.armorPiercePct * 100)}%` : '';
+                        const pierceStr = eff.armorPiercePct > 0 ? ` · X.Giáp ${Math.round(eff.armorPiercePct * 100)}%` : '';
                         const trueStr = eff.trueDamagePct > 0 ? ` · Chuẩn ${Math.round(eff.trueDamagePct * 100)}%` : '';
-                        return `ST: ${eff.soldierDamage} · Máu: ${eff.soldierHp} · Giáp: ${Math.round(eff.soldierArmor * 100)}% · Quân: ${eff.soldierCount} · Hồi: ${eff.soldierRespawn.toFixed(1)}s${pierceStr}${trueStr}`;
+                        return `ST ${eff.soldierDamage} · HP ${eff.soldierHp} · Giáp ${Math.round(eff.soldierArmor * 100)}% · ${eff.soldierCount} lính${pierceStr}${trueStr}`;
                       }
                       if (selectedTower.type === 'KNIGHT_GUARD') {
-                        const burnStr = eff.burnDps > 0 ? ` · Đốt: ${eff.burnDps}/s` : '';
-                        return `Lính: ${eff.soldierCount} (${eff.soldierHp} HP) · Cận: ${eff.soldierDamage} · Thương: ${eff.damage}${burnStr} · Xuyên giáp ${Math.round(eff.armorPiercePct * 100)}% · Hạ: ${selectedTower.kills}`;
+                        const burnStr = eff.burnDps > 0 ? ` · Đốt ${eff.burnDps}/s` : '';
+                        return `${eff.soldierCount} Kỵ (${eff.soldierHp} HP) · Thương ${eff.damage}${burnStr} · Hạ ${selectedTower.kills}`;
                       }
                       const slowStr = eff.slowPct > 0 ? ` · Chậm ${Math.round(eff.slowPct * 100)}%` : '';
                       const burnStr = eff.burnDps > 0 ? ` · Đốt ${eff.burnDps}/s` : '';
-                      const auraStr = eff.auraHastePct > 0 ? ` · Tăng tốc +${Math.round(eff.auraHastePct * 100)}%` : '';
-                      const pierceStr = eff.armorPiercePct > 0 ? ` · Xuyên giáp ${Math.round(eff.armorPiercePct * 100)}%` : '';
-                      const mPierceStr = eff.magicPiercePct > 0 ? ` · Xuyên kháng ${Math.round(eff.magicPiercePct * 100)}%` : '';
-                      const trueStr = eff.trueDamagePct > 0 ? ` · ST Chuẩn ${Math.round(eff.trueDamagePct * 100)}%` : '';
-                      return `ST: ${eff.damage} · Tốc độ: ${atkSpd}/s · Mục tiêu: ${
+                      const auraStr = eff.auraHastePct > 0 ? ` · Tốc +${Math.round(eff.auraHastePct * 100)}%` : '';
+                      const pierceStr = eff.armorPiercePct > 0 ? ` · X.Giáp ${Math.round(eff.armorPiercePct * 100)}%` : '';
+                      const mPierceStr = eff.magicPiercePct > 0 ? ` · X.Kháng ${Math.round(eff.magicPiercePct * 100)}%` : '';
+                      const trueStr = eff.trueDamagePct > 0 ? ` · Chuẩn ${Math.round(eff.trueDamagePct * 100)}%` : '';
+                      return `ST ${eff.damage} · ${atkSpd}/s · ${
                         eff.chainCount > 0 ? eff.chainCount : eff.targetCount
-                      }${slowStr}${burnStr}${auraStr}${pierceStr}${mPierceStr}${trueStr} · Hạ: ${selectedTower.kills}`;
+                      } MT${slowStr}${burnStr}${auraStr}${pierceStr}${mPierceStr}${trueStr} · Hạ ${selectedTower.kills}`;
                     })()}
                   </div>
                 </div>
@@ -2987,23 +3213,23 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                 type="button"
                 onClick={() => setSelectedTowerId(null)}
                 aria-label="Đóng chi tiết tháp"
-                className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white cursor-pointer shrink-0"
+                className="p-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white cursor-pointer shrink-0"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            {/* Level 10 -> 11: Choose 1 of 4 Mythic Specialization Paths */}
+            {/* Level 10 -> 11: Compact 4-Card Mythic Awakening Row with Transformed Sprites */}
             {selectedTower.level === 10 && (
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between text-[11px] font-extrabold text-amber-300 px-0.5">
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between text-[10px] font-extrabold text-amber-300 px-0.5">
                   <span className="flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5 text-[#FACC15]" />
-                    Chọn 1 trong 4 Hướng Thức Tỉnh (Lên Cấp 11/20)
+                    <Sparkles className="w-3 h-3 text-[#FACC15]" />
+                    Thức Tỉnh Cấp 11 (4 Dạng Tối Thượng)
                   </span>
                   <span className="font-mono-num text-slate-300">Vàng: {snap.gold}g</span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                   {TD_MYTHIC_PATHS[selectedTower.type].map((mp) => {
                     const mpCost = getDiscountedTdCost(mp.cost, upgrades);
                     const canAfford = snap.gold >= mpCost;
@@ -3013,30 +3239,30 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                         type="button"
                         disabled={!canAfford}
                         onClick={() => handleUpgradeTower(selectedTower.id, undefined, mp.id)}
-                        className={`p-2 rounded-xl border text-left flex items-center gap-2 transition-all ${
+                        className={`p-1.5 rounded-lg border text-center flex flex-col items-center gap-0.5 transition-all ${
                           canAfford
                             ? 'bg-[#1E293B] hover:bg-slate-700 border-amber-400/75 cursor-pointer'
                             : 'bg-slate-900/80 border-slate-800 opacity-45 cursor-not-allowed'
                         }`}
                       >
-                        <div className="w-10 h-10 rounded-lg bg-[#0F172A] flex items-center justify-center shrink-0">
+                        <div className="w-10 h-10 rounded-md bg-[#0F172A] flex items-center justify-center shrink-0">
                           <TdTowerPreview
                             type={selectedTower.type}
                             level={11}
                             branch={selectedTower.branch}
                             mythicPath={mp.id}
-                            className="w-9 h-9"
+                            className="w-10 h-10"
                           />
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-1 text-xs font-extrabold">
-                            <span className="truncate" style={{ color: mp.accentColor }}>
-                              {mp.name}
-                            </span>
-                            <span className="font-mono-num text-[#FACC15] shrink-0">{mpCost}g</span>
-                          </div>
-                          <div className="text-[10px] text-slate-300 line-clamp-2 leading-snug mt-0.5">{mp.shortDesc}</div>
+                        <div className="text-[10px] font-extrabold leading-tight truncate max-w-full" style={{ color: mp.accentColor }}>
+                          {mp.name}
                         </div>
+                        <div className="text-[9px] text-slate-300 line-clamp-2 leading-tight">
+                          {mp.shortDesc}
+                        </div>
+                        <span className="font-mono-num text-[10px] font-extrabold text-[#FACC15]">
+                          {mpCost}g
+                        </span>
                       </button>
                     );
                   })}
@@ -3044,7 +3270,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
               </div>
             )}
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               {(selectedTower.level === 1 || selectedTower.level === 2) && (() => {
                 const nextLv = (selectedTower.level + 1) as 2 | 3;
                 const upCost = getDiscountedTdCost(
@@ -3057,16 +3283,16 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                     type="button"
                     disabled={!canUp}
                     onClick={() => handleUpgradeTower(selectedTower.id)}
-                    className={`flex-1 min-h-[44px] px-3 py-1 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 ${
+                    className={`flex-1 min-h-[40px] px-2.5 py-1 rounded-lg font-extrabold text-xs flex items-center justify-center gap-1.5 ${
                       canUp
                         ? 'bg-[#FACC15] hover:bg-yellow-300 text-slate-950 cursor-pointer'
                         : 'bg-slate-800 text-slate-500 cursor-not-allowed'
                     }`}
                   >
-                    <TdTowerPreview type={selectedTower.type} level={nextLv} className="w-9 h-9 shrink-0" />
+                    <TdTowerPreview type={selectedTower.type} level={nextLv} className="w-7 h-7 shrink-0" />
                     <TrendingUp className="w-3.5 h-3.5 shrink-0" />
-                    <span>
-                      Lên Cấp {nextLv}/{TD_MAX_TOWER_LEVEL} ({upCost}g)
+                    <span className="font-mono-num">
+                      Cấp {nextLv}/{TD_MAX_TOWER_LEVEL} · {upCost}g
                     </span>
                   </button>
                 );
@@ -3082,26 +3308,26 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                       type="button"
                       disabled={!canAfford}
                       onClick={() => handleUpgradeTower(selectedTower.id, br.id)}
-                      className={`flex-1 min-w-[160px] px-2.5 py-1.5 rounded-xl border text-left flex items-center gap-2 ${
+                      className={`flex-1 min-w-[140px] px-2 py-1 rounded-lg border text-left flex items-center gap-1.5 ${
                         canAfford
                           ? 'bg-[#1E293B] hover:bg-slate-700 border-amber-400/80 cursor-pointer'
                           : 'bg-slate-900 border-slate-800 opacity-45 cursor-not-allowed'
                       }`}
                     >
-                      <div className="w-10 h-10 rounded-lg bg-[#0F172A] flex items-center justify-center shrink-0">
+                      <div className="w-8 h-8 rounded-md bg-[#0F172A] flex items-center justify-center shrink-0">
                         <TdTowerPreview
                           type={selectedTower.type}
                           level={4}
                           branch={br.id}
-                          className="w-9 h-9"
+                          className="w-8 h-8"
                         />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-1 text-xs font-extrabold text-amber-300">
+                        <div className="flex items-center justify-between gap-1 text-[11px] font-extrabold text-amber-300">
                           <span className="truncate">{br.name}</span>
                           <span className="font-mono-num shrink-0">{brCost}g</span>
                         </div>
-                        <div className="text-[10px] text-slate-300 truncate">{br.shortDesc}</div>
+                        <div className="text-[9px] text-slate-300 truncate">{br.shortDesc}</div>
                       </div>
                     </button>
                   );
@@ -3124,7 +3350,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                     type="button"
                     disabled={!canUp}
                     onClick={() => handleUpgradeTower(selectedTower.id)}
-                    className={`flex-1 min-h-[44px] px-3 py-1 rounded-xl border font-extrabold text-xs flex items-center justify-center gap-2 ${
+                    className={`flex-1 min-h-[40px] px-2.5 py-1 rounded-lg border font-extrabold text-xs flex items-center justify-center gap-1.5 ${
                       canUp
                         ? 'bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 border-sky-300 text-white cursor-pointer'
                         : 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
@@ -3134,19 +3360,15 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                       type={selectedTower.type}
                       level={nextLv}
                       branch={selectedTower.branch}
-                      className="w-9 h-9 shrink-0"
+                      className="w-7 h-7 shrink-0"
                     />
                     <TrendingUp className="w-3.5 h-3.5 shrink-0" />
-                    <div className="text-left leading-tight">
-                      <div>
-                        Nâng Cấp {nextLv}/{TD_MAX_TOWER_LEVEL} ({upCost}g)
-                      </div>
-                      <div className="text-[10px] opacity-90 font-semibold">
-                        {nextLv === 10
-                          ? '+24% Sát thương · Mở khóa 4 Hướng Thức Tỉnh ở cấp sau'
-                          : `+20% Sát thương · +Tốc đánh${nextLv === 5 || nextLv === 7 || nextLv === 9 ? ' · +Mục tiêu' : ''}`}
-                      </div>
-                    </div>
+                    <span className="font-mono-num truncate">
+                      Cấp {nextLv}/{TD_MAX_TOWER_LEVEL} ({upCost}g) ·{' '}
+                      {nextLv === 10
+                        ? '+24% ST · Mở 4 Dạng Thức Tỉnh'
+                        : `+20% ST${nextLv === 5 || nextLv === 7 || nextLv === 9 ? ' · +MT' : ''}`}
+                    </span>
                   </button>
                 );
               })()}
@@ -3168,7 +3390,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                     type="button"
                     disabled={!canUp}
                     onClick={() => handleUpgradeTower(selectedTower.id)}
-                    className={`flex-1 min-h-[44px] px-3 py-1 rounded-xl border font-extrabold text-xs flex items-center justify-center gap-2 ${
+                    className={`flex-1 min-h-[40px] px-2.5 py-1 rounded-lg border font-extrabold text-xs flex items-center justify-center gap-1.5 ${
                       canUp
                         ? 'bg-gradient-to-r from-fuchsia-600 to-amber-500 hover:from-fuchsia-500 hover:to-amber-400 border-amber-300 text-white cursor-pointer'
                         : 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
@@ -3179,27 +3401,21 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                       level={nextLv}
                       branch={selectedTower.branch}
                       mythicPath={selectedTower.mythicPath}
-                      className="w-9 h-9 shrink-0"
+                      className="w-7 h-7 shrink-0"
                     />
                     <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                    <div className="text-left leading-tight">
-                      <div>
-                        Thức Tỉnh Cấp {nextLv}/{TD_MAX_TOWER_LEVEL} ({upCost}g)
-                      </div>
-                      <div className="text-[10px] opacity-90 font-semibold">
-                        {mythicCfg ? `${mythicCfg.name} · ` : ''}+18% ST · +Tốc đánh
-                        {nextLv % 3 === 0 || nextLv === TD_MAX_TOWER_LEVEL ? ' · +Tầm & Chỉ số đặc biệt' : ''}
-                      </div>
-                    </div>
+                    <span className="font-mono-num truncate">
+                      Cấp {nextLv}/{TD_MAX_TOWER_LEVEL} ({upCost}g) · +18% ST · +Tốc
+                    </span>
                   </button>
                 );
               })()}
 
               {selectedTower.level === TD_MAX_TOWER_LEVEL && (
-                <div className="flex-1 min-h-[42px] px-3 rounded-xl bg-amber-950/60 border border-amber-400/60 text-amber-300 font-extrabold text-xs flex items-center justify-center gap-1.5">
+                <div className="flex-1 min-h-[40px] px-2.5 rounded-lg bg-amber-950/60 border border-amber-400/60 text-amber-300 font-extrabold text-xs flex items-center justify-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-[#FACC15]" />
                   <span>
-                    Cấp Tối Đa ({TD_MAX_TOWER_LEVEL}/{TD_MAX_TOWER_LEVEL})
+                    Tối Đa ({TD_MAX_TOWER_LEVEL}/{TD_MAX_TOWER_LEVEL})
                     {mythicCfg ? ` · ${mythicCfg.name}` : ''}
                   </span>
                 </div>
@@ -3211,7 +3427,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                   onClick={() => {
                     setTargeting({ kind: 'RALLY', towerId: selectedTower.id });
                   }}
-                  className="min-h-[42px] px-3 rounded-xl bg-sky-900/70 hover:bg-sky-800 border border-sky-500/70 text-sky-100 font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+                  className="min-h-[40px] px-2.5 rounded-lg bg-sky-900/70 hover:bg-sky-800 border border-sky-500/70 text-sky-100 font-bold text-xs flex items-center gap-1 cursor-pointer"
                 >
                   <Flag className="w-3.5 h-3.5 text-[#FACC15]" />
                   <span>Dời cờ</span>
@@ -3221,7 +3437,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
               <button
                 type="button"
                 onClick={() => handleSellTower(selectedTower.id)}
-                className="min-h-[42px] px-3 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-700/80 text-rose-100 font-bold text-xs flex items-center gap-1 cursor-pointer"
+                className="min-h-[40px] px-2.5 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-700/80 text-rose-100 font-bold text-xs flex items-center gap-1 cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span className="font-mono-num">+{refundGold}g</span>

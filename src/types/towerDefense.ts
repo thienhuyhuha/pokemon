@@ -120,7 +120,16 @@ export type TdEnemyType =
   | 'NECRO'
   | 'KNIGHT_DARK'
   | 'MINIBOSS'
-  | 'BOSS';
+  | 'BOSS'
+  | 'BROOD_MOTHER'
+  | 'BROODLING'
+  | 'MITE'
+  | 'SHADOW_REAPER'
+  | 'VOID_TITAN'
+  | 'ABYSS_OVERLORD'
+  | 'DRAGON_EMPEROR'
+  | 'PLAGUE_HYDRA'
+  | 'DOOM_COLOSSUS';
 
 export type TdUpgradeTrackId =
   | 'archery'
@@ -330,6 +339,12 @@ export interface TdEnemySpec {
   lifeCost: number;
   flying: boolean;
   healsAllies?: boolean;
+  cleansesAllies?: boolean;
+  selfRegenPct?: number;
+  isBoss?: boolean;
+  summonInterval?: number;
+  splitIntoType?: TdEnemyType;
+  splitCount?: number;
   radius: number;
   accentColor: string;
 }
@@ -373,6 +388,16 @@ export interface TdEnemyEntity {
   lifeCost: number;
   flying: boolean;
   healsAllies: boolean;
+  cleansesAllies: boolean;
+  selfRegenPct: number;
+  isBoss: boolean;
+  summonTimer: number;
+  splitIntoType?: TdEnemyType;
+  splitCount: number;
+  hasSplit?: boolean;
+  isDeadProcessed?: boolean;
+  enraged?: boolean;
+  bountyMult?: number;
   radius: number;
   facingLeft: boolean;
   blockedBySoldierId: string | null;
