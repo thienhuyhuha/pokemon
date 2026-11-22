@@ -208,3 +208,75 @@ export const DIRTY_DOZEN_TESTS: DirtyDozenCase[] = [
     expectedResult: 'PERMISSION_DENIED',
   },
 ];
+
+const TD_UPGRADE_KEYS = [
+  'archery',
+  'magic',
+  'barracks',
+  'artillery',
+  'support',
+  'economy',
+  'spells',
+  'citadel',
+  'lethality',
+  'mastery',
+] as const;
+
+export function isValidTdUpgradesPayload(up: unknown): boolean {
+  if (!up || typeof up !== 'object' || Array.isArray(up)) return false;
+  const record = up as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (!TD_UPGRADE_KEYS.every((k) => keys.includes(k))) return false;
+  if (!keys.every((k) => (TD_UPGRADE_KEYS as readonly string[]).includes(k))) return false;
+  return TD_UPGRADE_KEYS.every((k) => {
+    const val = record[k];
+    return typeof val === 'number' && Number.isInteger(val) && val >= 0 && val <= 5;
+  });
+}
+
+export const TD_UPGRADES_SECURITY_CASES = [
+  {
+    name: 'Valid 10-track TD upgrades (0..5) allowed',
+    upgrades: {
+      archery: 5,
+      magic: 4,
+      barracks: 3,
+      artillery: 5,
+      support: 5,
+      economy: 2,
+      spells: 1,
+      citadel: 3,
+      lethality: 4,
+      mastery: 5,
+    },
+    expected: true,
+  },
+  {
+    name: 'Out-of-bounds TD upgrade tier (> 5) denied',
+    upgrades: {
+      archery: 6,
+      magic: 0,
+      barracks: 0,
+      artillery: 0,
+      support: 0,
+      economy: 0,
+      spells: 0,
+      citadel: 0,
+      lethality: 0,
+      mastery: 0,
+    },
+    expected: false,
+  },
+  {
+    name: 'Missing new TD upgrade track denied',
+    upgrades: {
+      archery: 1,
+      magic: 1,
+      barracks: 1,
+      economy: 1,
+      spells: 1,
+    },
+    expected: false,
+  },
+];
+

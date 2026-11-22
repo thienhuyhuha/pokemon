@@ -21,3 +21,5 @@
 10. **Type Poisoning**: Updating `totalScore` with a string `"999999"` or `levels` with an array `[]`.
 11. **Denial-of-Wallet String/Map Bloat**: Passing a 2,000-character `displayName` or `photoURL`, or `levels` map with > 200 keys.
 12. **Document ID Poisoning**: Attempting to write to `/users/bad$id!with*invalid^chars`.
+13. **TowerDefenseProfile Upgrades Tampering**: Writing `/towerDefenseProgress/{userId}` with missing tracks, extra unknown keys, or track levels outside integer `0..5` across the 10 workshop tracks (`archery`, `magic`, `barracks`, `artillery`, `support`, `economy`, `spells`, `citadel`, `lethality`, `mastery`).
+

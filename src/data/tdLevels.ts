@@ -6,6 +6,8 @@ import {
   TdEnemyType,
   TdLevelConfig,
   TdMapTheme,
+  TdMythicPathConfig,
+  TdMythicPathId,
   TdPoint,
   TdTowerConfig,
   TdTowerLevel,
@@ -17,62 +19,190 @@ import {
 } from '../types/towerDefense';
 
 export const TD_MAX_LEVEL = 30;
+export const TD_MAX_TOWER_LEVEL = 20;
 export const TD_VIEWBOX_W = 1000;
 export const TD_VIEWBOX_H = 562.5;
+
+export const TD_UPGRADE_MAX_TIER = 5;
 
 export const DEFAULT_TD_UPGRADES: TdUpgrades = {
   archery: 0,
   magic: 0,
   barracks: 0,
+  artillery: 0,
+  support: 0,
   economy: 0,
   spells: 0,
+  citadel: 0,
+  lethality: 0,
+  mastery: 0,
 };
 
 export interface TdUpgradeTrackMeta {
   id: TdUpgradeTrackId;
   name: string;
   shortBonus: string;
-  tierCosts: [number, number, number];
-  tierLabels: [string, string, string];
+  tierCosts: [number, number, number, number, number];
+  tierLabels: [string, string, string, string, string];
 }
 
 export const TD_UPGRADE_TRACKS: TdUpgradeTrackMeta[] = [
   {
     id: 'archery',
     name: 'Xạ Tiễn & Ám Khí',
-    shortBonus: 'Cung Thủ, Pháo Thủ & Sát Thủ',
-    tierCosts: [1, 2, 3],
-    tierLabels: ['+12% Sát thương Vật lý', '+10% Tầm & Tốc độ đánh', '+25% Sát thương Chí mạng'],
+    shortBonus: 'Cung Thủ, Sát Thủ & Cơ Giới',
+    tierCosts: [1, 1, 2, 2, 3],
+    tierLabels: [
+      '+12% Sát thương Vật lý',
+      '+10% Tầm & Tốc bắn',
+      '+30% Sát thương Chí mạng',
+      'Xuyên 20% Giáp mục tiêu',
+      '+18% ST Vật lý & +1 Mục tiêu',
+    ],
   },
   {
     id: 'magic',
-    name: 'Ma Thuật & Quang Minh',
-    shortBonus: 'Pháp Sư & Thánh Nữ',
-    tierCosts: [1, 2, 3],
-    tierLabels: ['+15% Sát thương Phép', '+15% Tầm Pháp/Thánh Nữ', 'Làm chậm sâu +15%'],
+    name: 'Ma Thuật Nguyên Tố',
+    shortBonus: 'Pháp Sư, Hỏa Ngục & Thời Không',
+    tierCosts: [1, 1, 2, 2, 3],
+    tierLabels: [
+      '+14% Sát thương Phép',
+      '+14% Tầm Pháp sư',
+      'Làm chậm +12% & Đốt +20%',
+      'Xuyên 22% Kháng Phép',
+      '+20% ST Phép & -12% Hồi chiêu',
+    ],
   },
   {
     id: 'barracks',
-    name: 'Vệ Binh',
-    shortBonus: 'Đội Vệ Binh',
-    tierCosts: [1, 2, 3],
-    tierLabels: ['+25% Máu & Giáp Lính', 'Hồi sinh lính nhanh 30%', '+30% Sát thương Cận chiến'],
+    name: 'Bộ Binh & Long Kỵ',
+    shortBonus: 'Đội Vệ Binh & Long Kỵ Sĩ',
+    tierCosts: [1, 1, 2, 2, 3],
+    tierLabels: [
+      '+25% Máu & +10% Giáp Lính',
+      'Hồi sinh lính nhanh 30%',
+      '+28% Sát thương Cận chiến',
+      'Chém lan +25px & Xuyên 20% Giáp',
+      '+1 Lính doanh trại & +25% Máu',
+    ],
+  },
+  {
+    id: 'artillery',
+    name: 'Trọng Pháo & Cơ Giới',
+    shortBonus: 'Pháo Thủ & Cơ Giới Pháo Sư',
+    tierCosts: [1, 1, 2, 2, 3],
+    tierLabels: [
+      '+15% ST Nổ & Đạn Pháo',
+      '+16px Bán kính Nổ lan',
+      'Xuyên thêm 20% Giáp',
+      '+15% Tốc độ nạp đạn',
+      '+25% ST Nổ & Làm chậm 20% vùng nổ',
+    ],
+  },
+  {
+    id: 'support',
+    name: 'Quang Minh & Thời Không',
+    shortBonus: 'Thánh Nữ & Thần Sứ Thời Không',
+    tierCosts: [1, 1, 2, 2, 3],
+    tierLabels: [
+      '+14% ST Thánh Quang / Thời Không',
+      'Hào quang Tốc đánh +8% đồng đội',
+      '+35% Lượng hồi máu Lính',
+      '+15% Tầm Hào quang & Công kích',
+      '+1 Mục tiêu & +10% Tốc đánh',
+    ],
   },
   {
     id: 'economy',
-    name: 'Kho Bạc',
-    shortBonus: 'Vàng & Hoàn trả',
-    tierCosts: [1, 2, 3],
-    tierLabels: ['+50 Vàng khởi đầu', '+15% Vàng hạ quái', 'Bán hoàn 85% vàng'],
+    name: 'Kho Bạc Hoàng Gia',
+    shortBonus: 'Vàng đầu trận, thưởng quái & hoàn trả',
+    tierCosts: [1, 1, 2, 2, 3],
+    tierLabels: [
+      '+60 Vàng khởi đầu',
+      '+12% Vàng hạ quái',
+      'Bán công trình hoàn 85% vàng',
+      '+100 Vàng khởi đầu (tổng +160g)',
+      '+25% Vàng hạ quái & Hoàn 90%',
+    ],
   },
   {
     id: 'spells',
-    name: 'Thiên Thạch',
-    shortBonus: 'Phép Chủ Động',
-    tierCosts: [1, 2, 3],
-    tierLabels: ['Giảm 20% hồi chiêu phép', '+35% Sát thương Thiên Thạch', '+1 Vệ binh Tiếp viện (3 lính)'],
+    name: 'Phép Chủ Động',
+    shortBonus: 'Mưa Thiên Thạch & Quân Tiếp Viện',
+    tierCosts: [1, 1, 2, 2, 3],
+    tierLabels: [
+      'Giảm 18% hồi chiêu phép',
+      '+35% Sát thương Thiên Thạch',
+      '+1 Vệ binh Tiếp viện (3 lính)',
+      'Giảm 32% hồi chiêu phép',
+      '+75% ST Thiên Thạch & Tiếp viện 4 Kỵ sĩ',
+    ],
+  },
+  {
+    id: 'citadel',
+    name: 'Thành Quách Kiên Cố',
+    shortBonus: 'Máu Thành & Giáp Phòng Ngự',
+    tierCosts: [1, 1, 2, 2, 3],
+    tierLabels: [
+      '+3 Máu Thành khởi đầu',
+      '+3 Máu Thành (tổng +6 tim)',
+      'Quân Tiếp viện +45% Máu & Giáp',
+      '+4 Máu Thành (tổng +10 tim)',
+      'Giảm 25% ST quái đánh lính đồng minh',
+    ],
+  },
+  {
+    id: 'lethality',
+    name: 'Sát Thương Chí Tử',
+    shortBonus: 'Chí mạng & Sát thương Chuẩn toàn quân',
+    tierCosts: [1, 1, 2, 2, 3],
+    tierLabels: [
+      '+6% Tỷ lệ Chí mạng toàn quân',
+      '+6% Sát thương Chuẩn toàn đội',
+      '+20% Sát thương Chí mạng',
+      '+15% Sát thương lên Boss & Tinh nhuệ',
+      '+14% ST Chuẩn & +10% Chí mạng',
+    ],
+  },
+  {
+    id: 'mastery',
+    name: 'Tinh Thông Chiến Trận',
+    shortBonus: 'Giảm giá xây nâng cấp & Tầm đánh',
+    tierCosts: [1, 1, 2, 2, 3],
+    tierLabels: [
+      '-4% Giá xây & nâng cấp trong trận',
+      '+5% Tầm đánh toàn công trình',
+      '-8% Giá xây & nâng cấp',
+      '+8% Tốc độ đánh toàn công trình',
+      '-12% Giá xây nâng cấp & +10% Tầm',
+    ],
   },
 ];
+
+export const TD_TOWER_BUILD_ORDER: TdTowerType[] = [
+  'ARCHER',
+  'BARRACKS',
+  'MAGE',
+  'ARTILLERY',
+  'ASSASSIN',
+  'VALKYRIE',
+  'KNIGHT_GUARD',
+  'PYROMANCER',
+  'MECHANIST',
+  'CHRONOMANCER',
+];
+
+export function isTowerUnlocked(
+  type: TdTowerType,
+  levels: Record<number, { completed?: boolean }>,
+  highestUnlockedLevel: number,
+  isPreviewMode = false
+): boolean {
+  const req = TD_TOWERS[type].unlockStage;
+  if (!req) return true;
+  if (isPreviewMode) return true;
+  return Boolean(levels[req]?.completed) || highestUnlockedLevel > req;
+}
 
 export const TD_TOWERS: Record<TdTowerType, TdTowerConfig> = {
   ARCHER: {
@@ -103,9 +233,9 @@ export const TD_TOWERS: Record<TdTowerType, TdTowerConfig> = {
         name: 'Thần Tiễn Hoàng Gia',
         shortDesc: 'Bắn 2 phát tầm xa + 35% Chí mạng',
         cost: 240,
-        damage: 82,
+        damage: 84,
         range: 270,
-        cooldown: 0.42,
+        cooldown: 0.4,
         targetCount: 2,
         critChance: 0.35,
       },
@@ -120,99 +250,100 @@ export const TD_TOWERS: Record<TdTowerType, TdTowerConfig> = {
     tiers: [
       {
         cost: 70,
-        damage: 13,
+        damage: 16,
         range: 190,
-        cooldown: 0.9,
+        cooldown: 0.85,
         soldierCount: 3,
-        soldierHp: 135,
-        soldierArmor: 0.16,
-        soldierDamage: 14,
+        soldierHp: 150,
+        soldierArmor: 0.2,
+        soldierDamage: 16,
       },
       {
         cost: 105,
-        damage: 19,
+        damage: 23,
         range: 215,
-        cooldown: 0.74,
+        cooldown: 0.7,
         soldierCount: 4,
-        soldierHp: 195,
-        soldierArmor: 0.25,
-        soldierDamage: 20,
+        soldierHp: 220,
+        soldierArmor: 0.28,
+        soldierDamage: 23,
       },
       {
         cost: 160,
-        damage: 28,
+        damage: 33,
         range: 240,
-        cooldown: 0.6,
+        cooldown: 0.56,
         soldierCount: 5,
-        soldierHp: 280,
-        soldierArmor: 0.36,
-        soldierDamage: 28,
+        soldierHp: 320,
+        soldierArmor: 0.38,
+        soldierDamage: 33,
       },
     ],
     branches: [
       {
         id: 'PALADIN',
         name: 'Thánh Kỵ Sĩ',
-        shortDesc: '5 Kỵ sĩ giáp 52% · Chém nhanh toàn vùng rộng',
+        shortDesc: '5 Kỵ sĩ giáp 54% · Xuyên 20% Giáp',
         cost: 220,
-        damage: 40,
+        damage: 48,
         range: 265,
-        cooldown: 0.48,
+        cooldown: 0.45,
         soldierCount: 5,
-        soldierHp: 440,
-        soldierArmor: 0.52,
-        soldierDamage: 40,
+        soldierHp: 500,
+        soldierArmor: 0.54,
+        soldierDamage: 48,
+        innateArmorPiercePct: 0.2,
       },
       {
         id: 'BARBARIAN',
         name: 'Chiến Binh Cuồng Nộ',
-        shortDesc: '6 Chiến binh chém lan siêu tốc!',
+        shortDesc: '6 Chiến binh chém lan 52px siêu tốc!',
         cost: 225,
-        damage: 52,
+        damage: 60,
         range: 265,
-        cooldown: 0.44,
+        cooldown: 0.4,
         soldierCount: 6,
-        soldierHp: 330,
-        soldierArmor: 0.3,
-        soldierDamage: 52,
-        cleaveRadius: 48,
+        soldierHp: 375,
+        soldierArmor: 0.34,
+        soldierDamage: 60,
+        cleaveRadius: 52,
       },
     ],
   },
   MAGE: {
     type: 'MAGE',
     name: 'Pháp Sư Băng Hồn',
-    roleLabel: 'Bùng nổ phép mạnh · Làm chậm lan diện rộng',
+    roleLabel: 'Khống chế băng giá · Làm chậm diện rộng',
     damageKind: 'MAGIC',
     canHitAir: true,
     tiers: [
-      { cost: 100, damage: 52, range: 172, cooldown: 1.1, targetCount: 1, slowPct: 0.32, slowSplashRadius: 48 },
-      { cost: 150, damage: 78, range: 188, cooldown: 0.88, targetCount: 2, slowPct: 0.38, slowSplashRadius: 56 },
-      { cost: 215, damage: 112, range: 205, cooldown: 0.7, targetCount: 3, slowPct: 0.45, slowSplashRadius: 65 },
+      { cost: 100, damage: 44, range: 172, cooldown: 1.18, targetCount: 1, slowPct: 0.34, slowSplashRadius: 50 },
+      { cost: 150, damage: 60, range: 186, cooldown: 0.98, targetCount: 2, slowPct: 0.4, slowSplashRadius: 58 },
+      { cost: 215, damage: 80, range: 202, cooldown: 0.84, targetCount: 3, slowPct: 0.46, slowSplashRadius: 68 },
     ],
     branches: [
       {
         id: 'ARCANE_BEAM',
         name: 'Băng Hồn Đại Sư',
-        shortDesc: '3 cầu băng nổ chậm 58% lan 82px + Tốc độ cao',
+        shortDesc: '3 cầu băng nổ chậm 60% lan 86px',
         cost: 280,
-        damage: 175,
-        range: 225,
-        cooldown: 0.58,
+        damage: 115,
+        range: 220,
+        cooldown: 0.72,
         targetCount: 3,
-        slowPct: 0.58,
-        slowSplashRadius: 82,
+        slowPct: 0.6,
+        slowSplashRadius: 86,
       },
       {
         id: 'STORM_CHAIN',
         name: 'Lôi Băng Pháp Thần',
-        shortDesc: 'Sét băng lan 6 mục tiêu + Làm chậm 45%',
+        shortDesc: 'Sét băng lan 6 mục tiêu + Chậm 46%',
         cost: 270,
-        damage: 148,
-        range: 215,
-        cooldown: 0.54,
+        damage: 96,
+        range: 212,
+        cooldown: 0.66,
         targetCount: 2,
-        slowPct: 0.45,
+        slowPct: 0.46,
         chainCount: 6,
       },
     ],
@@ -220,37 +351,65 @@ export const TD_TOWERS: Record<TdTowerType, TdTowerConfig> = {
   ARTILLERY: {
     type: 'ARTILLERY',
     name: 'Pháo Thủ',
-    roleLabel: 'Bắn nhiều bom nổ lan · Tăng tốc theo cấp',
+    roleLabel: 'Đại bác xuyên 50% Giáp · Nổ lan diện rộng',
     damageKind: 'SPLASH',
     canHitAir: false,
     tiers: [
-      { cost: 120, damage: 38, range: 158, cooldown: 1.85, targetCount: 1, splashRadius: 60 },
-      { cost: 175, damage: 52, range: 174, cooldown: 1.48, targetCount: 2, splashRadius: 68 },
-      { cost: 245, damage: 70, range: 190, cooldown: 1.15, targetCount: 3, splashRadius: 78 },
+      {
+        cost: 120,
+        damage: 68,
+        range: 178,
+        cooldown: 1.38,
+        targetCount: 1,
+        splashRadius: 74,
+        innateArmorPiercePct: 0.5,
+      },
+      {
+        cost: 175,
+        damage: 95,
+        range: 194,
+        cooldown: 1.12,
+        targetCount: 2,
+        splashRadius: 86,
+        innateArmorPiercePct: 0.5,
+      },
+      {
+        cost: 245,
+        damage: 130,
+        range: 212,
+        cooldown: 0.9,
+        targetCount: 3,
+        splashRadius: 98,
+        innateArmorPiercePct: 0.5,
+      },
     ],
     branches: [
       {
         id: 'BIG_BERTHA',
         name: 'Xạ Thủ Siêu Pháo',
-        shortDesc: 'Bắn 2 đại bác nổ lan 115px nhanh hơn',
+        shortDesc: '3 đại bác nổ 132px · Xuyên 55% Giáp & Chậm',
         cost: 300,
-        damage: 135,
-        range: 215,
-        cooldown: 0.92,
-        targetCount: 2,
-        splashRadius: 115,
+        damage: 225,
+        range: 236,
+        cooldown: 0.72,
+        targetCount: 3,
+        splashRadius: 132,
+        slowPct: 0.28,
+        slowSplashRadius: 110,
+        innateArmorPiercePct: 0.55,
       },
       {
         id: 'TESLA_COIL',
         name: 'Kỹ Sư Lôi Điện',
-        shortDesc: 'Giật sét 5 mục tiêu siêu nhanh · Hạ quái bay!',
+        shortDesc: 'Giật sét 6 mục tiêu · Xuyên 55% Giáp & Bắn bay',
         cost: 310,
-        damage: 102,
-        range: 200,
-        cooldown: 0.72,
-        targetCount: 2,
-        splashRadius: 75,
-        chainCount: 5,
+        damage: 155,
+        range: 222,
+        cooldown: 0.54,
+        targetCount: 3,
+        splashRadius: 88,
+        chainCount: 6,
+        innateArmorPiercePct: 0.55,
       },
     ],
   },
@@ -261,95 +420,929 @@ export const TD_TOWERS: Record<TdTowerType, TdTowerConfig> = {
     damageKind: 'PHYSICAL',
     canHitAir: true,
     tiers: [
-      { cost: 85, damage: 22, range: 155, cooldown: 0.48, targetCount: 1, critChance: 0.22 },
-      { cost: 130, damage: 30, range: 170, cooldown: 0.37, targetCount: 2, critChance: 0.28 },
-      { cost: 185, damage: 40, range: 185, cooldown: 0.29, targetCount: 3, critChance: 0.34 },
+      { cost: 85, damage: 24, range: 158, cooldown: 0.46, targetCount: 1, critChance: 0.24 },
+      { cost: 130, damage: 33, range: 174, cooldown: 0.36, targetCount: 2, critChance: 0.3 },
+      { cost: 185, damage: 44, range: 190, cooldown: 0.28, targetCount: 3, critChance: 0.36 },
     ],
     branches: [
       {
         id: 'SHADOW_BLADE',
         name: 'Ảnh Kiếm Vô Ảnh',
-        shortDesc: 'Phóng 4 phi tiêu siêu thanh · 48% Chí mạng!',
+        shortDesc: '4 phi tiêu siêu thanh · 50% Chí mạng · Xuyên 20% Giáp',
         cost: 245,
-        damage: 54,
-        range: 200,
-        cooldown: 0.22,
+        damage: 60,
+        range: 205,
+        cooldown: 0.21,
         targetCount: 4,
-        critChance: 0.48,
+        critChance: 0.5,
+        innateArmorPiercePct: 0.2,
       },
       {
         id: 'VENOM_FANG',
         name: 'Độc Ảnh Xuyên Tâm',
-        shortDesc: '3 phi đao độc + Làm chậm 28% · Độc 5s',
+        shortDesc: '3 phi đao độc + Làm chậm 30% · Độc 5s',
         cost: 240,
-        damage: 46,
-        range: 195,
-        cooldown: 0.25,
+        damage: 52,
+        range: 200,
+        cooldown: 0.24,
         targetCount: 3,
-        poisonDps: 46,
-        slowPct: 0.28,
-        critChance: 0.25,
+        poisonDps: 52,
+        slowPct: 0.3,
+        critChance: 0.28,
       },
     ],
   },
   VALKYRIE: {
     type: 'VALKYRIE',
     name: 'Thánh Nữ',
-    roleLabel: 'Giáo ánh sáng · Tăng tốc đồng đội & Hồi máu lính',
+    roleLabel: 'Giáo xuyên 40% Kháng · Tăng tốc & Hồi máu lính',
     damageKind: 'MAGIC',
     canHitAir: true,
     tiers: [
-      { cost: 110, damage: 34, range: 168, cooldown: 0.96, targetCount: 1, auraHastePct: 0.14, healSoldierAmt: 16 },
-      { cost: 160, damage: 48, range: 184, cooldown: 0.78, targetCount: 2, auraHastePct: 0.18, healSoldierAmt: 26 },
-      { cost: 225, damage: 68, range: 200, cooldown: 0.62, targetCount: 3, auraHastePct: 0.22, healSoldierAmt: 40 },
+      {
+        cost: 110,
+        damage: 46,
+        range: 182,
+        cooldown: 0.82,
+        targetCount: 2,
+        auraHastePct: 0.18,
+        healSoldierAmt: 26,
+        innateMagicPiercePct: 0.4,
+      },
+      {
+        cost: 160,
+        damage: 66,
+        range: 198,
+        cooldown: 0.66,
+        targetCount: 3,
+        auraHastePct: 0.23,
+        healSoldierAmt: 42,
+        innateMagicPiercePct: 0.4,
+      },
+      {
+        cost: 225,
+        damage: 92,
+        range: 216,
+        cooldown: 0.52,
+        targetCount: 4,
+        auraHastePct: 0.28,
+        healSoldierAmt: 62,
+        innateMagicPiercePct: 0.4,
+      },
     ],
     branches: [
       {
         id: 'SOLAR_SERAPH',
         name: 'Thiên Sứ Nhật Quang',
-        shortDesc: '4 Thánh giáo siêu tốc + Tăng 28% tốc đánh đồng đội',
+        shortDesc: '5 Thánh giáo xuyên 45% Kháng + 35% Tốc đồng đội',
         cost: 290,
-        damage: 98,
-        range: 218,
-        cooldown: 0.5,
-        targetCount: 4,
-        auraHastePct: 0.28,
-        healSoldierAmt: 65,
+        damage: 132,
+        range: 236,
+        cooldown: 0.42,
+        targetCount: 5,
+        auraHastePct: 0.35,
+        healSoldierAmt: 95,
+        innateMagicPiercePct: 0.45,
       },
       {
         id: 'FROST_VALKYRIE',
         name: 'Nữ Thần Băng Phong',
-        shortDesc: '3 Thương băng làm chậm 42% + Tăng 24% tốc đánh',
+        shortDesc: '4 Thương băng chậm 48% + Xuyên 45% Kháng + 30% Tốc',
         cost: 285,
-        damage: 88,
-        range: 215,
-        cooldown: 0.52,
+        damage: 118,
+        range: 232,
+        cooldown: 0.44,
+        targetCount: 4,
+        slowPct: 0.48,
+        slowSplashRadius: 68,
+        auraHastePct: 0.3,
+        healSoldierAmt: 75,
+        innateMagicPiercePct: 0.45,
+      },
+    ],
+  },
+  KNIGHT_GUARD: {
+    type: 'KNIGHT_GUARD',
+    name: 'Long Kỵ Sĩ',
+    roleLabel: 'Triệu hồi Kỵ Sĩ · Phóng thương lửa & Chém lan',
+    damageKind: 'MELEE',
+    canHitAir: true,
+    unlockStage: 10,
+    tiers: [
+      {
+        cost: 145,
+        damage: 52,
+        range: 210,
+        cooldown: 0.95,
+        targetCount: 1,
+        burnDps: 26,
+        innateArmorPiercePct: 0.45,
+        soldierCount: 3,
+        soldierHp: 260,
+        soldierArmor: 0.34,
+        soldierDamage: 32,
+        cleaveRadius: 34,
+      },
+      {
+        cost: 205,
+        damage: 76,
+        range: 228,
+        cooldown: 0.78,
+        targetCount: 2,
+        burnDps: 38,
+        innateArmorPiercePct: 0.45,
+        soldierCount: 4,
+        soldierHp: 380,
+        soldierArmor: 0.42,
+        soldierDamage: 46,
+        cleaveRadius: 38,
+      },
+      {
+        cost: 280,
+        damage: 108,
+        range: 248,
+        cooldown: 0.64,
+        targetCount: 2,
+        burnDps: 54,
+        innateArmorPiercePct: 0.5,
+        soldierCount: 4,
+        soldierHp: 540,
+        soldierArmor: 0.5,
+        soldierDamage: 64,
+        cleaveRadius: 42,
+      },
+    ],
+    branches: [
+      {
+        id: 'DRAGON_LANCER',
+        name: 'Long Thương Hỏa Diễm',
+        shortDesc: '5 Kỵ sĩ chém lan 56px + Phóng 3 thương lửa xuyên 60% Giáp',
+        cost: 345,
+        damage: 158,
+        range: 268,
+        cooldown: 0.5,
         targetCount: 3,
-        slowPct: 0.42,
-        slowSplashRadius: 55,
-        auraHastePct: 0.24,
-        healSoldierAmt: 45,
+        burnDps: 85,
+        innateArmorPiercePct: 0.6,
+        soldierCount: 5,
+        soldierHp: 680,
+        soldierArmor: 0.52,
+        soldierDamage: 88,
+        cleaveRadius: 56,
+      },
+      {
+        id: 'AEGIS_WARDEN',
+        name: 'Hộ Vệ Long Khiên',
+        shortDesc: '5 Kỵ sĩ giáp 64% (920 Máu) + Thương băng chậm 35%',
+        cost: 340,
+        damage: 125,
+        range: 262,
+        cooldown: 0.56,
+        targetCount: 2,
+        slowPct: 0.35,
+        burnDps: 45,
+        innateArmorPiercePct: 0.5,
+        soldierCount: 5,
+        soldierHp: 920,
+        soldierArmor: 0.64,
+        soldierDamage: 68,
+        cleaveRadius: 42,
+      },
+    ],
+  },
+  PYROMANCER: {
+    type: 'PYROMANCER',
+    name: 'Hỏa Ngục Pháp Sư',
+    roleLabel: 'Cầu lửa nổ lan · Thiêu đốt 4s & Xuyên Kháng',
+    damageKind: 'MAGIC',
+    canHitAir: true,
+    unlockStage: 15,
+    tiers: [
+      {
+        cost: 155,
+        damage: 78,
+        range: 192,
+        cooldown: 1.05,
+        targetCount: 1,
+        splashRadius: 68,
+        burnDps: 45,
+        innateMagicPiercePct: 0.3,
+      },
+      {
+        cost: 220,
+        damage: 110,
+        range: 208,
+        cooldown: 0.86,
+        targetCount: 2,
+        splashRadius: 78,
+        burnDps: 66,
+        innateMagicPiercePct: 0.3,
+      },
+      {
+        cost: 300,
+        damage: 152,
+        range: 225,
+        cooldown: 0.7,
+        targetCount: 3,
+        splashRadius: 88,
+        burnDps: 94,
+        innateMagicPiercePct: 0.35,
+      },
+    ],
+    branches: [
+      {
+        id: 'HELLFIRE_LORD',
+        name: 'Chúa Tể Hỏa Ngục',
+        shortDesc: '3 cầu hỏa ngục nổ 112px · Thiêu đốt cực mạnh & Xuyên 50% Kháng',
+        cost: 370,
+        damage: 230,
+        range: 242,
+        cooldown: 0.58,
+        targetCount: 3,
+        splashRadius: 112,
+        burnDps: 145,
+        innateMagicPiercePct: 0.5,
+      },
+      {
+        id: 'PHOENIX_SAGE',
+        name: 'Phượng Hoàng Bất Diệt',
+        shortDesc: '4 cầu lửa siêu nhanh + Hồi 55 Máu cho lính quanh vùng',
+        cost: 365,
+        damage: 195,
+        range: 238,
+        cooldown: 0.48,
+        targetCount: 4,
+        splashRadius: 92,
+        burnDps: 120,
+        healSoldierAmt: 55,
+        innateMagicPiercePct: 0.45,
+      },
+    ],
+  },
+  MECHANIST: {
+    type: 'MECHANIST',
+    name: 'Cơ Giới Pháo Sư',
+    roleLabel: 'Súng từ trường tầm xa · Xuyên giáp & Bắn quái bay',
+    damageKind: 'PHYSICAL',
+    canHitAir: true,
+    unlockStage: 20,
+    tiers: [
+      {
+        cost: 185,
+        damage: 95,
+        range: 240,
+        cooldown: 0.85,
+        targetCount: 1,
+        critChance: 0.2,
+        innateArmorPiercePct: 0.65,
+      },
+      {
+        cost: 260,
+        damage: 135,
+        range: 260,
+        cooldown: 0.68,
+        targetCount: 2,
+        critChance: 0.25,
+        innateArmorPiercePct: 0.68,
+      },
+      {
+        cost: 350,
+        damage: 185,
+        range: 280,
+        cooldown: 0.54,
+        targetCount: 3,
+        critChance: 0.3,
+        innateArmorPiercePct: 0.72,
+      },
+    ],
+    branches: [
+      {
+        id: 'RAILGUN_MECH',
+        name: 'Pháo Từ Trường Tối Thượng',
+        shortDesc: '3 tia xuyên 85% Giáp + 35% ST Chuẩn + 40% Chí mạng',
+        cost: 425,
+        damage: 295,
+        range: 320,
+        cooldown: 0.45,
+        targetCount: 3,
+        critChance: 0.4,
+        innateArmorPiercePct: 0.85,
+        innateTrueDamagePct: 0.35,
+      },
+      {
+        id: 'ROCKET_BATTERY',
+        name: 'Tổ Hợp Tên Lửa Hextech',
+        shortDesc: 'Phóng 5 tên lửa nổ lan 72px (bắn cả quái bay)',
+        cost: 420,
+        damage: 210,
+        range: 285,
+        cooldown: 0.46,
+        targetCount: 5,
+        splashRadius: 72,
+        innateArmorPiercePct: 0.65,
+      },
+    ],
+  },
+  CHRONOMANCER: {
+    type: 'CHRONOMANCER',
+    name: 'Thần Sứ Thời Không',
+    roleLabel: 'Sát thương Chuẩn · Ngưng đọng & Tăng tốc toàn đội',
+    damageKind: 'MAGIC',
+    canHitAir: true,
+    unlockStage: 25,
+    tiers: [
+      {
+        cost: 220,
+        damage: 105,
+        range: 210,
+        cooldown: 0.88,
+        targetCount: 2,
+        slowPct: 0.48,
+        slowSplashRadius: 72,
+        auraHastePct: 0.16,
+        innateTrueDamagePct: 0.5,
+      },
+      {
+        cost: 305,
+        damage: 150,
+        range: 228,
+        cooldown: 0.72,
+        targetCount: 3,
+        slowPct: 0.54,
+        slowSplashRadius: 82,
+        auraHastePct: 0.21,
+        innateTrueDamagePct: 0.55,
+      },
+      {
+        cost: 410,
+        damage: 210,
+        range: 246,
+        cooldown: 0.58,
+        targetCount: 4,
+        slowPct: 0.6,
+        slowSplashRadius: 92,
+        auraHastePct: 0.26,
+        innateTrueDamagePct: 0.6,
+      },
+    ],
+    branches: [
+      {
+        id: 'TIME_ARCHON',
+        name: 'Chấp Pháp Thời Gian',
+        shortDesc: '5 tia chuẩn 70% · Chậm 70% lan 112px · +36% Tốc đồng minh',
+        cost: 490,
+        damage: 295,
+        range: 270,
+        cooldown: 0.44,
+        targetCount: 5,
+        slowPct: 0.7,
+        slowSplashRadius: 112,
+        auraHastePct: 0.36,
+        innateTrueDamagePct: 0.7,
+      },
+      {
+        id: 'VOID_SOVEREIGN',
+        name: 'Thần Vương Hư Không',
+        shortDesc: '100% Sát Thương Chuẩn · 4 tia hủy diệt xuyên mọi giáp',
+        cost: 495,
+        damage: 365,
+        range: 265,
+        cooldown: 0.48,
+        targetCount: 4,
+        slowPct: 0.58,
+        slowSplashRadius: 95,
+        auraHastePct: 0.28,
+        innateTrueDamagePct: 1.0,
       },
     ],
   },
 };
 
+export const TD_MYTHIC_PATHS: Record<TdTowerType, TdMythicPathConfig[]> = {
+  ARCHER: [
+    {
+      id: 'ARCHER_BARRAGE',
+      towerType: 'ARCHER',
+      name: 'Vạn Tiễn Liên Hoàn',
+      shortDesc: '+4 mục tiêu · +35% tốc bắn',
+      accentColor: '#38BDF8',
+      cost: 1650,
+      damageMult: 1.25,
+      cooldownMult: 0.74,
+      bonusTargets: 4,
+    },
+    {
+      id: 'ARCHER_PIERCE',
+      towerType: 'ARCHER',
+      name: 'Thần Tiễn Xuyên Giáp',
+      shortDesc: 'Xuyên 75% Giáp · +65% Sát thương',
+      accentColor: '#FACC15',
+      cost: 1750,
+      damageMult: 1.65,
+      armorPiercePct: 0.75,
+      bonusTargets: 1,
+    },
+    {
+      id: 'ARCHER_PLAGUE',
+      towerType: 'ARCHER',
+      name: 'Độc Vương Tận Thế',
+      shortDesc: 'Độc x1.8 · Lan độc 65px · Chậm 25%',
+      accentColor: '#4ADE80',
+      cost: 1700,
+      damageMult: 1.35,
+      poisonMult: 1.8,
+      poisonSpreadRadius: 65,
+      slowPctBonus: 0.25,
+      bonusTargets: 2,
+    },
+    {
+      id: 'ARCHER_EAGLE',
+      towerType: 'ARCHER',
+      name: 'Thiên Nhãn Tối Thượng',
+      shortDesc: '+40% Tầm · +25% Chí mạng (x3.2)',
+      accentColor: '#FB7185',
+      cost: 1800,
+      damageMult: 1.45,
+      rangeMult: 1.4,
+      critChanceBonus: 0.25,
+      critMultBonus: 0.9,
+      armorPiercePct: 0.35,
+    },
+  ],
+  BARRACKS: [
+    {
+      id: 'BARRACKS_LEGION',
+      towerType: 'BARRACKS',
+      name: 'Quân Đoàn Bất Diệt',
+      shortDesc: '+3 Lính · Hồi 2.5s · +45% Máu',
+      accentColor: '#38BDF8',
+      cost: 1600,
+      soldierCountBonus: 3,
+      soldierHpMult: 1.45,
+      soldierDamageMult: 1.3,
+      soldierRespawnOverride: 2.5,
+    },
+    {
+      id: 'BARRACKS_TITAN',
+      towerType: 'BARRACKS',
+      name: 'Thánh Giáp Pháo Đài',
+      shortDesc: 'Giáp tới 85% · +115% Máu Lính',
+      accentColor: '#FACC15',
+      cost: 1700,
+      soldierHpMult: 2.15,
+      soldierArmorBonus: 0.28,
+      soldierDamageMult: 1.35,
+    },
+    {
+      id: 'BARRACKS_BERSERK',
+      towerType: 'BARRACKS',
+      name: 'Cuồng Chiến Huyết Sát',
+      shortDesc: '+85% ST Lính · Chém lan +35px · +30% Tốc',
+      accentColor: '#EF4444',
+      cost: 1750,
+      soldierDamageMult: 1.85,
+      cooldownMult: 0.76,
+      cleaveRadiusBonus: 35,
+    },
+    {
+      id: 'BARRACKS_SUNDER',
+      towerType: 'BARRACKS',
+      name: 'Kiếm Khí Phá Giáp',
+      shortDesc: '60% Sát thương Chuẩn · Chậm 35%',
+      accentColor: '#C084FC',
+      cost: 1800,
+      soldierDamageMult: 1.5,
+      trueDamagePct: 0.6,
+      armorPiercePct: 0.7,
+      slowPctBonus: 0.35,
+    },
+  ],
+  MAGE: [
+    {
+      id: 'MAGE_GLACIER',
+      towerType: 'MAGE',
+      name: 'Kỷ Băng Hà Tuyệt Đối',
+      shortDesc: 'Chậm 75% · Vùng băng 120px · +2 Cầu',
+      accentColor: '#38BDF8',
+      cost: 1750,
+      damageMult: 1.28,
+      slowPctBonus: 0.25,
+      slowSplashBonus: 55,
+      bonusTargets: 2,
+    },
+    {
+      id: 'MAGE_VOID',
+      towerType: 'MAGE',
+      name: 'Hư Không Xuyên Kháng',
+      shortDesc: 'Xuyên 80% Kháng Phép · +60% ST',
+      accentColor: '#E879F9',
+      cost: 1850,
+      damageMult: 1.6,
+      magicPiercePct: 0.8,
+      bonusTargets: 1,
+    },
+    {
+      id: 'MAGE_TEMPEST',
+      towerType: 'MAGE',
+      name: 'Thiên Lôi Cửu Thiên',
+      shortDesc: '+6 Sét lan · +30% Tốc niệm',
+      accentColor: '#FACC15',
+      cost: 1800,
+      damageMult: 1.32,
+      cooldownMult: 0.76,
+      chainBonus: 6,
+      bonusTargets: 1,
+    },
+    {
+      id: 'MAGE_METEOR',
+      towerType: 'MAGE',
+      name: 'Tinh Tú Bùng Nổ',
+      shortDesc: 'Nổ Phép Lan 90px · +45% ST · +20% Tầm',
+      accentColor: '#FB923C',
+      cost: 1850,
+      damageMult: 1.45,
+      rangeMult: 1.2,
+      splashRadiusBonus: 90,
+      magicPiercePct: 0.35,
+    },
+  ],
+  ARTILLERY: [
+    {
+      id: 'ARTILLERY_NUKE',
+      towerType: 'ARTILLERY',
+      name: 'Đại Bác Hủy Diệt',
+      shortDesc: '+90% ST Nổ · Bán kính +60px',
+      accentColor: '#F97316',
+      cost: 1850,
+      damageMult: 1.9,
+      splashRadiusBonus: 60,
+      rangeMult: 1.18,
+    },
+    {
+      id: 'ARTILLERY_SHRED',
+      towerType: 'ARTILLERY',
+      name: 'Đạn Xuyên Phá Giáp',
+      shortDesc: 'Xuyên 85% Giáp · 40% ST Chuẩn',
+      accentColor: '#FACC15',
+      cost: 1900,
+      damageMult: 1.55,
+      armorPiercePct: 0.85,
+      trueDamagePct: 0.4,
+    },
+    {
+      id: 'ARTILLERY_GATLING',
+      towerType: 'ARTILLERY',
+      name: 'Liên Thanh Siêu Pháo',
+      shortDesc: '+60% Tốc bắn · +2 Quả Đạn/lượt',
+      accentColor: '#EF4444',
+      cost: 1850,
+      damageMult: 1.32,
+      cooldownMult: 0.62,
+      bonusTargets: 2,
+    },
+    {
+      id: 'ARTILLERY_EMP',
+      towerType: 'ARTILLERY',
+      name: 'Lôi Điện Tê Liệt',
+      shortDesc: 'Bắn Quái Bay · Chậm 52% Diện Rộng',
+      accentColor: '#38BDF8',
+      cost: 1800,
+      damageMult: 1.45,
+      slowPctBonus: 0.52,
+      slowSplashBonus: 100,
+      grantCanHitAir: true,
+      chainBonus: 4,
+    },
+  ],
+  ASSASSIN: [
+    {
+      id: 'ASSASSIN_PHANTOM',
+      towerType: 'ASSASSIN',
+      name: 'Phân Thân Bách Ảnh',
+      shortDesc: '+4 Phi Tiêu · +40% Tốc ra đòn',
+      accentColor: '#FB7185',
+      cost: 1700,
+      damageMult: 1.3,
+      cooldownMult: 0.71,
+      bonusTargets: 4,
+    },
+    {
+      id: 'ASSASSIN_EXECUTION',
+      towerType: 'ASSASSIN',
+      name: 'Ám Sát Đoạt Mệnh',
+      shortDesc: '+25% Chí mạng (x3.5) · Xuyên 65% Giáp',
+      accentColor: '#FACC15',
+      cost: 1800,
+      damageMult: 1.55,
+      critChanceBonus: 0.25,
+      critMultBonus: 1.15,
+      armorPiercePct: 0.65,
+    },
+    {
+      id: 'ASSASSIN_TOXIN',
+      towerType: 'ASSASSIN',
+      name: 'Huyết Độc Vô Hình',
+      shortDesc: 'Độc x1.75 · Chậm 40% · +2 Phi Tiêu',
+      accentColor: '#4ADE80',
+      cost: 1750,
+      damageMult: 1.4,
+      poisonMult: 1.75,
+      poisonSpreadRadius: 50,
+      slowPctBonus: 0.4,
+      bonusTargets: 2,
+    },
+    {
+      id: 'ASSASSIN_TRUE',
+      towerType: 'ASSASSIN',
+      name: 'Vô Ảnh Chân Kinh',
+      shortDesc: '100% Sát Thương Chuẩn · +30% Tầm',
+      accentColor: '#C084FC',
+      cost: 1900,
+      damageMult: 1.48,
+      trueDamagePct: 1.0,
+      rangeMult: 1.3,
+    },
+  ],
+  VALKYRIE: [
+    {
+      id: 'VALKYRIE_SERAPHIM',
+      towerType: 'VALKYRIE',
+      name: 'Tổng Lãnh Thiên Thần',
+      shortDesc: 'Hào quang +26% Tốc · Hồi lính x2 · +30% Tầm',
+      accentColor: '#FEF08A',
+      cost: 1800,
+      damageMult: 1.42,
+      rangeMult: 1.3,
+      auraHasteBonus: 0.26,
+      healSoldierMult: 2.0,
+      bonusTargets: 2,
+    },
+    {
+      id: 'VALKYRIE_JUDGMENT',
+      towerType: 'VALKYRIE',
+      name: 'Thánh Quang Phán Quyết',
+      shortDesc: 'Xuyên 85% Kháng · +3 Giáo · +68% ST',
+      accentColor: '#F59E0B',
+      cost: 1850,
+      damageMult: 1.68,
+      magicPiercePct: 0.85,
+      bonusTargets: 3,
+    },
+    {
+      id: 'VALKYRIE_BLIZZARD',
+      towerType: 'VALKYRIE',
+      name: 'Nữ Hoàng Bão Tuyết',
+      shortDesc: 'Chậm 65% Lan 110px · +2 Giáo Băng',
+      accentColor: '#7DD3FC',
+      cost: 1750,
+      damageMult: 1.45,
+      slowPctBonus: 0.34,
+      slowSplashBonus: 58,
+      bonusTargets: 2,
+    },
+    {
+      id: 'VALKYRIE_DIVINE',
+      towerType: 'VALKYRIE',
+      name: 'Thần Lực Bất Diệt',
+      shortDesc: '+50% Tốc · +32% Chí mạng Phép · +2 Mục tiêu',
+      accentColor: '#E879F9',
+      cost: 1850,
+      damageMult: 1.5,
+      cooldownMult: 0.67,
+      critChanceBonus: 0.32,
+      critMultBonus: 0.9,
+      bonusTargets: 2,
+    },
+  ],
+  KNIGHT_GUARD: [
+    {
+      id: 'KNIGHT_DRAGONFIRE',
+      towerType: 'KNIGHT_GUARD',
+      name: 'Long Viêm Hủy Diệt',
+      shortDesc: 'Thiêu đốt x2 · +2 Thương lửa · +55% ST',
+      accentColor: '#F97316',
+      cost: 1950,
+      damageMult: 1.55,
+      burnMult: 2.0,
+      bonusTargets: 2,
+      soldierDamageMult: 1.45,
+    },
+    {
+      id: 'KNIGHT_IMMORTAL',
+      towerType: 'KNIGHT_GUARD',
+      name: 'Bất Tử Long Vệ',
+      shortDesc: '+2 Kỵ sĩ · Hồi 2.2s · +95% Máu & Giáp 85%',
+      accentColor: '#FACC15',
+      cost: 1900,
+      soldierCountBonus: 2,
+      soldierHpMult: 1.95,
+      soldierArmorBonus: 0.25,
+      soldierRespawnOverride: 2.2,
+    },
+    {
+      id: 'KNIGHT_CHARGE',
+      towerType: 'KNIGHT_GUARD',
+      name: 'Thiết Kỵ Xung Phong',
+      shortDesc: '+80% ST Kỵ sĩ · Chém lan +40px · +30% Tốc',
+      accentColor: '#EF4444',
+      cost: 1950,
+      soldierDamageMult: 1.8,
+      cleaveRadiusBonus: 40,
+      cooldownMult: 0.76,
+      damageMult: 1.35,
+    },
+    {
+      id: 'KNIGHT_VALKYR',
+      towerType: 'KNIGHT_GUARD',
+      name: 'Thần Thương Phá Giáp',
+      shortDesc: '70% Sát thương Chuẩn · Xuyên 80% Giáp',
+      accentColor: '#38BDF8',
+      cost: 2000,
+      damageMult: 1.45,
+      soldierDamageMult: 1.5,
+      trueDamagePct: 0.7,
+      armorPiercePct: 0.8,
+    },
+  ],
+  PYROMANCER: [
+    {
+      id: 'PYRO_SUPERNOVA',
+      towerType: 'PYROMANCER',
+      name: 'Siêu Tân Tinh Bùng Nổ',
+      shortDesc: '+80% ST Nổ · Bán kính +65px · +20% Tầm',
+      accentColor: '#F97316',
+      cost: 2000,
+      damageMult: 1.8,
+      splashRadiusBonus: 65,
+      rangeMult: 1.2,
+    },
+    {
+      id: 'PYRO_INFERNO',
+      towerType: 'PYROMANCER',
+      name: 'Địa Ngục Hỏa Thiêu',
+      shortDesc: 'Đốt cháy x2.2 · Chậm 35% · +2 Cầu lửa',
+      accentColor: '#EF4444',
+      cost: 1950,
+      damageMult: 1.4,
+      burnMult: 2.2,
+      slowPctBonus: 0.35,
+      bonusTargets: 2,
+    },
+    {
+      id: 'PYRO_MELTDOWN',
+      towerType: 'PYROMANCER',
+      name: 'Dung Nham Xuyên Kháng',
+      shortDesc: 'Xuyên 85% Kháng Phép · 40% ST Chuẩn',
+      accentColor: '#FACC15',
+      cost: 2050,
+      damageMult: 1.55,
+      magicPiercePct: 0.85,
+      trueDamagePct: 0.4,
+    },
+    {
+      id: 'PYRO_PHOENIX',
+      towerType: 'PYROMANCER',
+      name: 'Phượng Hoàng Tái Sinh',
+      shortDesc: '+45% Tốc niệm · Hồi lính x2.2 · +2 Mục tiêu',
+      accentColor: '#FB7185',
+      cost: 2000,
+      damageMult: 1.42,
+      cooldownMult: 0.69,
+      healSoldierMult: 2.2,
+      bonusTargets: 2,
+    },
+  ],
+  MECHANIST: [
+    {
+      id: 'MECH_OMEGA',
+      towerType: 'MECHANIST',
+      name: 'Đại Pháo Omega',
+      shortDesc: '+85% ST · Xuyên 95% Giáp · +35% Tầm',
+      accentColor: '#38BDF8',
+      cost: 2150,
+      damageMult: 1.85,
+      armorPiercePct: 0.95,
+      rangeMult: 1.35,
+    },
+    {
+      id: 'MECH_SWARM',
+      towerType: 'MECHANIST',
+      name: 'Mưa Tên Lửa Hextech',
+      shortDesc: '+4 Tên lửa/lượt · Nổ lan +45px · +30% Tốc',
+      accentColor: '#F59E0B',
+      cost: 2100,
+      damageMult: 1.32,
+      bonusTargets: 4,
+      splashRadiusBonus: 45,
+      cooldownMult: 0.77,
+    },
+    {
+      id: 'MECH_ORBITAL',
+      towerType: 'MECHANIST',
+      name: 'Vệ Tinh Chí Mạng',
+      shortDesc: '+30% Chí mạng (x3.5) · +55% ST · Sét lan +3',
+      accentColor: '#67E8F9',
+      cost: 2150,
+      damageMult: 1.55,
+      critChanceBonus: 0.3,
+      critMultBonus: 1.1,
+      chainBonus: 3,
+    },
+    {
+      id: 'MECH_PIERCER',
+      towerType: 'MECHANIST',
+      name: 'Tia Hủy Diệt Chân Không',
+      shortDesc: '85% Sát thương Chuẩn · +40% Tốc bắn',
+      accentColor: '#C084FC',
+      cost: 2200,
+      damageMult: 1.5,
+      trueDamagePct: 0.85,
+      cooldownMult: 0.71,
+    },
+  ],
+  CHRONOMANCER: [
+    {
+      id: 'CHRONO_STASIS',
+      towerType: 'CHRONOMANCER',
+      name: 'Ngưng Đọng Vĩnh Hằng',
+      shortDesc: 'Chậm 78% Lan 130px · +3 Tia Thời Không',
+      accentColor: '#67E8F9',
+      cost: 2250,
+      damageMult: 1.4,
+      slowPctBonus: 0.32,
+      slowSplashBonus: 65,
+      bonusTargets: 3,
+    },
+    {
+      id: 'CHRONO_OBLIVION',
+      towerType: 'CHRONOMANCER',
+      name: 'Chân Lý Hư Vô',
+      shortDesc: '100% ST Chuẩn · +75% Sát thương',
+      accentColor: '#C084FC',
+      cost: 2350,
+      damageMult: 1.75,
+      trueDamagePct: 1.0,
+      bonusTargets: 1,
+    },
+    {
+      id: 'CHRONO_OVERCLOCK',
+      towerType: 'CHRONOMANCER',
+      name: 'Gia Tốc Không Gian',
+      shortDesc: 'Hào quang +28% Tốc đồng đội · +45% Tốc niệm',
+      accentColor: '#FACC15',
+      cost: 2250,
+      damageMult: 1.45,
+      auraHasteBonus: 0.28,
+      cooldownMult: 0.69,
+      rangeMult: 1.25,
+    },
+    {
+      id: 'CHRONO_SINGULARITY',
+      towerType: 'CHRONOMANCER',
+      name: 'Điểm Kỳ Dị Vũ Trụ',
+      shortDesc: 'Nổ Chuẩn 95px · +60% ST · +2 Mục tiêu',
+      accentColor: '#E879F9',
+      cost: 2300,
+      damageMult: 1.6,
+      splashRadiusBonus: 95,
+      trueDamagePct: 0.8,
+      bonusTargets: 2,
+    },
+  ],
+};
+
+export function getMythicPathConfig(
+  type: TdTowerType,
+  pathId: TdMythicPathId | null
+): TdMythicPathConfig | null {
+  if (!pathId) return null;
+  return TD_MYTHIC_PATHS[type].find((p) => p.id === pathId) ?? null;
+}
+
 export function getExtraTowerUpgradeCost(
   type: TdTowerType,
   currentLevel: TdTowerLevel,
-  branch: TdBranchId | null
+  branch: TdBranchId | null,
+  mythicPathId?: TdMythicPathId | null
 ): number | null {
-  if (currentLevel < 4 || currentLevel >= 7) return null;
+  if (currentLevel < 4 || currentLevel >= TD_MAX_TOWER_LEVEL) return null;
   const cfg = TD_TOWERS[type];
   const branchCfg = branch ? cfg.branches.find((b) => b.id === branch) : cfg.branches[0];
   const baseBranchCost = branchCfg?.cost ?? 250;
-  // +3 extra upgrade tiers (Lv 5, 6, 7) at x2 gold cost progression
-  const multByTarget: Record<number, number> = {
-    5: 2.0,
-    6: 3.0,
-    7: 4.5,
-  };
-  return Math.round(baseBranchCost * (multByTarget[currentLevel + 1] ?? 4.5));
+  const nextLv = currentLevel + 1;
+
+  if (nextLv === 11) {
+    const chosen = mythicPathId ? getMythicPathConfig(type, mythicPathId) : TD_MYTHIC_PATHS[type][0];
+    return chosen?.cost ?? 1750;
+  }
+
+  // Smooth escalation across Lv 5..10 and Lv 12..20
+  const post4Step = nextLv - 4; // 1..16
+  if (nextLv <= 10) {
+    return Math.round(baseBranchCost * (1.45 + post4Step * 0.55 + Math.pow(post4Step, 1.55) * 0.14));
+  }
+  const mythicStep = nextLv - 11; // 1..9 for Lv12..20
+  return Math.round(1850 + mythicStep * 480 + Math.pow(mythicStep, 1.65) * 145);
 }
 
 export const TD_ENEMIES: Record<TdEnemyType, TdEnemySpec> = {
@@ -522,31 +1515,40 @@ function makeWave(
 }
 
 function buildWavesForStage(level: number, pathCount: number): TdWaveConfig[] {
-  const totalWaves = Math.max(10, Math.min(16, 9 + Math.floor(level * 0.25)));
-  // Strictly monotonic stage progression: every stage is ~9-12% tankier & faster than the previous one
+  const totalWaves = 100;
+  // Strictly monotonic stage progression across Stages 1 -> 30
   const stageHpScale =
-    Math.pow(1.09, level - 1) * (1 + Math.min(0.25, (level - 1) * 0.025));
-  const stageSpeedMult = Number((1 + (level - 1) * 0.014).toFixed(3));
-  const intervalScale = Math.max(0.75, 1 - (level - 1) * 0.0085);
+    Math.pow(1.072, level - 1) * (1 + Math.min(0.25, (level - 1) * 0.025));
+  const stageSpeedMult = 1 + (level - 1) * 0.012;
+  const intervalScale = Math.max(0.68, 1 - (level - 1) * 0.009);
   const isMilestoneBossStage = level % 5 === 0;
   const waves: TdWaveConfig[] = [];
 
   const getPath = (idx: number) => idx % pathCount;
 
-  // Mid-stage Boss vanguard waves exclusively for milestone Boss stages (5, 10, 15, 20, 25, 30)
-  const bossVanguardWaveA = isMilestoneBossStage
-    ? Math.max(6, Math.min(totalWaves - 3, 5 + Math.floor(level / 6)))
-    : -1;
-  const bossVanguardWaveB =
-    isMilestoneBossStage && level >= 10
-      ? Math.max(bossVanguardWaveA + 2, totalWaves - 2)
-      : -1;
-
   for (let w = 1; w <= totalWaves; w++) {
     const groups: TdWaveGroup[] = [];
-    // Starting from Wave 3 of every stage, monster base HP increases by +50%, plus +10% compounding every wave
+    // +50% base HP from Wave 3 onward; +10%/wave up to Wave 10 then +4.6%/wave through Wave 100
     const wave3Boost = w >= 3 ? 1.5 : 1.0;
-    const waveScale = stageHpScale * wave3Boost * Math.pow(1.1, w - 1);
+    const waveCompounding =
+      Math.pow(1.1, Math.min(w, 10) - 1) * Math.pow(1.046, Math.max(0, w - 10));
+    const waveScale = stageHpScale * wave3Boost * waveCompounding;
+
+    // Monotonic per-wave speed, armor, magicResist, and bounty escalation across 100 waves
+    const waveSpeedMult = Number(
+      (stageSpeedMult * (1 + Math.min(0.4, (w - 1) * 0.004))).toFixed(3)
+    );
+    const waveArmorBonus = Number(
+      Math.min(0.45, (w - 1) * 0.0042 + (level - 1) * 0.0035).toFixed(3)
+    );
+    const waveMagicResistBonus = Number(
+      Math.min(0.42, (w - 1) * 0.0038 + (level - 1) * 0.0032).toFixed(3)
+    );
+    const waveBountyMult = Number(
+      (1 + (w - 1) * 0.038 + (level - 1) * 0.015).toFixed(3)
+    );
+    const waveInterval = Math.max(0.24, (0.54 - Math.min(0.22, w * 0.0022)) * intervalScale);
+
     const altPath = getPath(w);
     const secondPath = getPath(w + 1);
     const thirdPath = getPath(w + 2);
@@ -554,22 +1556,28 @@ function buildWavesForStage(level: number, pathCount: number): TdWaveConfig[] {
     if (w === 1) {
       groups.push({
         enemyType: 'GOBLIN',
-        count: 7 + Math.floor(level / 2),
+        count: 7 + Math.floor(level / 3),
         interval: 0.55 * intervalScale,
         delay: 0,
         pathIndex: 0,
         hpMult: waveScale,
-        speedMult: stageSpeedMult,
+        speedMult: waveSpeedMult,
+        armorBonus: waveArmorBonus,
+        magicResistBonus: waveMagicResistBonus,
+        bountyMult: waveBountyMult,
       });
       if (pathCount >= 2) {
         groups.push({
           enemyType: level >= 4 ? 'SPIDER' : 'GOBLIN',
-          count: 5 + Math.floor(level / 3),
+          count: 5 + Math.floor(level / 4),
           interval: 0.58 * intervalScale,
           delay: 0.45,
           pathIndex: 1,
           hpMult: waveScale,
-          speedMult: stageSpeedMult,
+          speedMult: waveSpeedMult,
+          armorBonus: waveArmorBonus,
+          magicResistBonus: waveMagicResistBonus,
+          bountyMult: waveBountyMult,
         });
       }
       if (pathCount >= 3) {
@@ -580,345 +1588,278 @@ function buildWavesForStage(level: number, pathCount: number): TdWaveConfig[] {
           delay: 0.85,
           pathIndex: 2,
           hpMult: waveScale,
-          speedMult: stageSpeedMult,
+          speedMult: waveSpeedMult,
+          armorBonus: waveArmorBonus,
+          magicResistBonus: waveMagicResistBonus,
+          bountyMult: waveBountyMult,
         });
       }
     } else if (w === totalWaves) {
-      // Final Wave Climax (ALWAYS the strongest wave of the stage!)
-      const finalMult = 1.24 + Math.floor((level - 1) / 5) * 0.04;
+      // Wave 100 Grand Finale Climax (ALWAYS the strongest wave of the stage!)
+      const finalMult = 1.45 + Math.floor((level - 1) / 5) * 0.06;
       const finalBossCount = isMilestoneBossStage
-        ? level >= 25
-          ? 4
-          : level >= 15
-            ? 3
-            : 2
-        : level >= 26
-          ? 3
-          : level >= 16
-            ? 2
-            : level >= 6
-              ? 1
-              : 0;
+        ? 4 + Math.floor(level / 6)
+        : 2 + Math.floor(level / 8);
 
-      if (finalBossCount > 0) {
-        groups.push({
-          enemyType: 'BOSS',
-          count: finalBossCount,
-          interval: finalBossCount >= 3 ? 2.4 : 2.8,
-          delay: 1.5,
-          pathIndex: 0,
-          hpMult: waveScale * (1.28 + level * 0.012),
-          speedMult: stageSpeedMult,
-        });
-      }
+      groups.push({
+        enemyType: 'BOSS',
+        count: finalBossCount,
+        interval: 2.1,
+        delay: 1.2,
+        pathIndex: 0,
+        hpMult: waveScale * (1.42 + level * 0.015),
+        speedMult: waveSpeedMult,
+        armorBonus: waveArmorBonus,
+        magicResistBonus: waveMagicResistBonus,
+        bountyMult: waveBountyMult * 1.4,
+      });
 
       groups.push({
         enemyType: 'MINIBOSS',
-        count: 2 + Math.floor(level / 7),
-        interval: 1.15 * intervalScale,
-        delay: 1.0,
+        count: 4 + Math.floor(level / 5),
+        interval: 0.9 * intervalScale,
+        delay: 0.8,
         pathIndex: secondPath,
-        hpMult: waveScale * (finalMult + 0.04),
-        speedMult: stageSpeedMult,
+        hpMult: waveScale * finalMult,
+        speedMult: waveSpeedMult,
+        armorBonus: waveArmorBonus,
+        magicResistBonus: waveMagicResistBonus,
+        bountyMult: waveBountyMult * 1.25,
       });
 
       groups.push({
         enemyType: 'KNIGHT_DARK',
-        count: 4 + Math.floor(level / 3),
-        interval: 0.85 * intervalScale,
-        delay: 0.5,
+        count: 10 + Math.floor(level / 2.5),
+        interval: 0.55 * intervalScale,
+        delay: 0.4,
         pathIndex: secondPath,
         hpMult: waveScale * finalMult,
-        speedMult: stageSpeedMult,
+        speedMult: waveSpeedMult,
+        armorBonus: waveArmorBonus,
+        magicResistBonus: waveMagicResistBonus,
+        bountyMult: waveBountyMult,
       });
 
       groups.push({
         enemyType: 'ORC',
-        count: 8 + Math.floor(level / 2.5),
-        interval: 0.48 * intervalScale,
+        count: 16 + Math.floor(level / 2),
+        interval: 0.36 * intervalScale,
         delay: 0,
         pathIndex: 0,
         hpMult: waveScale * finalMult,
-        speedMult: stageSpeedMult,
+        speedMult: waveSpeedMult,
+        armorBonus: waveArmorBonus,
+        magicResistBonus: waveMagicResistBonus,
+        bountyMult: waveBountyMult,
       });
 
       groups.push({
         enemyType: 'GOLEM',
-        count: 3 + Math.floor(level / 4),
-        interval: 0.92 * intervalScale,
-        delay: 0.9,
+        count: 8 + Math.floor(level / 3),
+        interval: 0.65 * intervalScale,
+        delay: 0.7,
         pathIndex: altPath,
         hpMult: waveScale * finalMult,
-        speedMult: stageSpeedMult,
+        speedMult: waveSpeedMult,
+        armorBonus: waveArmorBonus,
+        magicResistBonus: waveMagicResistBonus,
+        bountyMult: waveBountyMult,
       });
 
       groups.push({
-        enemyType: level >= 7 ? 'NECRO' : 'SHAMAN',
-        count: 3 + Math.floor(level / 4),
-        interval: 0.9 * intervalScale,
-        delay: 2.0,
+        enemyType: 'NECRO',
+        count: 6 + Math.floor(level / 4),
+        interval: 0.72 * intervalScale,
+        delay: 1.6,
         pathIndex: 0,
         hpMult: waveScale * finalMult,
-        speedMult: stageSpeedMult,
+        speedMult: waveSpeedMult,
+        armorBonus: waveArmorBonus,
+        magicResistBonus: waveMagicResistBonus,
+        bountyMult: waveBountyMult,
       });
 
       groups.push({
-        enemyType: level >= 6 ? 'HARPY' : 'WYVERN',
-        count: 6 + Math.floor(level / 3.5),
-        interval: 0.46 * intervalScale,
-        delay: 2.3,
+        enemyType: 'HARPY',
+        count: 14 + Math.floor(level / 2.5),
+        interval: 0.34 * intervalScale,
+        delay: 1.8,
         pathIndex: secondPath,
         hpMult: waveScale * finalMult,
-        speedMult: stageSpeedMult,
+        speedMult: waveSpeedMult,
+        armorBonus: waveArmorBonus,
+        magicResistBonus: waveMagicResistBonus,
+        bountyMult: waveBountyMult,
       });
 
       if (pathCount >= 3) {
         groups.push({
           enemyType: 'WOLF',
-          count: 10 + Math.floor(level / 4),
-          interval: 0.38 * intervalScale,
-          delay: 1.3,
+          count: 16 + Math.floor(level / 3),
+          interval: 0.28 * intervalScale,
+          delay: 1.1,
           pathIndex: thirdPath,
           hpMult: waveScale * finalMult,
-          speedMult: stageSpeedMult,
+          speedMult: waveSpeedMult,
+          armorBonus: waveArmorBonus,
+          magicResistBonus: waveMagicResistBonus,
+          bountyMult: waveBountyMult,
         });
       }
     } else {
       const swarmRotation: TdEnemyType[] = ['GOBLIN', 'WOLF', 'SPIDER', 'ORC'];
       const leadType = swarmRotation[(w + level) % swarmRotation.length];
 
-      // Milestone Boss Stage Vanguard Bosses (e.g. stages 5, 10, 15, 20, 25, 30)
-      if (w === bossVanguardWaveA) {
+      // Boss Spawns across Waves 1..99:
+      // Milestone stages (5, 10, 15, 20, 25, 30) deploy Bosses every 5 waves; regular stages every 10 waves.
+      const isBossWave = isMilestoneBossStage
+        ? w % 5 === 0
+        : w >= 10 && w % 10 === 0;
+
+      if (isBossWave) {
+        const bossCount = isMilestoneBossStage
+          ? 1 + Math.floor(w / 30) + Math.floor(level / 15)
+          : 1 + Math.floor(w / 45) + Math.floor(level / 18);
         groups.push({
           enemyType: 'BOSS',
-          count: level >= 30 ? 2 : 1,
-          interval: 3.0,
-          delay: 1.4,
-          pathIndex: 0,
-          hpMult: waveScale * (1.1 + level * 0.008),
-          speedMult: stageSpeedMult,
-        });
-      } else if (w === bossVanguardWaveB) {
-        groups.push({
-          enemyType: 'BOSS',
-          count: level >= 20 ? 2 : 1,
-          interval: 2.8,
-          delay: 1.3,
-          pathIndex: secondPath,
-          hpMult: waveScale * (1.15 + level * 0.009),
-          speedMult: stageSpeedMult,
-        });
-      } else if (level >= 21 && w === Math.floor(totalWaves * 0.7)) {
-        // Late-campaign mid-stage Boss pressure on stages 21+
-        groups.push({
-          enemyType: 'BOSS',
-          count: 1,
-          interval: 2.8,
-          delay: 1.5,
-          pathIndex: 0,
-          hpMult: waveScale * (1.12 + level * 0.008),
-          speedMult: stageSpeedMult,
+          count: bossCount,
+          interval: 2.6,
+          delay: 1.2,
+          pathIndex: w % 2 === 0 ? 0 : secondPath,
+          hpMult: waveScale * (1.14 + Math.min(0.32, w * 0.003) + level * 0.006),
+          speedMult: waveSpeedMult,
+          armorBonus: waveArmorBonus,
+          magicResistBonus: waveMagicResistBonus,
+          bountyMult: waveBountyMult * 1.25,
         });
       }
 
+      // Miniboss Champions appear every 5 waves (and frequently in Waves 60+)
+      if (w % 5 === 0 || (w >= 55 && w % 3 === 0)) {
+        const miniCount = 1 + Math.floor(w / 22) + Math.floor(level / 10);
+        groups.push({
+          enemyType: 'MINIBOSS',
+          count: miniCount,
+          interval: 1.05 * intervalScale,
+          delay: 0.9,
+          pathIndex: 0,
+          hpMult: waveScale * (1.06 + Math.min(0.22, w * 0.002)),
+          speedMult: waveSpeedMult,
+          armorBonus: waveArmorBonus,
+          magicResistBonus: waveMagicResistBonus,
+          bountyMult: waveBountyMult * 1.15,
+        });
+      }
+
+      // Lead Infantry Swarm (capped sensibly per group for 60fps clarity)
+      const leadCount = Math.min(22, 7 + Math.floor(w * 0.16) + Math.floor(level / 3));
       groups.push({
         enemyType: leadType,
-        count: 7 + Math.floor(w * 0.85) + Math.floor(level / 2.5),
-        interval: (leadType === 'WOLF' || leadType === 'SPIDER' ? 0.44 : 0.52) * intervalScale,
+        count: leadCount,
+        interval: waveInterval,
         delay: 0,
         pathIndex: altPath,
         hpMult: waveScale,
-        speedMult: stageSpeedMult,
+        speedMult: waveSpeedMult,
+        armorBonus: waveArmorBonus,
+        magicResistBonus: waveMagicResistBonus,
+        bountyMult: waveBountyMult,
       });
 
-      if (pathCount >= 2 && w >= 2) {
+      // Multi-lane Flank Squad
+      if ((pathCount >= 2 && w >= 2) || w >= 12) {
         const flankType = swarmRotation[(w + level + 1) % swarmRotation.length];
+        const flankCount = Math.min(18, 5 + Math.floor(w * 0.13) + Math.floor(level / 4));
         groups.push({
           enemyType: flankType,
-          count: 5 + Math.floor(w * 0.65) + Math.floor(level / 5),
-          interval: 0.5 * intervalScale,
-          delay: 0.5,
+          count: flankCount,
+          interval: waveInterval * 1.04,
+          delay: 0.45,
           pathIndex: secondPath,
           hpMult: waveScale,
-          speedMult: stageSpeedMult,
+          speedMult: waveSpeedMult,
+          armorBonus: waveArmorBonus,
+          magicResistBonus: waveMagicResistBonus,
+          bountyMult: waveBountyMult,
         });
       }
 
+      // Heavy Armored Vanguard (Golem / Dark Knight)
       if (w >= 2 && (level >= 2 || w >= 4)) {
-        const tankType: TdEnemyType = level >= 7 && w % 2 === 0 ? 'KNIGHT_DARK' : 'GOLEM';
+        const tankType: TdEnemyType =
+          w >= 20 || (level >= 7 && w % 2 === 0) ? 'KNIGHT_DARK' : 'GOLEM';
+        const tankCount = Math.min(12, 1 + Math.floor(w / 10) + Math.floor(level / 5));
         groups.push({
           enemyType: tankType,
-          count: 1 + Math.floor((w + level) / 5),
-          interval: 1.2 * intervalScale,
-          delay: 0.8,
+          count: tankCount,
+          interval: Math.max(0.5, 1.15 * intervalScale),
+          delay: 0.75,
           pathIndex: 0,
-          hpMult: waveScale,
-          speedMult: stageSpeedMult,
+          hpMult: waveScale * (w >= 40 ? 1.08 : 1.0),
+          speedMult: waveSpeedMult,
+          armorBonus: waveArmorBonus,
+          magicResistBonus: waveMagicResistBonus,
+          bountyMult: waveBountyMult,
         });
       }
 
+      // Aerial Squadron (Wyvern / Harpy)
       if (w >= 3 && (level >= 2 || w >= 5)) {
-        const airType: TdEnemyType = level >= 5 && w % 2 === 1 ? 'HARPY' : 'WYVERN';
+        const airType: TdEnemyType =
+          w >= 24 || (level >= 5 && w % 2 === 1) ? 'HARPY' : 'WYVERN';
+        const airCount = Math.min(16, 3 + Math.floor(w / 8) + Math.floor(level / 5));
         groups.push({
           enemyType: airType,
-          count: 3 + Math.floor((w + level) / 4.5),
-          interval: 0.6 * intervalScale,
-          delay: 1.15,
+          count: airCount,
+          interval: Math.max(0.32, 0.58 * intervalScale),
+          delay: 1.05,
           pathIndex: secondPath,
           hpMult: waveScale,
-          speedMult: stageSpeedMult,
+          speedMult: waveSpeedMult,
+          armorBonus: waveArmorBonus,
+          magicResistBonus: waveMagicResistBonus,
+          bountyMult: waveBountyMult,
         });
       }
 
+      // Support Healers & Cleansers (Shaman / Necro)
       if (w >= 5 || (w >= 4 && level >= 3)) {
-        const supportType: TdEnemyType = level >= 6 && w % 2 === 0 ? 'NECRO' : 'SHAMAN';
+        const supportType: TdEnemyType =
+          w >= 18 || (level >= 6 && w % 2 === 0) ? 'NECRO' : 'SHAMAN';
+        const supportCount = Math.min(9, 1 + Math.floor(w / 14) + Math.floor(level / 7));
         groups.push({
           enemyType: supportType,
-          count: 1 + Math.floor(w / 4) + Math.floor(level / 7),
-          interval: 1.3 * intervalScale,
-          delay: 1.45,
+          count: supportCount,
+          interval: Math.max(0.65, 1.2 * intervalScale),
+          delay: 1.3,
           pathIndex: altPath,
           hpMult: waveScale,
-          speedMult: stageSpeedMult,
+          speedMult: waveSpeedMult,
+          armorBonus: waveArmorBonus,
+          magicResistBonus: waveMagicResistBonus,
+          bountyMult: waveBountyMult,
         });
       }
 
-      // Waves 8-9-10 Heavy Elite Escalation (building up toward the Final Wave climax!)
-      if (w === 8) {
+      // Extra Third-Lane Assault on Waves 25+
+      if (w >= 25 && (pathCount >= 3 || w % 2 === 0)) {
+        const bonusType: TdEnemyType = w % 3 === 0 ? 'KNIGHT_DARK' : 'ORC';
         groups.push({
-          enemyType: 'KNIGHT_DARK',
-          count: 2 + Math.floor(level / 5),
-          interval: 1.0 * intervalScale,
-          delay: 1.05,
-          pathIndex: 0,
-          hpMult: waveScale * 1.06,
-          speedMult: stageSpeedMult,
-        });
-        groups.push({
-          enemyType: 'ORC',
-          count: 6 + Math.floor(level / 3.5),
-          interval: 0.48 * intervalScale,
+          enemyType: bonusType,
+          count: Math.min(14, 3 + Math.floor((w - 20) / 8) + Math.floor(level / 6)),
+          interval: Math.max(0.36, 0.65 * intervalScale),
           delay: 1.5,
-          pathIndex: secondPath,
-          hpMult: waveScale * 1.05,
-          speedMult: stageSpeedMult,
-        });
-        groups.push({
-          enemyType: 'WYVERN',
-          count: 3 + Math.floor(level / 5),
-          interval: 0.56 * intervalScale,
-          delay: 1.9,
-          pathIndex: altPath,
-          hpMult: waveScale * 1.05,
-          speedMult: stageSpeedMult,
-        });
-      } else if (w === 9) {
-        groups.push({
-          enemyType: 'MINIBOSS',
-          count: 1 + Math.floor(level / 9),
-          interval: 1.35 * intervalScale,
-          delay: 1.1,
-          pathIndex: 0,
-          hpMult: waveScale * 1.08,
-          speedMult: stageSpeedMult,
-        });
-        groups.push({
-          enemyType: 'KNIGHT_DARK',
-          count: 3 + Math.floor(level / 4.5),
-          interval: 0.92 * intervalScale,
-          delay: 1.45,
-          pathIndex: secondPath,
-          hpMult: waveScale * 1.08,
-          speedMult: stageSpeedMult,
-        });
-        groups.push({
-          enemyType: level >= 5 ? 'NECRO' : 'SHAMAN',
-          count: 2 + Math.floor(level / 7),
-          interval: 1.1 * intervalScale,
-          delay: 1.9,
-          pathIndex: 0,
-          hpMult: waveScale * 1.08,
-          speedMult: stageSpeedMult,
-        });
-        groups.push({
-          enemyType: 'HARPY',
-          count: 4 + Math.floor(level / 4.5),
-          interval: 0.5 * intervalScale,
-          delay: 2.2,
           pathIndex: thirdPath,
           hpMult: waveScale * 1.06,
-          speedMult: stageSpeedMult,
-        });
-      } else if (w === 10 && totalWaves > 10) {
-        groups.push({
-          enemyType: 'MINIBOSS',
-          count: 2 + Math.floor(level / 8),
-          interval: 1.25 * intervalScale,
-          delay: 1.0,
-          pathIndex: 0,
-          hpMult: waveScale * 1.12,
-          speedMult: stageSpeedMult,
-        });
-        groups.push({
-          enemyType: 'KNIGHT_DARK',
-          count: 3 + Math.floor(level / 4),
-          interval: 0.88 * intervalScale,
-          delay: 1.35,
-          pathIndex: secondPath,
-          hpMult: waveScale * 1.1,
-          speedMult: stageSpeedMult,
-        });
-        groups.push({
-          enemyType: 'GOLEM',
-          count: 2 + Math.floor(level / 4.5),
-          interval: 1.0 * intervalScale,
-          delay: 1.65,
-          pathIndex: altPath,
-          hpMult: waveScale * 1.1,
-          speedMult: stageSpeedMult,
-        });
-        groups.push({
-          enemyType: 'NECRO',
-          count: 2 + Math.floor(level / 6),
-          interval: 1.1 * intervalScale,
-          delay: 2.0,
-          pathIndex: 0,
-          hpMult: waveScale * 1.1,
-          speedMult: stageSpeedMult,
-        });
-        groups.push({
-          enemyType: 'HARPY',
-          count: 5 + Math.floor(level / 4),
-          interval: 0.48 * intervalScale,
-          delay: 2.2,
-          pathIndex: secondPath,
-          hpMult: waveScale * 1.08,
-          speedMult: stageSpeedMult,
-        });
-      }
-
-      if (
-        w === Math.floor(totalWaves * 0.65) &&
-        level >= 4 &&
-        w !== 8 &&
-        w !== 9 &&
-        w !== 10 &&
-        w !== bossVanguardWaveA &&
-        w !== bossVanguardWaveB
-      ) {
-        groups.push({
-          enemyType: 'MINIBOSS',
-          count: 1 + Math.floor(level / 15),
-          interval: 1.1 * intervalScale,
-          delay: 1.7,
-          pathIndex: 0,
-          hpMult: waveScale * 0.98,
-          speedMult: stageSpeedMult,
+          speedMult: waveSpeedMult,
+          armorBonus: waveArmorBonus,
+          magicResistBonus: waveMagicResistBonus,
+          bountyMult: waveBountyMult,
         });
       }
     }
 
-    waves.push(makeWave(w, groups, 16 + w * 3 + level * 2));
+    waves.push(makeWave(w, groups, 18 + Math.min(180, w * 3) + level * 2));
   }
 
   return waves;
@@ -2385,7 +3326,7 @@ export function getTotalStarsEarnedInTd(levels: Record<number, { stars?: number 
 export function getSpentUpgradeStars(upgrades: TdUpgrades): number {
   let spent = 0;
   for (const track of TD_UPGRADE_TRACKS) {
-    const lv = Math.max(0, Math.min(3, upgrades[track.id] ?? 0));
+    const lv = Math.max(0, Math.min(TD_UPGRADE_MAX_TIER, upgrades[track.id] ?? 0));
     for (let i = 0; i < lv; i++) {
       spent += track.tierCosts[i];
     }

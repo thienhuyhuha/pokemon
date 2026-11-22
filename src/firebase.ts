@@ -25,7 +25,11 @@ import {
 import firebaseConfig from '../firebase-applet-config.json';
 import { DIAMOND_MAX_LEVEL } from './data/diamondLevels';
 import { MAX_LEVEL } from './data/levels';
-import { DEFAULT_TD_UPGRADES, TD_MAX_LEVEL } from './data/tdLevels';
+import {
+  DEFAULT_TD_UPGRADES,
+  TD_MAX_LEVEL,
+  TD_UPGRADE_MAX_TIER,
+} from './data/tdLevels';
 import { DiamondLevelProgress, DiamondSaveData } from './types/diamond';
 import { LevelProgress, SaveData } from './types/game';
 import { TdLevelProgress, TdSaveData, TdUpgrades } from './types/towerDefense';
@@ -240,12 +244,19 @@ export function normalizeDiamondLevelsFromCloud(
 
 export function sanitizeTdUpgrades(raw: unknown): TdUpgrades {
   const src = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const clampTier = (val: unknown, fallback: number) =>
+    clampInt(Number(val ?? fallback), 0, TD_UPGRADE_MAX_TIER);
   return {
-    archery: clampInt(Number(src.archery ?? DEFAULT_TD_UPGRADES.archery), 0, 3),
-    magic: clampInt(Number(src.magic ?? DEFAULT_TD_UPGRADES.magic), 0, 3),
-    barracks: clampInt(Number(src.barracks ?? DEFAULT_TD_UPGRADES.barracks), 0, 3),
-    economy: clampInt(Number(src.economy ?? DEFAULT_TD_UPGRADES.economy), 0, 3),
-    spells: clampInt(Number(src.spells ?? DEFAULT_TD_UPGRADES.spells), 0, 3),
+    archery: clampTier(src.archery, DEFAULT_TD_UPGRADES.archery),
+    magic: clampTier(src.magic, DEFAULT_TD_UPGRADES.magic),
+    barracks: clampTier(src.barracks, DEFAULT_TD_UPGRADES.barracks),
+    artillery: clampTier(src.artillery, DEFAULT_TD_UPGRADES.artillery),
+    support: clampTier(src.support, DEFAULT_TD_UPGRADES.support),
+    economy: clampTier(src.economy, DEFAULT_TD_UPGRADES.economy),
+    spells: clampTier(src.spells, DEFAULT_TD_UPGRADES.spells),
+    citadel: clampTier(src.citadel, DEFAULT_TD_UPGRADES.citadel),
+    lethality: clampTier(src.lethality, DEFAULT_TD_UPGRADES.lethality),
+    mastery: clampTier(src.mastery, DEFAULT_TD_UPGRADES.mastery),
   };
 }
 

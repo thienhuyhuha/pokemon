@@ -4,6 +4,7 @@ import tdHeroesSheet2 from '../assets/images/td_anime_heroes_2_1795252934353.jpg
 import tdGuardsSheet from '../assets/images/td_anime_guards_1795252933143.jpg';
 import tdMonstersSheet1 from '../assets/images/td_anime_monsters_1_1795252933896.jpg';
 import tdMonstersSheet2 from '../assets/images/td_anime_monsters_2_1795252934093.jpg';
+import tdUnlockHeroesSheet from '../assets/images/td_anime_unlock_heroes_1795383985515.jpg';
 import { TdBranchId, TdEnemyType, TdTowerLevel, TdTowerType } from '../types/towerDefense';
 
 export type TdAnimeSpriteKey =
@@ -25,6 +26,10 @@ export type TdAnimeSpriteKey =
   | 'VALKYRIE_BASE'
   | 'VALKYRIE_SERAPH'
   | 'VALKYRIE_FROST'
+  | 'KNIGHT_GUARD_BASE'
+  | 'PYROMANCER_BASE'
+  | 'MECHANIST_BASE'
+  | 'CHRONOMANCER_BASE'
   | 'GUARD_KNIGHT'
   | 'GUARD_PALADIN'
   | 'GUARD_BARB'
@@ -66,6 +71,15 @@ const grid2 = (sheet: string, row: number, col: number): CropDef => ({
   h: 0.5,
 });
 
+// Inset 2x2 crop avoids center thin grid lines so white flood-fill stays crystal-clean
+const grid2Inset = (sheet: string, row: number, col: number): CropDef => ({
+  sheet,
+  x: col === 0 ? 0.018 : 0.518,
+  y: row === 0 ? 0.018 : 0.518,
+  w: 0.464,
+  h: 0.464,
+});
+
 const SPRITE_CROPS: Record<TdAnimeSpriteKey, CropDef> = {
   // Hero Towers Sheet 1
   ARCHER_BASE: grid3(tdHeroesSheet1, 0, 0),
@@ -88,6 +102,12 @@ const SPRITE_CROPS: Record<TdAnimeSpriteKey, CropDef> = {
   VALKYRIE_BASE: grid3(tdHeroesSheet2, 2, 0),
   VALKYRIE_SERAPH: grid3(tdHeroesSheet2, 2, 1),
   VALKYRIE_FROST: grid3(tdHeroesSheet2, 2, 2),
+
+  // Unlockable Hero Towers Sheet (Stages 10, 15, 20, 25)
+  KNIGHT_GUARD_BASE: grid2Inset(tdUnlockHeroesSheet, 0, 0),
+  PYROMANCER_BASE: grid2Inset(tdUnlockHeroesSheet, 0, 1),
+  MECHANIST_BASE: grid2Inset(tdUnlockHeroesSheet, 1, 0),
+  CHRONOMANCER_BASE: grid2Inset(tdUnlockHeroesSheet, 1, 1),
 
   // Barracks & Reinforcement Guards
   GUARD_KNIGHT: grid2(tdGuardsSheet, 0, 0),
@@ -176,7 +196,6 @@ function extractTransparentCell(
     }
   };
 
-  // Seed flood-fill from all 4 edges of the cell
   for (let x = 0; x < sw; x++) {
     trySeed(x);
     trySeed((sh - 1) * sw + x);
@@ -186,7 +205,6 @@ function extractTransparentCell(
     trySeed(y * sw + (sw - 1));
   }
 
-  // BFS exterior white removal
   while (head < tail) {
     const cur = queue[head++];
     const cx = cur % sw;
@@ -198,8 +216,6 @@ function extractTransparentCell(
     if (cy < sh - 1) trySeed(cur + sw);
   }
 
-  // Also clear large enclosed pure-#FFFFFF gaps (e.g. inside bow loops / under Torii arch)
-  // while leaving tinted white armor & small eye highlights untouched.
   const pocketVisited = new Uint8Array(total);
   const pocketQueue = new Int32Array(total);
   for (let i = 0; i < total; i++) {
@@ -240,7 +256,6 @@ function extractTransparentCell(
     }
   }
 
-  // Apply transparency and 1px edge anti-alias defringing
   for (let i = 0; i < total; i++) {
     const off = i * 4;
     if (transparent[i]) {
@@ -271,7 +286,6 @@ function extractTransparentCell(
 
   ctx.putImageData(imgData, 0, 0);
 
-  // Compute tight non-transparent bounding box
   let minX = sw;
   let minY = sh;
   let maxX = -1;
@@ -332,6 +346,7 @@ function loadAndSliceSheet(sheetUrl: string) {
 export const TD_ANIME_SHEET_URLS = [
   tdHeroesSheet1,
   tdHeroesSheet2,
+  tdUnlockHeroesSheet,
   tdGuardsSheet,
   tdMonstersSheet1,
   tdMonstersSheet2,
@@ -373,6 +388,11 @@ export function resolveHeroAnimeKey(
     if (branch === 'SHADOW_BLADE' || level >= 3) return 'ASSASSIN_SHADOW';
     return 'ASSASSIN_BASE';
   }
+  if (type === 'KNIGHT_GUARD') return 'KNIGHT_GUARD_BASE';
+  if (type === 'PYROMANCER') return 'PYROMANCER_BASE';
+  if (type === 'MECHANIST') return 'MECHANIST_BASE';
+  if (type === 'CHRONOMANCER') return 'CHRONOMANCER_BASE';
+
   // VALKYRIE
   if (branch === 'FROST_VALKYRIE') return 'VALKYRIE_FROST';
   if (branch === 'SOLAR_SERAPH' || level >= 3) return 'VALKYRIE_SERAPH';
@@ -381,9 +401,15 @@ export function resolveHeroAnimeKey(
 
 export function resolveGuardAnimeKey(
   isReinforcement: boolean,
-  branch: TdBranchId | null
+  branch: TdBranchId | null,
+  towerType?: TdTowerType
 ): TdAnimeSpriteKey {
   if (isReinforcement) return 'GUARD_CHAMPION';
+  if (towerType === 'KNIGHT_GUARD') {
+    if (branch === 'AEGIS_WARDEN') return 'GUARD_PALADIN';
+    if (branch === 'DRAGON_LANCER') return 'GUARD_CHAMPION';
+    return 'GUARD_BARB';
+  }
   if (branch === 'PALADIN') return 'GUARD_PALADIN';
   if (branch === 'BARBARIAN') return 'GUARD_BARB';
   return 'GUARD_KNIGHT';

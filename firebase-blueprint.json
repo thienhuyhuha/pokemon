@@ -141,7 +141,7 @@
         },
         "upgrades": {
           "type": "object",
-          "description": "Map of 5 upgrade track levels (archery, magic, barracks, economy, spells), each integer 0..3."
+          "description": "Map of 10 upgrade track levels (archery, magic, barracks, artillery, support, economy, spells, citadel, lethality, mastery), each integer 0..5."
         },
         "createdAt": {
           "type": "string",

@@ -5,6 +5,7 @@ import {
   getSpentUpgradeStars,
   getTotalStarsEarnedInTd,
   TD_MAX_LEVEL,
+  TD_UPGRADE_MAX_TIER,
 } from '../data/tdLevels';
 import { DiamondLevelProgress, DiamondSaveData } from '../types/diamond';
 import { LevelProgress, SaveData } from '../types/game';
@@ -391,13 +392,19 @@ export function mergeDiamondSaveData(
 
 function sanitizeTdUpgradesLocal(raw: unknown): TdUpgrades {
   const src = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  const clamp = (v: unknown) => Math.max(0, Math.min(3, Math.floor(Number(v ?? 0) || 0)));
+  const clamp = (v: unknown) =>
+    Math.max(0, Math.min(TD_UPGRADE_MAX_TIER, Math.floor(Number(v ?? 0) || 0)));
   return {
     archery: clamp(src.archery),
     magic: clamp(src.magic),
     barracks: clamp(src.barracks),
+    artillery: clamp(src.artillery),
+    support: clamp(src.support),
     economy: clamp(src.economy),
     spells: clamp(src.spells),
+    citadel: clamp(src.citadel),
+    lethality: clamp(src.lethality),
+    mastery: clamp(src.mastery),
   };
 }
 

@@ -1,5 +1,13 @@
 import React from 'react';
-import { TdBranchId, TdEnemyType, TdMapLandmark, TdTowerLevel, TdTowerType } from '../types/towerDefense';
+import { getMythicPathConfig } from '../data/tdLevels';
+import {
+  TdBranchId,
+  TdEnemyType,
+  TdMapLandmark,
+  TdMythicPathId,
+  TdTowerLevel,
+  TdTowerType,
+} from '../types/towerDefense';
 import {
   resolveEnemyAnimeKey,
   resolveGuardAnimeKey,
@@ -175,6 +183,7 @@ interface TdTowerSpriteProps {
   type: TdTowerType;
   level: TdTowerLevel;
   branch: TdBranchId | null;
+  mythicPath?: TdMythicPathId | null;
   facingAngle?: number;
   recoil?: number;
   windup?: number;
@@ -228,6 +237,22 @@ function renderHeroPedestal(
   } else if (type === 'VALKYRIE') {
     bodyFill = branch === 'FROST_VALKYRIE' ? 'url(#tdPedestalCobaltGrad)' : 'url(#tdPedestalCrimsonGrad)';
     trimColor = branch === 'FROST_VALKYRIE' ? '#7DD3FC' : '#FEF08A';
+    auraColor = trimColor;
+  } else if (type === 'KNIGHT_GUARD') {
+    bodyFill = branch === 'AEGIS_WARDEN' ? 'url(#tdPedestalCobaltGrad)' : 'url(#tdPedestalCrimsonGrad)';
+    trimColor = branch === 'AEGIS_WARDEN' ? '#38BDF8' : '#FB923C';
+    auraColor = trimColor;
+  } else if (type === 'PYROMANCER') {
+    bodyFill = 'url(#tdPedestalCrimsonGrad)';
+    trimColor = branch === 'PHOENIX_SAGE' ? '#FACC15' : '#F97316';
+    auraColor = trimColor;
+  } else if (type === 'MECHANIST') {
+    bodyFill = 'url(#tdPedestalStoneGrad)';
+    trimColor = branch === 'ROCKET_BATTERY' ? '#FACC15' : '#38BDF8';
+    auraColor = trimColor;
+  } else if (type === 'CHRONOMANCER') {
+    bodyFill = 'url(#tdPedestalObsidianGrad)';
+    trimColor = branch === 'VOID_SOVEREIGN' ? '#F43F5E' : '#C084FC';
     auraColor = trimColor;
   }
 
@@ -300,12 +325,12 @@ function renderHeroPedestal(
           {/* Radiant Ground Aura */}
           <ellipse cx="0" cy="9.5" rx="22.5" ry="7.4" fill="none" stroke={auraColor} strokeWidth="1.5" strokeDasharray="5 3" className="td-anim-glow" />
           {/* Twin Royal Standards or Crystal Spires */}
-          {type === 'MAGE' || type === 'VALKYRIE' ? (
+          {type === 'MAGE' || type === 'VALKYRIE' || type === 'PYROMANCER' || type === 'CHRONOMANCER' ? (
             <>
               <polygon points="-21,-5 -17.5,-14 -14,-5 -17.5,-2" fill={auraColor} stroke="#FFFFFF" strokeWidth="0.9" className="td-anim-orb" />
               <polygon points="14,-5 17.5,-14 21,-5 17.5,-2" fill={auraColor} stroke="#FFFFFF" strokeWidth="0.9" className="td-anim-orb" />
             </>
-          ) : type === 'ARTILLERY' ? (
+          ) : type === 'ARTILLERY' || type === 'MECHANIST' ? (
             <>
               <path d="M-22,6 L-24,-3 L-18,-3 Z" fill="url(#tdBronzeGrad)" stroke="#0F172A" strokeWidth="1" />
               <path d="M22,6 L24,-3 L18,-3 Z" fill="url(#tdBronzeGrad)" stroke="#0F172A" strokeWidth="1" />
@@ -895,8 +920,9 @@ function renderValkyrieHero(opts: {
 }
 
 export const TdTowerSprite: React.FC<TdTowerSpriteProps> = React.memo(
-  ({ type, level, branch, facingAngle = 0, recoil = 0, windup = 0 }) => {
+  ({ type, level, branch, mythicPath = null, facingAngle = 0, recoil = 0, windup = 0 }) => {
     const animeSrc = useTdAnimeSprite(resolveHeroAnimeKey(type, level, branch));
+    const mythicCfg = getMythicPathConfig(type, mythicPath);
     const k = Math.min(1, Math.max(0, recoil / 0.28));
     const w = Math.min(1, Math.max(0, windup));
     const firing = k > 0.02;
@@ -911,7 +937,7 @@ export const TdTowerSprite: React.FC<TdTowerSpriteProps> = React.memo(
     const scaleBoost = 1 + swing * 0.06;
 
     if (animeSrc) {
-      const auraColor =
+      const baseAuraColor =
         type === 'ARCHER'
           ? branch === 'SNIPER_CRIT'
             ? '#FACC15'
@@ -934,26 +960,61 @@ export const TdTowerSprite: React.FC<TdTowerSpriteProps> = React.memo(
                   ? branch === 'VENOM_FANG'
                     ? '#4ADE80'
                     : '#F43F5E'
-                  : branch === 'FROST_VALKYRIE'
-                    ? '#7DD3FC'
-                    : '#FEF08A';
+                  : type === 'VALKYRIE'
+                    ? branch === 'FROST_VALKYRIE'
+                      ? '#7DD3FC'
+                      : '#FEF08A'
+                    : type === 'KNIGHT_GUARD'
+                      ? branch === 'AEGIS_WARDEN'
+                        ? '#38BDF8'
+                        : '#FB923C'
+                      : type === 'PYROMANCER'
+                        ? branch === 'PHOENIX_SAGE'
+                          ? '#FACC15'
+                          : '#F97316'
+                        : type === 'MECHANIST'
+                          ? branch === 'ROCKET_BATTERY'
+                            ? '#FACC15'
+                            : '#38BDF8'
+                          : branch === 'VOID_SOVEREIGN'
+                            ? '#F43F5E'
+                            : '#C084FC';
+      const auraColor = mythicCfg?.accentColor ?? baseAuraColor;
 
       const sizeW =
-        level >= 7 ? 70 : level === 6 ? 68 : level === 5 ? 66 : level === 4 ? 64 : level === 3 ? 60 : level === 2 ? 56 : 52;
+        level >= 20
+          ? 77
+          : level >= 15
+            ? 74
+            : level >= 11
+              ? 72
+              : level >= 7
+                ? 70
+                : level === 6
+                  ? 68
+                  : level === 5
+                    ? 66
+                    : level === 4
+                      ? 64
+                      : level === 3
+                        ? 60
+                        : level === 2
+                          ? 56
+                          : 52;
       const sizeH = sizeW;
 
       // 2-Stage Spring Kinematics: Anticipation pull-back (windup) -> Release snap / recoil (firing)
       const shiftX = isWinding
         ? -aimRight * w * 3.8
         : firing
-          ? type === 'ARTILLERY'
+          ? type === 'ARTILLERY' || type === 'MECHANIST'
             ? -aimRight * kick * 4.4
             : aimRight * swing * 4.5
           : 0;
       const shiftY = isWinding
         ? type === 'ASSASSIN'
           ? w * 2.4
-          : type === 'VALKYRIE' || type === 'MAGE'
+          : type === 'VALKYRIE' || type === 'MAGE' || type === 'PYROMANCER' || type === 'CHRONOMANCER'
             ? -w * 3.2
             : w * 0.8
         : firing
@@ -962,7 +1023,7 @@ export const TdTowerSprite: React.FC<TdTowerSpriteProps> = React.memo(
       const leanDeg = isWinding
         ? -aimRight * w * 8.5
         : firing
-          ? type === 'ARTILLERY'
+          ? type === 'ARTILLERY' || type === 'MECHANIST'
             ? -aimRight * kick * 6.5
             : aimRight * swing * 9.5
           : 0;
@@ -1003,39 +1064,64 @@ export const TdTowerSprite: React.FC<TdTowerSpriteProps> = React.memo(
             />
           )}
 
-          {/* Mythic Ascension Aura (Lv 5, 6, 7) */}
+          {/* Mythic & Paragon Ascension Aura (Lv 5..20) */}
           {level >= 5 && (
             <g className="pointer-events-none">
               <ellipse
                 cx="0"
                 cy="12.5"
-                rx={level >= 7 ? 29 : 27}
-                ry={level >= 7 ? 10 : 9.2}
+                rx={level >= 15 ? 31 : level >= 11 ? 29.5 : level >= 7 ? 28 : 26.5}
+                ry={level >= 15 ? 11 : level >= 11 ? 10.3 : level >= 7 ? 9.8 : 9}
                 fill="none"
-                stroke={level >= 7 ? '#38BDF8' : '#FACC15'}
-                strokeWidth="1.4"
-                strokeDasharray="3 4"
-                opacity="0.85"
+                stroke={level >= 11 ? auraColor : level >= 7 ? '#38BDF8' : '#FACC15'}
+                strokeWidth={level >= 15 ? '2' : '1.4'}
+                strokeDasharray={level >= 11 ? '5 3' : '3 4'}
+                opacity="0.9"
               />
+              {level >= 11 && (
+                <ellipse
+                  cx="0"
+                  cy="12.5"
+                  rx={level >= 20 ? 35 : 33}
+                  ry={level >= 20 ? 12.2 : 11.4}
+                  fill="none"
+                  stroke={level >= 20 ? '#FEF08A' : '#E879F9'}
+                  strokeWidth={level >= 20 ? '2' : '1.2'}
+                  strokeDasharray="2 5"
+                  opacity="0.85"
+                />
+              )}
               <polygon
                 points="-22,-18 -20,-14 -16,-12 -20,-10 -22,-6 -24,-10 -28,-12 -24,-14"
-                fill={level >= 7 ? '#FEF08A' : '#E879F9'}
+                fill={level >= 11 ? auraColor : level >= 7 ? '#FEF08A' : '#E879F9'}
                 className="td-anim-orb"
               />
               {level >= 6 && (
                 <polygon
                   points="22,-20 24,-16 28,-14 24,-12 22,-8 20,-12 16,-14 20,-16"
-                  fill="#38BDF8"
+                  fill={level >= 11 ? auraColor : '#38BDF8'}
                   className="td-anim-orb"
                 />
               )}
               {level >= 7 && (
                 <polygon
                   points="0,-46 2.5,-41 7.5,-38.5 2.5,-36 0,-31 -2.5,-36 -7.5,-38.5 -2.5,-41"
-                  fill="#FEF08A"
+                  fill={level >= 20 ? '#FEF08A' : level >= 11 ? auraColor : '#FEF08A'}
                   stroke="#0F172A"
                   strokeWidth="0.7"
                   className="td-anim-glow"
+                />
+              )}
+              {level >= 15 && (
+                <circle
+                  cx="0"
+                  cy="-22"
+                  r={level >= 20 ? 27 : 24}
+                  fill="none"
+                  stroke={auraColor}
+                  strokeWidth={level >= 20 ? '1.6' : '1.1'}
+                  strokeDasharray="4 6"
+                  opacity="0.55"
                 />
               )}
             </g>
@@ -1238,20 +1324,85 @@ export const TdTowerSprite: React.FC<TdTowerSpriteProps> = React.memo(
                 </g>
               )}
 
-              {/* VALKYRIE: Raised Celestial Spear Charge -> Radiant Spear-Thrust Wave */}
-              {type === 'VALKYRIE' && (
+              {/* VALKYRIE / KNIGHT_GUARD: Raised Lance/Spear Charge -> Thrust Wave */}
+              {(type === 'VALKYRIE' || type === 'KNIGHT_GUARD') && (
                 <g>
                   {isWinding ? (
                     <g transform={`translate(${6 - w * 6}, ${-3 - w * 4}) rotate(${-18 * w})`} opacity={0.5 + w * 0.5}>
-                      <line x1="-10" y1="0" x2="12" y2="0" stroke="#FACC15" strokeWidth="2.4" strokeLinecap="round" />
+                      <line x1="-10" y1="0" x2="12" y2="0" stroke={type === 'KNIGHT_GUARD' ? '#FB923C' : '#FACC15'} strokeWidth="2.5" strokeLinecap="round" />
                       <polygon points="12,-3.5 21,0 12,3.5" fill="#FFFFFF" stroke={auraColor} strokeWidth="1" />
                       <circle cx="15" cy="0" r={2 + w * 3.5} fill={auraColor} opacity="0.55" />
                     </g>
                   ) : (
                     <g transform={`translate(${12 + (1 - k) * 10}, 0)`} opacity={Math.min(1, k * 1.5)}>
-                      <path d="M-8,-5 L16,0 L-8,5 L-3,0 Z" fill={auraColor} opacity="0.75" />
+                      <path d="M-8,-5 L16,0 L-8,5 L-3,0 Z" fill={auraColor} opacity="0.78" />
                       <path d="M-2,-2.5 L19,0 L-2,2.5 Z" fill="#FFFFFF" />
                       <ellipse cx="4" cy="0" rx={2.5 + (1 - k) * 4} ry={7 + (1 - k) * 6} fill="none" stroke={auraColor} strokeWidth="1.8" />
+                    </g>
+                  )}
+                </g>
+              )}
+
+              {/* PYROMANCER / CHRONOMANCER: Spinning Elemental / Cosmic Clockwork Sigil */}
+              {(type === 'PYROMANCER' || type === 'CHRONOMANCER') && (
+                <g transform="translate(15, 0)">
+                  {isWinding ? (
+                    <g transform={`rotate(${w * 200})`} opacity={0.4 + w * 0.6}>
+                      <circle
+                        cx="0"
+                        cy="0"
+                        r={5.5 + w * 9}
+                        fill={auraColor}
+                        fillOpacity="0.18"
+                        stroke={auraColor}
+                        strokeWidth="2"
+                        strokeDasharray={type === 'CHRONOMANCER' ? '3 3' : '6 3'}
+                      />
+                      <polygon
+                        points={`0,${-6 - w * 6} ${5 + w * 5},${3 + w * 3} ${-5 - w * 5},${3 + w * 3}`}
+                        fill="none"
+                        stroke="#FEF08A"
+                        strokeWidth="1.2"
+                      />
+                      <circle cx="0" cy="0" r={2.4 + w * 4} fill="#FFFFFF" stroke={auraColor} strokeWidth="1.5" />
+                    </g>
+                  ) : (
+                    <g opacity={Math.min(1, k * 1.5)}>
+                      <circle
+                        cx={(1 - k) * 6}
+                        cy="0"
+                        r={9 + (1 - k) * 12}
+                        fill="none"
+                        stroke={auraColor}
+                        strokeWidth="2.8"
+                      />
+                      <path d={`M-2,0 L${13 + k * 9},-6 L${8 + k * 4},0 L${13 + k * 9},6 Z`} fill="#FEF08A" />
+                    </g>
+                  )}
+                </g>
+              )}
+
+              {/* MECHANIST: Hextech Railgun Barrel + Plasma Recoil Blast */}
+              {type === 'MECHANIST' && (
+                <g transform={`translate(${firing ? -kick * 7.5 : 0}, 1)`}>
+                  <path
+                    d="M2,-3.8 L18,-4.5 L22,-2.8 L22,2.8 L18,4.5 L2,3.8 Z"
+                    fill="#1E293B"
+                    stroke="#0F172A"
+                    strokeWidth="1.3"
+                  />
+                  <line x1="7" y1="-3.5" x2="7" y2="3.5" stroke={auraColor} strokeWidth="1.8" />
+                  <line x1="13" y1="-3.5" x2="13" y2="3.5" stroke={auraColor} strokeWidth="1.8" />
+                  {isWinding && (
+                    <circle cx="22.5" cy="0" r={2 + w * 3.2} fill={auraColor} opacity={0.45 + w * 0.55} />
+                  )}
+                  {firing && (
+                    <g opacity={Math.min(1, k * 1.45)}>
+                      <polygon
+                        points={`22,0 ${36 + k * 8},-7 ${28 + k * 4},0 ${36 + k * 8},7`}
+                        fill={auraColor}
+                      />
+                      <circle cx="24" cy="0" r={5.2 * k + 2} fill="#FFFFFF" />
                     </g>
                   )}
                 </g>
@@ -1835,6 +1986,99 @@ export const TdTowerSprite: React.FC<TdTowerSpriteProps> = React.memo(
       );
     }
 
+    if (type === 'KNIGHT_GUARD') {
+      const isAegis = branch === 'AEGIS_WARDEN';
+      const armor = isAegis ? '#0284C7' : '#B91C1C';
+      const cape = isAegis ? '#1E3A8A' : '#450A0A';
+      const crest = isAegis ? '#7DD3FC' : '#FACC15';
+      return (
+        <g transform={`scale(${scaleBoost})`}>
+          {renderHeroPedestal(type, level, branch)}
+          <circle cx="0" cy="1" r="16" fill={crest} opacity="0.16" className="td-anim-glow" />
+          {renderBarracksCommander({
+            x: 0,
+            y: -2,
+            scale: 1.08,
+            armor,
+            cape,
+            crest,
+            isPaladin: !isAegis,
+            isBarb: false,
+            hasBanner: true,
+          })}
+        </g>
+      );
+    }
+
+    if (type === 'PYROMANCER') {
+      const isPhoenix = branch === 'PHOENIX_SAGE';
+      return (
+        <g transform={`scale(${scaleBoost})`}>
+          {renderHeroPedestal(type, level, branch)}
+          <circle cx="0" cy="1" r="16" fill={isPhoenix ? '#FACC15' : '#F97316'} opacity="0.2" className="td-anim-glow" />
+          {renderMageHero({
+            x: 0,
+            y: -2,
+            scale: 1.08,
+            robe: '#7C2D12',
+            robeTrim: isPhoenix ? '#FEF08A' : '#FB923C',
+            hat: '#DC2626',
+            crystal: isPhoenix ? '#FACC15' : '#F97316',
+            aimRight,
+            firing,
+            hasCrown: level >= 4,
+          })}
+        </g>
+      );
+    }
+
+    if (type === 'MECHANIST') {
+      const isRocket = branch === 'ROCKET_BATTERY';
+      return (
+        <g transform={`scale(${scaleBoost})`}>
+          {renderHeroPedestal(type, level, branch)}
+          {renderArtilleryHero({
+            x: 0,
+            y: -2,
+            scale: 1.06,
+            armor: '#0F766E',
+            helm: '#38BDF8',
+            barrel: isRocket ? '#B45309' : '#0284C7',
+            aimRight,
+            deg,
+            firing,
+            isTesla: true,
+          })}
+        </g>
+      );
+    }
+
+    if (type === 'CHRONOMANCER') {
+      const isVoid = branch === 'VOID_SOVEREIGN';
+      return (
+        <g transform={`scale(${scaleBoost})`}>
+          {renderHeroPedestal(type, level, branch)}
+          <g transform="translate(0, 9) scale(1, 0.34)">
+            <g className="td-anim-spin">
+              <circle cx="0" cy="0" r="17" fill="none" stroke={isVoid ? '#F43F5E' : '#C084FC'} strokeWidth="2" strokeDasharray="4 4" />
+            </g>
+          </g>
+          {renderValkyrieHero({
+            x: 0,
+            y: -2,
+            scale: 1.08,
+            armor: isVoid ? '#4C1D95' : '#6D28D9',
+            trim: '#FEF08A',
+            wingGrad: 'url(#tdFrostWingGrad)',
+            spearColor: isVoid ? '#FB7185' : '#E879F9',
+            aimRight,
+            firing,
+            isSeraph: true,
+          })}
+        </g>
+      );
+    }
+
     // VALKYRIE -> Celestial Winged Thánh Nữ
     const isSeraph = branch === 'SOLAR_SERAPH';
     const isFrostValk = branch === 'FROST_VALKYRIE';
@@ -1951,6 +2195,7 @@ interface TdEnemySpriteProps {
   hitFlash: boolean;
   slowed: boolean;
   poisoned: boolean;
+  burned?: boolean;
   facingLeft: boolean;
   isAttacking?: boolean;
   isHealing?: boolean;
@@ -1964,6 +2209,7 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
     hitFlash,
     slowed,
     poisoned,
+    burned = false,
     facingLeft,
     isAttacking = false,
     isHealing = false,
@@ -2093,6 +2339,20 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
               <circle cx="-8" cy="-14" r="2.2" fill="#4ADE80" stroke="#052E16" strokeWidth="0.7" className="td-anim-orb" />
               <circle cx="9" cy="-18" r="1.9" fill="#86EFAC" stroke="#052E16" strokeWidth="0.7" className="td-anim-orb" />
               <circle cx="2" cy="-22" r="1.6" fill="#22C55E" opacity="0.9" className="td-anim-orb" />
+            </g>
+          )}
+          {burned && (
+            <g className="pointer-events-none">
+              <ellipse
+                cx="0"
+                cy="10"
+                rx={type === 'BOSS' ? 22 : 14}
+                ry={type === 'BOSS' ? 7 : 4.5}
+                fill="#F97316"
+                opacity="0.34"
+              />
+              <polygon points="-9,-6 -6,-17 -2,-8" fill="#F97316" opacity="0.88" className="td-anim-torch" />
+              <polygon points="4,-8 8,-19 11,-6" fill="#FEF08A" opacity="0.85" className="td-anim-torch" />
             </g>
           )}
 
@@ -2562,6 +2822,17 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
             strokeWidth="1.8"
           />
         )}
+        {burned && (
+          <circle
+            cx="0"
+            cy="0"
+            r={type === 'BOSS' ? 24 : 14.5}
+            fill="none"
+            stroke="#F97316"
+            strokeWidth="2"
+            strokeDasharray="4 2"
+          />
+        )}
 
         {!hideHud && (
           <>
@@ -2598,6 +2869,7 @@ export const TdSoldierSprite: React.FC<{
   facingLeft: boolean;
   isAttacking?: boolean;
   isMoving?: boolean;
+  towerType?: TdTowerType;
   level?: TdTowerLevel;
   branch?: TdBranchId | null;
 }> = React.memo(
@@ -2607,30 +2879,41 @@ export const TdSoldierSprite: React.FC<{
     facingLeft,
     isAttacking = false,
     isMoving = true,
+    towerType = 'BARRACKS',
     level = 1,
     branch = null,
   }) => {
-    const animeSrc = useTdAnimeSprite(resolveGuardAnimeKey(isReinforcement, branch));
-    const isPaladin = branch === 'PALADIN';
+    const animeSrc = useTdAnimeSprite(resolveGuardAnimeKey(isReinforcement, branch, towerType));
+    const isDragonKnight = towerType === 'KNIGHT_GUARD';
+    const isAegis = branch === 'AEGIS_WARDEN';
+    const isPaladin = branch === 'PALADIN' || branch === 'DRAGON_LANCER';
     const isBarb = branch === 'BARBARIAN';
     const armorFill = isReinforcement
       ? '#D97706'
-      : isPaladin
-        ? '#F8FAFC'
-        : isBarb
-          ? '#B91C1C'
-          : level >= 3
-            ? '#0284C7'
-            : level === 2
-              ? '#1D4ED8'
-              : '#2563EB';
+      : isDragonKnight
+        ? isAegis
+          ? '#0284C7'
+          : '#B91C1C'
+        : isPaladin
+          ? '#F8FAFC'
+          : isBarb
+            ? '#B91C1C'
+            : level >= 3
+              ? '#0284C7'
+              : level === 2
+                ? '#1D4ED8'
+                : '#2563EB';
     const shieldTrim = isReinforcement
       ? '#FEF08A'
-      : isPaladin
-        ? '#FACC15'
-        : isBarb
-          ? '#F87171'
-          : '#93C5FD';
+      : isDragonKnight
+        ? isAegis
+          ? '#7DD3FC'
+          : '#FACC15'
+        : isPaladin
+          ? '#FACC15'
+          : isBarb
+            ? '#F87171'
+            : '#93C5FD';
     const flip = facingLeft ? -1 : 1;
     const animClass = isAttacking ? 'td-anim-lunge' : isMoving ? 'td-anim-walk' : 'td-anim-idle';
 
@@ -2850,11 +3133,12 @@ export const TdTowerPreview: React.FC<{
   type: TdTowerType;
   level?: TdTowerLevel;
   branch?: TdBranchId | null;
+  mythicPath?: TdMythicPathId | null;
   className?: string;
-}> = React.memo(({ type, level = 1, branch = null, className = 'w-11 h-11' }) => (
+}> = React.memo(({ type, level = 1, branch = null, mythicPath = null, className = 'w-11 h-11' }) => (
   <svg viewBox="-32 -50 64 70" className={`${className} overflow-visible select-none pointer-events-none`}>
     <TdSharedArtworkDefs />
-    <TdTowerSprite type={type} level={level} branch={branch} facingAngle={-0.35} />
+    <TdTowerSprite type={type} level={level} branch={branch} mythicPath={mythicPath} facingAngle={-0.35} />
   </svg>
 ));
 

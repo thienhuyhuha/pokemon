@@ -1,6 +1,26 @@
 export type TdBiomeId = 'FOREST' | 'DESERT' | 'VOLCANO' | 'ICE' | 'ABYSS' | 'SKY';
 
-export type TdTowerLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+export type TdTowerLevel =
+  | 1
+  | 2
+  | 3
+  | 4
+  | 5
+  | 6
+  | 7
+  | 8
+  | 9
+  | 10
+  | 11
+  | 12
+  | 13
+  | 14
+  | 15
+  | 16
+  | 17
+  | 18
+  | 19
+  | 20;
 
 export type TdTowerType =
   | 'ARCHER'
@@ -8,7 +28,11 @@ export type TdTowerType =
   | 'MAGE'
   | 'ARTILLERY'
   | 'ASSASSIN'
-  | 'VALKYRIE';
+  | 'VALKYRIE'
+  | 'KNIGHT_GUARD'
+  | 'PYROMANCER'
+  | 'MECHANIST'
+  | 'CHRONOMANCER';
 
 export type TdBranchId =
   | 'RANGER_POISON'
@@ -22,7 +46,67 @@ export type TdBranchId =
   | 'SHADOW_BLADE'
   | 'VENOM_FANG'
   | 'SOLAR_SERAPH'
-  | 'FROST_VALKYRIE';
+  | 'FROST_VALKYRIE'
+  | 'DRAGON_LANCER'
+  | 'AEGIS_WARDEN'
+  | 'HELLFIRE_LORD'
+  | 'PHOENIX_SAGE'
+  | 'RAILGUN_MECH'
+  | 'ROCKET_BATTERY'
+  | 'TIME_ARCHON'
+  | 'VOID_SOVEREIGN';
+
+export type TdMythicPathId =
+  // ARCHER (4 post-Lv10 paths)
+  | 'ARCHER_BARRAGE'
+  | 'ARCHER_PIERCE'
+  | 'ARCHER_PLAGUE'
+  | 'ARCHER_EAGLE'
+  // BARRACKS (4 post-Lv10 paths)
+  | 'BARRACKS_LEGION'
+  | 'BARRACKS_TITAN'
+  | 'BARRACKS_BERSERK'
+  | 'BARRACKS_SUNDER'
+  // MAGE (4 post-Lv10 paths)
+  | 'MAGE_GLACIER'
+  | 'MAGE_VOID'
+  | 'MAGE_TEMPEST'
+  | 'MAGE_METEOR'
+  // ARTILLERY (4 post-Lv10 paths)
+  | 'ARTILLERY_NUKE'
+  | 'ARTILLERY_SHRED'
+  | 'ARTILLERY_GATLING'
+  | 'ARTILLERY_EMP'
+  // ASSASSIN (4 post-Lv10 paths)
+  | 'ASSASSIN_PHANTOM'
+  | 'ASSASSIN_EXECUTION'
+  | 'ASSASSIN_TOXIN'
+  | 'ASSASSIN_TRUE'
+  // VALKYRIE (4 post-Lv10 paths)
+  | 'VALKYRIE_SERAPHIM'
+  | 'VALKYRIE_JUDGMENT'
+  | 'VALKYRIE_BLIZZARD'
+  | 'VALKYRIE_DIVINE'
+  // KNIGHT_GUARD (Stage 10 Unlock)
+  | 'KNIGHT_DRAGONFIRE'
+  | 'KNIGHT_IMMORTAL'
+  | 'KNIGHT_CHARGE'
+  | 'KNIGHT_VALKYR'
+  // PYROMANCER (Stage 15 Unlock)
+  | 'PYRO_SUPERNOVA'
+  | 'PYRO_INFERNO'
+  | 'PYRO_MELTDOWN'
+  | 'PYRO_PHOENIX'
+  // MECHANIST (Stage 20 Unlock)
+  | 'MECH_OMEGA'
+  | 'MECH_SWARM'
+  | 'MECH_ORBITAL'
+  | 'MECH_PIERCER'
+  // CHRONOMANCER (Stage 25 Unlock)
+  | 'CHRONO_STASIS'
+  | 'CHRONO_OBLIVION'
+  | 'CHRONO_OVERCLOCK'
+  | 'CHRONO_SINGULARITY';
 
 export type TdEnemyType =
   | 'GOBLIN'
@@ -42,8 +126,13 @@ export type TdUpgradeTrackId =
   | 'archery'
   | 'magic'
   | 'barracks'
+  | 'artillery'
+  | 'support'
   | 'economy'
-  | 'spells';
+  | 'spells'
+  | 'citadel'
+  | 'lethality'
+  | 'mastery';
 
 export type TdUpgrades = Record<TdUpgradeTrackId, number>;
 
@@ -94,6 +183,9 @@ export interface TdWaveGroup {
   pathIndex: number; // index into levelConfig.paths
   hpMult?: number;
   speedMult?: number;
+  armorBonus?: number;
+  magicResistBonus?: number;
+  bountyMult?: number;
 }
 
 export interface TdWaveConfig {
@@ -143,6 +235,7 @@ export interface TdTowerBranchConfig {
   slowPct?: number;
   slowSplashRadius?: number;
   poisonDps?: number;
+  burnDps?: number;
   critChance?: number;
   chainCount?: number;
   auraHastePct?: number;
@@ -152,6 +245,43 @@ export interface TdTowerBranchConfig {
   soldierArmor?: number;
   soldierDamage?: number;
   cleaveRadius?: number;
+  innateArmorPiercePct?: number;
+  innateMagicPiercePct?: number;
+  innateTrueDamagePct?: number;
+}
+
+export interface TdMythicPathConfig {
+  id: TdMythicPathId;
+  towerType: TdTowerType;
+  name: string;
+  shortDesc: string;
+  accentColor: string;
+  cost: number;
+  damageMult?: number;
+  rangeMult?: number;
+  cooldownMult?: number;
+  bonusTargets?: number;
+  armorPiercePct?: number;
+  magicPiercePct?: number;
+  trueDamagePct?: number;
+  splashRadiusBonus?: number;
+  slowPctBonus?: number;
+  slowSplashBonus?: number;
+  poisonMult?: number;
+  poisonSpreadRadius?: number;
+  burnMult?: number;
+  critChanceBonus?: number;
+  critMultBonus?: number;
+  chainBonus?: number;
+  auraHasteBonus?: number;
+  healSoldierMult?: number;
+  soldierCountBonus?: number;
+  soldierHpMult?: number;
+  soldierArmorBonus?: number;
+  soldierDamageMult?: number;
+  soldierRespawnOverride?: number;
+  cleaveRadiusBonus?: number;
+  grantCanHitAir?: boolean;
 }
 
 export interface TdTowerTierStats {
@@ -164,6 +294,7 @@ export interface TdTowerTierStats {
   slowPct?: number;
   slowSplashRadius?: number;
   poisonDps?: number;
+  burnDps?: number;
   critChance?: number;
   auraHastePct?: number;
   healSoldierAmt?: number;
@@ -172,6 +303,9 @@ export interface TdTowerTierStats {
   soldierArmor?: number;
   soldierDamage?: number;
   cleaveRadius?: number;
+  innateArmorPiercePct?: number;
+  innateMagicPiercePct?: number;
+  innateTrueDamagePct?: number;
 }
 
 export interface TdTowerConfig {
@@ -180,6 +314,7 @@ export interface TdTowerConfig {
   roleLabel: string;
   damageKind: 'PHYSICAL' | 'MAGIC' | 'MELEE' | 'SPLASH';
   canHitAir: boolean;
+  unlockStage?: number;
   tiers: [TdTowerTierStats, TdTowerTierStats, TdTowerTierStats]; // Lv 1, 2, 3
   branches: [TdTowerBranchConfig, TdTowerBranchConfig]; // Lv 4 choices
 }
@@ -207,6 +342,7 @@ export interface TdBuiltTower {
   type: TdTowerType;
   level: TdTowerLevel;
   branch: TdBranchId | null;
+  mythicPath: TdMythicPathId | null;
   x: number;
   y: number;
   rallyX: number;
@@ -249,6 +385,10 @@ export interface TdEnemyEntity {
   poisonDps: number;
   poisonTickTimer: number;
   poisonSourceTowerId?: string;
+  burnTimer: number;
+  burnDps: number;
+  burnTickTimer: number;
+  burnSourceTowerId?: string;
   healAuraTimer: number;
   hitFlashTimer: number;
   distanceTraveled: number;
@@ -257,8 +397,10 @@ export interface TdEnemyEntity {
 export interface TdSoldierEntity {
   id: string;
   towerId: string | null; // null = temporary Reinforcement spell unit
+  towerType?: TdTowerType;
   towerLevel?: TdTowerLevel;
   towerBranch?: TdBranchId | null;
+  towerMythicPath?: TdMythicPathId | null;
   slotIndex: number;
   x: number;
   y: number;
@@ -278,11 +420,26 @@ export interface TdSoldierEntity {
   ttl: number; // remaining seconds for temporary reinforcements
   facingLeft: boolean;
   isMoving?: boolean;
+  armorPiercePct?: number;
+  trueDamagePct?: number;
+  cleaveRadius?: number;
+  slowPct?: number;
+  burnDps?: number;
 }
 
 export interface TdProjectile {
   id: string;
-  kind: 'ARROW' | 'BOLT' | 'BOMB' | 'LIGHTNING' | 'POISON_ARROW' | 'SHURIKEN' | 'SPEAR';
+  kind:
+    | 'ARROW'
+    | 'BOLT'
+    | 'BOMB'
+    | 'LIGHTNING'
+    | 'POISON_ARROW'
+    | 'SHURIKEN'
+    | 'SPEAR'
+    | 'FIREBALL'
+    | 'RAILBOLT'
+    | 'CHRONO_RAY';
   x: number;
   y: number;
   startX: number;
@@ -298,8 +455,13 @@ export interface TdProjectile {
   slowPct: number;
   slowSplashRadius?: number;
   poisonDps: number;
+  poisonSpreadRadius?: number;
+  burnDps?: number;
   chainCount: number;
   armorPierce: boolean;
+  armorPiercePct?: number;
+  magicPiercePct?: number;
+  trueDamagePct?: number;
   isCrit?: boolean;
   sourceTowerId: string;
 }
@@ -316,7 +478,9 @@ export interface TdEffectBurst {
     | 'SLASH'
     | 'MONSTER_HIT'
     | 'MUZZLE'
-    | 'FROST_NOVA';
+    | 'FROST_NOVA'
+    | 'FIRE_BLAST'
+    | 'CHRONO_PULSE';
   x: number;
   y: number;
   targetX?: number;

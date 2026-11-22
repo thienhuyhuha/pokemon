@@ -165,13 +165,40 @@ service cloud.firestore {
     // 5. TowerDefenseProfile Validation Blueprint (Vệ Thành Quái Thú)
     function isValidTdUpgrades(up) {
       return up is map
-        && up.keys().hasAll(['archery', 'magic', 'barracks', 'economy', 'spells'])
-        && up.keys().hasOnly(['archery', 'magic', 'barracks', 'economy', 'spells'])
-        && up.archery is int && up.archery >= 0 && up.archery <= 3
-        && up.magic is int && up.magic >= 0 && up.magic <= 3
-        && up.barracks is int && up.barracks >= 0 && up.barracks <= 3
-        && up.economy is int && up.economy >= 0 && up.economy <= 3
-        && up.spells is int && up.spells >= 0 && up.spells <= 3;
+        && up.keys().hasAll([
+          'archery',
+          'magic',
+          'barracks',
+          'artillery',
+          'support',
+          'economy',
+          'spells',
+          'citadel',
+          'lethality',
+          'mastery'
+        ])
+        && up.keys().hasOnly([
+          'archery',
+          'magic',
+          'barracks',
+          'artillery',
+          'support',
+          'economy',
+          'spells',
+          'citadel',
+          'lethality',
+          'mastery'
+        ])
+        && up.archery is int && up.archery >= 0 && up.archery <= 5
+        && up.magic is int && up.magic >= 0 && up.magic <= 5
+        && up.barracks is int && up.barracks >= 0 && up.barracks <= 5
+        && up.artillery is int && up.artillery >= 0 && up.artillery <= 5
+        && up.support is int && up.support >= 0 && up.support <= 5
+        && up.economy is int && up.economy >= 0 && up.economy <= 5
+        && up.spells is int && up.spells >= 0 && up.spells <= 5
+        && up.citadel is int && up.citadel >= 0 && up.citadel <= 5
+        && up.lethality is int && up.lethality >= 0 && up.lethality <= 5
+        && up.mastery is int && up.mastery >= 0 && up.mastery <= 5;
     }
 
     function isValidTowerDefenseProfile(data, userId) {

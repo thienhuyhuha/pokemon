@@ -33,7 +33,12 @@ import {
   MAX_LEVEL,
 } from './data/levels';
 import { preloadAllGameAssets } from './data/pokemonSprites';
-import { getTdLevelConfig, TD_MAX_LEVEL } from './data/tdLevels';
+import {
+  getTdLevelConfig,
+  isTowerUnlocked,
+  TD_MAX_LEVEL,
+  TD_TOWER_BUILD_ORDER,
+} from './data/tdLevels';
 import {
   auth,
   checkGoogleRedirectResult,
@@ -1522,6 +1527,14 @@ export default function App() {
           levelConfig={tdLevelConfig}
           runNonce={tdRunNonce}
           upgrades={tdSaveData.upgrades}
+          unlockedTowers={TD_TOWER_BUILD_ORDER.filter((t) =>
+            isTowerUnlocked(
+              t,
+              tdSaveData.levels,
+              tdSaveData.highestUnlockedLevel,
+              isPreviewMode
+            )
+          )}
           isPaused={gameState === 'PAUSED'}
           isCompactLandscape={viewport.isCompactLandscape}
           isFullscreen={viewport.isFullscreen}
@@ -1549,7 +1562,12 @@ export default function App() {
             score={tdResultModal.score}
             stars={tdResultModal.stars}
             livesLeft={tdResultModal.livesLeft}
-            startingLives={tdLevelConfig.startingLives}
+            startingLives={
+              tdLevelConfig.startingLives +
+              (tdSaveData.upgrades.citadel >= 1 ? 3 : 0) +
+              (tdSaveData.upgrades.citadel >= 2 ? 3 : 0) +
+              (tdSaveData.upgrades.citadel >= 4 ? 4 : 0)
+            }
             enemiesSlain={tdResultModal.enemiesSlain}
             isPreviewMode={isPreviewMode && tdLevelConfig.level > tdSaveData.highestUnlockedLevel}
             onReplay={() => startTdLevel(tdLevelConfig.level)}

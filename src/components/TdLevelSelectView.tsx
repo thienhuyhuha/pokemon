@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import {
   ArrowLeft,
   Castle,
+  CheckCircle2,
+  Coins,
+  Crosshair,
   Eye,
   Flame,
   Hammer,
@@ -9,6 +12,8 @@ import {
   Music,
   Play,
   RotateCcw,
+  Shield,
+  Sparkles,
   Star,
   Volume2,
   VolumeX,
@@ -27,7 +32,11 @@ import {
   getSpentUpgradeStars,
   getStageBossCount,
   getTotalStarsEarnedInTd,
+  isTowerUnlocked,
   TD_MAX_LEVEL,
+  TD_TOWER_BUILD_ORDER,
+  TD_TOWERS,
+  TD_UPGRADE_MAX_TIER,
   TD_UPGRADE_TRACKS,
 } from '../data/tdLevels';
 import { CloudSyncStatus } from '../firebase';
@@ -134,11 +143,13 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
   const availableStars = Math.max(0, totalStarsEarned - spentStars);
   const completedCount = Object.values(saveData.levels).filter((l) => l.completed).length;
 
+  const unlockableTowers = TD_TOWER_BUILD_ORDER.filter((t) => Boolean(TD_TOWERS[t].unlockStage));
+
   const handleUpgradeTrack = (trackId: TdUpgradeTrackId) => {
     const meta = TD_UPGRADE_TRACKS.find((t) => t.id === trackId);
     if (!meta) return;
     const currentLv = saveData.upgrades[trackId] ?? 0;
-    if (currentLv >= 3) return;
+    if (currentLv >= TD_UPGRADE_MAX_TIER) return;
     const cost = meta.tierCosts[currentLv];
     if (availableStars < cost) return;
     onUpdateUpgrades({
@@ -244,6 +255,81 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
 
       {/* Campaign Map by Biome */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
+        {/* Unlockable Elite Soldiers Showcase */}
+        <section className="rounded-2xl bg-[#131C31] border border-amber-500/40 p-4 sm:p-5 shadow-xl flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="font-display text-base sm:text-lg font-extrabold text-white flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[#FACC15]" />
+                Binh Chủng Tinh Nhuệ Mở Khóa Theo Ải
+              </h2>
+              <p className="text-xs text-slate-400">
+                Vượt qua các mốc ải 10, 15, 20 và 25 để chiêu mộ 4 binh chủng cấp cao mới vào trận chiến.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setWorkshopOpen(true)}
+              className="text-xs font-bold text-amber-300 hover:text-amber-200 underline underline-offset-4 cursor-pointer"
+            >
+              Xem 10 nhánh Nâng Cấp Sao ({spentStars}/90★)
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {unlockableTowers.map((towerType) => {
+              const cfg = TD_TOWERS[towerType];
+              const unlockedTower = isTowerUnlocked(
+                towerType,
+                saveData.levels,
+                saveData.highestUnlockedLevel,
+                isPreviewMode
+              );
+
+              return (
+                <div
+                  key={towerType}
+                  className={`rounded-xl border p-3 flex items-center gap-3 ${
+                    unlockedTower
+                      ? 'bg-[#0F172A] border-emerald-500/50'
+                      : 'bg-[#0F172A]/60 border-slate-800 opacity-85'
+                  }`}
+                >
+                  <div className="w-14 h-14 rounded-xl bg-slate-900 border border-slate-700/80 flex items-center justify-center shrink-0">
+                    <TdTowerPreview type={towerType} level={1} className="w-12 h-12" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-display text-sm font-extrabold text-white truncate">
+                        {cfg.name}
+                      </span>
+                      <span className="font-mono-num text-[11px] font-extrabold text-[#FACC15] shrink-0">
+                        {cfg.tiers[0].cost}g
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5 leading-snug">
+                      {cfg.roleLabel}
+                    </p>
+                    <div className="mt-1.5">
+                      {unlockedTower ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950/70 border border-emerald-600/50 text-[10px] font-bold text-emerald-300">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Đã mở khóa
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] font-bold text-amber-300">
+                          <Lock className="w-3 h-3" />
+                          Qua Ải {cfg.unlockStage}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
         {BIOME_META.map((biome) => {
           const biomeLevels = levels.filter((lv) => lv.biome === biome.id);
           return (
@@ -431,17 +517,17 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
           onClick={() => setWorkshopOpen(false)}
         >
           <div
-            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-[#131C31] border-2 border-amber-400/70 p-5 sm:p-6 shadow-2xl flex flex-col gap-4"
+            className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl bg-[#131C31] border-2 border-amber-400/70 p-5 sm:p-6 shadow-2xl flex flex-col gap-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-3">
               <div>
                 <h2 className="font-display text-xl font-extrabold text-white flex items-center gap-2">
                   <Hammer className="w-5 h-5 text-[#FACC15]" />
-                  Xưởng Nâng Cấp Binh Chủng
+                  Xưởng Nâng Cấp Binh Chủng (10 Nhánh · 5 Cấp)
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Dùng Sao (★) kiếm được từ các ải để tăng sức mạnh vĩnh viễn. Có thể hoàn tác miễn phí bất cứ lúc nào.
+                  Dùng Sao (★) kiếm được từ các ải để tăng sức mạnh vĩnh viễn cho toàn quân. Có thể hoàn tác miễn phí bất cứ lúc nào.
                 </p>
               </div>
               <div className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-400/60 font-mono-num text-sm font-extrabold text-[#FACC15] shrink-0">
@@ -449,11 +535,12 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {TD_UPGRADE_TRACKS.map((track) => {
                 const lv = saveData.upgrades[track.id] ?? 0;
-                const nextCost = lv < 3 ? track.tierCosts[lv] : 0;
-                const canAfford = lv < 3 && availableStars >= nextCost;
+                const isMaxed = lv >= TD_UPGRADE_MAX_TIER;
+                const nextCost = !isMaxed ? track.tierCosts[lv] : 0;
+                const canAfford = !isMaxed && availableStars >= nextCost;
 
                 return (
                   <div
@@ -469,10 +556,20 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
                             <TdTowerPreview type="MAGE" level={4} branch="ARCANE_BEAM" className="w-9 h-9" />
                           ) : track.id === 'barracks' ? (
                             <TdTowerPreview type="BARRACKS" level={4} branch="PALADIN" className="w-9 h-9" />
-                          ) : track.id === 'economy' ? (
+                          ) : track.id === 'artillery' ? (
                             <TdTowerPreview type="ARTILLERY" level={4} branch="BIG_BERTHA" className="w-9 h-9" />
+                          ) : track.id === 'support' ? (
+                            <TdTowerPreview type="VALKYRIE" level={4} branch="SOLAR_SERAPH" className="w-9 h-9" />
+                          ) : track.id === 'economy' ? (
+                            <Coins className="w-5 h-5 text-[#FACC15]" />
+                          ) : track.id === 'spells' ? (
+                            <Flame className="w-5 h-5 text-orange-400" />
+                          ) : track.id === 'citadel' ? (
+                            <Shield className="w-5 h-5 text-sky-400" />
+                          ) : track.id === 'lethality' ? (
+                            <Crosshair className="w-5 h-5 text-rose-400" />
                           ) : (
-                            <Flame className="w-5 h-5 text-[#FACC15]" />
+                            <Sparkles className="w-5 h-5 text-purple-300" />
                           )}
                         </div>
                         <div>
@@ -482,8 +579,8 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
                           <div className="text-[11px] text-slate-400">{track.shortBonus}</div>
                         </div>
                       </div>
-                      <span className="font-mono-num text-xs font-extrabold text-amber-300">
-                        Cấp {lv}/3
+                      <span className="font-mono-num text-xs font-extrabold text-amber-300 shrink-0">
+                        Cấp {lv}/{TD_UPGRADE_MAX_TIER}
                       </span>
                     </div>
 
@@ -499,7 +596,7 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
                                 : 'text-slate-500'
                           }`}
                         >
-                          {idx + 1}. {lbl}
+                          {idx + 1}. {lbl} ({track.tierCosts[idx]}★)
                         </div>
                       ))}
                     </div>
@@ -509,14 +606,14 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
                       disabled={!canAfford}
                       onClick={() => handleUpgradeTrack(track.id)}
                       className={`min-h-[38px] rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-colors ${
-                        lv >= 3
+                        isMaxed
                           ? 'bg-emerald-950/50 border border-emerald-700/60 text-emerald-300 cursor-default'
                           : canAfford
                             ? 'bg-[#FACC15] hover:bg-yellow-300 text-slate-950 cursor-pointer'
                             : 'bg-slate-800 text-slate-500 cursor-not-allowed'
                       }`}
                     >
-                      {lv >= 3 ? (
+                      {isMaxed ? (
                         'Đã tối đa'
                       ) : (
                         <>
