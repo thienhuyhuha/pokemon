@@ -56,6 +56,8 @@ export type TdBranchId =
   | 'TIME_ARCHON'
   | 'VOID_SOVEREIGN';
 
+export type TdCombatFocus = 'MULTI' | 'FOCUSED';
+
 export type TdMythicPathId =
   // ARCHER (4 post-Lv10 paths)
   | 'ARCHER_BARRAGE'
@@ -357,6 +359,7 @@ export interface TdBuiltTower {
   type: TdTowerType;
   level: TdTowerLevel;
   branch: TdBranchId | null;
+  focusBranch?: TdCombatFocus | null;
   mythicPath: TdMythicPathId | null;
   x: number;
   y: number;
@@ -425,6 +428,7 @@ export interface TdSoldierEntity {
   towerType?: TdTowerType;
   towerLevel?: TdTowerLevel;
   towerBranch?: TdBranchId | null;
+  towerFocusBranch?: TdCombatFocus | null;
   towerMythicPath?: TdMythicPathId | null;
   slotIndex: number;
   x: number;

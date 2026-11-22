@@ -2437,13 +2437,17 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
           : undefined;
 
     const combinedFilter =
-      poisoned && hitFlash
-        ? 'sepia(0.92) hue-rotate(74deg) saturate(2.9) brightness(1.42)'
-        : poisoned
-          ? 'sepia(0.92) hue-rotate(74deg) saturate(2.7) brightness(0.96)'
-          : hitFlash
-            ? 'brightness(1.55) saturate(1.25)'
-            : baseFilter;
+      burned && hitFlash
+        ? 'sepia(0.95) hue-rotate(-38deg) saturate(3.6) brightness(1.38)'
+        : burned
+          ? 'sepia(0.95) hue-rotate(-38deg) saturate(3.4) brightness(1.04)'
+          : poisoned && hitFlash
+            ? 'sepia(0.92) hue-rotate(74deg) saturate(2.9) brightness(1.42)'
+            : poisoned
+              ? 'sepia(0.92) hue-rotate(74deg) saturate(2.7) brightness(0.96)'
+              : hitFlash
+                ? 'brightness(1.55) saturate(1.25)'
+                : baseFilter;
 
     if (animeSrc) {
       const boxSize = hideHud
@@ -2573,11 +2577,20 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
                 cy="10"
                 rx={isBoss ? 30 : 14}
                 ry={isBoss ? 9 : 4.5}
-                fill="#F97316"
-                opacity="0.34"
+                fill="#EF4444"
+                opacity="0.38"
               />
-              <polygon points="-9,-6 -6,-17 -2,-8" fill="#F97316" opacity="0.88" className="td-anim-torch" />
-              <polygon points="4,-8 8,-19 11,-6" fill="#FEF08A" opacity="0.85" className="td-anim-torch" />
+              <circle
+                cx="0"
+                cy={isBoss ? -18 : -4}
+                r={isBoss ? 34 : 15}
+                fill="none"
+                stroke="#EF4444"
+                strokeWidth="1.8"
+                opacity="0.85"
+              />
+              <polygon points="-9,-6 -6,-17 -2,-8" fill="#EF4444" opacity="0.92" className="td-anim-torch" />
+              <polygon points="4,-8 8,-19 11,-6" fill="#FCA5A5" opacity="0.9" className="td-anim-torch" />
             </g>
           )}
 
@@ -2640,9 +2653,11 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
           transform={`scale(${flip}, 1)`}
           opacity={hitFlash ? 0.68 : 1}
           style={
-            poisoned
-              ? { filter: 'sepia(0.92) hue-rotate(74deg) saturate(2.7) brightness(0.96)' }
-              : undefined
+            burned
+              ? { filter: 'sepia(0.95) hue-rotate(-38deg) saturate(3.4) brightness(1.04)' }
+              : poisoned
+                ? { filter: 'sepia(0.92) hue-rotate(74deg) saturate(2.7) brightness(0.96)' }
+                : undefined
           }
         >
           {/* 1. GOBLIN — Hunched Raider with Leather Harness, Jagged Ears & Curved Scimitar */}

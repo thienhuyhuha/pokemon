@@ -33,6 +33,7 @@ import {
 import {
   getExtraTowerUpgradeCost,
   getMythicPathConfig,
+  getMythicUpgradeCost,
   TD_ENEMIES,
   TD_MAX_LEVEL,
   TD_MAX_TOWER_LEVEL,
@@ -45,6 +46,7 @@ import {
 import {
   TdBranchId,
   TdBuiltTower,
+  TdCombatFocus,
   TdEffectBurst,
   TdEnemyEntity,
   TdEnemyType,
@@ -182,6 +184,13 @@ function dist(ax: number, ay: number, bx: number, by: number): number {
   return Math.hypot(ax - bx, ay - by);
 }
 
+function getEnemyHealMultiplier(enemy: TdEnemyEntity): number {
+  let mult = 1;
+  if (enemy.poisonTimer > 0) mult *= 0.5;
+  if (enemy.burnTimer > 0) mult *= 0.8;
+  return mult;
+}
+
 function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
   const cfg = TD_TOWERS[tower.type];
   const branchCfg = tower.branch
@@ -275,7 +284,7 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
   let critMult = 2.3 + (mythicCfg?.critMultBonus ?? 0);
 
   const baseChain = branchCfg?.chainCount ?? 0;
-  const chainCount =
+  let chainCount =
     baseChain > 0 || (mythicCfg?.chainBonus ?? 0) > 0
       ? baseChain + Math.floor(midTiers / 2) + (mythicCfg?.chainBonus ?? 0) + (tower.level >= 16 ? 1 : 0)
       : 0;
@@ -449,6 +458,42 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
     cooldown *= 0.92;
   }
 
+  // Only Mages (Pháp Sư) can slow >50%; all other classes capped at <=25%
+  const maxSlowCap = tower.type === 'MAGE' ? 0.78 : 0.25;
+  if (slowPct > maxSlowCap) {
+    slowPct = maxSlowCap;
+  }
+
+  // Level 5+ 2-Branch Combat Stance Split:
+  // 1) MULTI: Keeps multi-target count, -20% power
+  // 2) FOCUSED: Fewer targets, +43% attack speed, +45% power
+  let effectivePoisonDps = poisonDps;
+  if (tower.level >= 5) {
+    const focus: TdCombatFocus = tower.focusBranch ?? 'MULTI';
+    if (focus === 'MULTI') {
+      damage = Math.round(damage * 0.8);
+      soldierDamage = Math.round(soldierDamage * 0.8);
+      burnDps = Math.round(burnDps * 0.8);
+      effectivePoisonDps = Math.round(effectivePoisonDps * 0.8);
+    } else {
+      targetCount = targetCount >= 6 ? 2 : 1;
+      if (chainCount > 0) {
+        chainCount = Math.max(2, Math.floor(chainCount * 0.4));
+      }
+      if (isGarrisonTower(tower.type)) {
+        soldierCount = Math.max(2, Math.floor(soldierCount * 0.65));
+      }
+      if (splashRadius > 0) {
+        splashRadius = Math.max(40, Math.round(splashRadius * 0.72));
+      }
+      cooldown *= 0.7;
+      damage = Math.round(damage * 1.45);
+      soldierDamage = Math.round(soldierDamage * 1.45);
+      burnDps = Math.round(burnDps * 1.45);
+      effectivePoisonDps = Math.round(effectivePoisonDps * 1.45);
+    }
+  }
+
   return {
     damage,
     range,
@@ -457,7 +502,7 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
     splashRadius,
     slowPct,
     slowSplashRadius,
-    poisonDps,
+    poisonDps: effectivePoisonDps,
     poisonSpreadRadius,
     burnDps,
     critChance,
@@ -1178,16 +1223,6 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             applyDamageToEnemy(w, e, Math.max(1, e.burnDps * 0.5), 'MAGIC', e.burnSourceTowerId, {
               magicPiercePct: 0.35,
             });
-            w.effects.push({
-              id: `fx-${w.idCounter++}`,
-              kind: 'HIT',
-              x: e.x,
-              y: e.y - 10,
-              radius: 10,
-              color: '#F97316',
-              ttl: 0.2,
-              maxTtl: 0.2,
-            });
             if (e.hp <= 0) {
               diedFromBurn = true;
               break;
@@ -1207,7 +1242,8 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
 
         // Self-regeneration & Boss Enrage (<50% HP)
         if (e.selfRegenPct > 0 && e.hp > 0 && e.hp < e.maxHp) {
-          e.hp = Math.min(e.maxHp, e.hp + e.maxHp * e.selfRegenPct * dt);
+          const healMult = getEnemyHealMultiplier(e);
+          e.hp = Math.min(e.maxHp, e.hp + e.maxHp * e.selfRegenPct * healMult * dt);
         }
         if (e.isBoss && !e.enraged && e.hp > 0 && e.hp <= e.maxHp * 0.5) {
           e.enraged = true;
@@ -1323,7 +1359,8 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
               if (ally.hp > 0 && dist(e.x, e.y, ally.x, ally.y) <= pulseRadius) {
                 if ((e.healsAllies || ally.id === e.id) && ally.hp < ally.maxHp) {
                   const healRate = e.isBoss && ally.id === e.id ? 0.045 : 0.14;
-                  ally.hp = Math.min(ally.maxHp, ally.hp + ally.maxHp * healRate);
+                  const healMult = getEnemyHealMultiplier(ally);
+                  ally.hp = Math.min(ally.maxHp, ally.hp + ally.maxHp * healRate * healMult);
                   healedAny = true;
                 }
                 if (ally.poisonTimer > 0 || ally.slowTimer > 0 || ally.burnTimer > 0) {
@@ -1455,7 +1492,8 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
         const dx = targetWp.x - e.x;
         const dy = targetWp.y - e.y;
         const dWp = Math.hypot(dx, dy);
-        const effSpeed = e.speed * (1 - Math.min(0.68, e.slowPct));
+        const burnSpeedBoost = e.burnTimer > 0 ? 1.05 : 1;
+        const effSpeed = e.speed * (1 - Math.min(0.78, e.slowPct)) * burnSpeedBoost;
         const moveStep = effSpeed * dt;
 
         if (dx < -1) e.facingLeft = true;
@@ -1799,15 +1837,16 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
               id: `fx-${w.idCounter++}`,
               kind:
                 p.kind === 'FIREBALL'
-                  ? 'FIRE_BLAST'
+                  ? 'HIT'
                   : p.kind === 'CHRONO_RAY'
                     ? 'CHRONO_PULSE'
                     : 'EXPLOSION',
               x: p.targetX,
               y: p.targetY,
-              radius: p.splashRadius,
-              ttl: 0.34,
-              maxTtl: 0.34,
+              radius: p.kind === 'FIREBALL' ? 14 : p.splashRadius,
+              color: p.kind === 'FIREBALL' ? '#EF4444' : undefined,
+              ttl: p.kind === 'FIREBALL' ? 0.22 : 0.34,
+              maxTtl: p.kind === 'FIREBALL' ? 0.22 : 0.34,
             });
           } else {
             if (liveTarget) {
@@ -1948,6 +1987,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
         type,
         level: 1,
         branch: null,
+        focusBranch: null,
         mythicPath: null,
         x: pad.x,
         y: pad.y,
@@ -2011,7 +2051,12 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
   );
 
   const handleUpgradeTower = useCallback(
-    (towerId: string, branchId?: TdBranchId, mythicPathId?: TdMythicPathId) => {
+    (
+      towerId: string,
+      branchId?: TdBranchId,
+      mythicPathId?: TdMythicPathId,
+      focusBranch?: TdCombatFocus
+    ) => {
       const w = worldRef.current;
       const tw = w.towers.find((t) => t.id === towerId);
       if (!tw) return;
@@ -2024,12 +2069,22 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
         const branchCfg = cfg.branches.find((b) => b.id === branchId);
         if (!branchCfg) return;
         baseCost = branchCfg.cost;
+      } else if (tw.level === 4 && focusBranch) {
+        const extraCost = getExtraTowerUpgradeCost(tw.type, tw.level, tw.branch, tw.mythicPath);
+        if (extraCost === null) return;
+        baseCost = extraCost;
       } else if (tw.level === 10 && mythicPathId) {
         const mythicCfg = getMythicPathConfig(tw.type, mythicPathId);
         if (!mythicCfg) return;
-        baseCost = mythicCfg.cost;
-      } else if (tw.level >= 4 && tw.level < TD_MAX_TOWER_LEVEL && tw.level !== 10) {
-        const extraCost = getExtraTowerUpgradeCost(tw.type, tw.level, tw.branch, tw.mythicPath);
+        baseCost = getMythicUpgradeCost(mythicCfg.cost, tw.focusBranch);
+      } else if (tw.level >= 5 && tw.level < TD_MAX_TOWER_LEVEL && tw.level !== 10) {
+        const extraCost = getExtraTowerUpgradeCost(
+          tw.type,
+          tw.level,
+          tw.branch,
+          tw.mythicPath,
+          tw.focusBranch
+        );
         if (extraCost === null) return;
         baseCost = extraCost;
       } else {
@@ -2045,10 +2100,13 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
       } else if (tw.level === 3 && branchId) {
         tw.level = 4;
         tw.branch = branchId;
+      } else if (tw.level === 4 && focusBranch) {
+        tw.level = 5;
+        tw.focusBranch = focusBranch;
       } else if (tw.level === 10 && mythicPathId) {
         tw.level = 11;
         tw.mythicPath = mythicPathId;
-      } else if (tw.level >= 4 && tw.level < TD_MAX_TOWER_LEVEL) {
+      } else if (tw.level >= 5 && tw.level < TD_MAX_TOWER_LEVEL) {
         tw.level = (tw.level + 1) as TdTowerLevel;
       }
 
@@ -2056,10 +2114,25 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
       if (isGarrisonTower(tw.type)) {
         const stats = getEffectiveTowerStats(tw, upgradesRef.current);
         const existing = w.soldiers.filter((s) => s.towerId === tw.id);
-        for (const s of existing) {
+        if (existing.length > stats.soldierCount) {
+          const toRemove = new Set(existing.slice(stats.soldierCount).map((s) => s.id));
+          for (let i = w.soldiers.length - 1; i >= 0; i--) {
+            if (toRemove.has(w.soldiers[i].id)) {
+              const rem = w.soldiers[i];
+              if (rem.engagedEnemyId) {
+                const en = w.enemies.find((e) => e.id === rem.engagedEnemyId);
+                if (en && en.blockedBySoldierId === rem.id) en.blockedBySoldierId = null;
+              }
+              w.soldiers.splice(i, 1);
+            }
+          }
+        }
+        const activeExisting = w.soldiers.filter((s) => s.towerId === tw.id);
+        for (const s of activeExisting) {
           s.towerType = tw.type;
           s.towerLevel = tw.level;
           s.towerBranch = tw.branch;
+          s.towerFocusBranch = tw.focusBranch;
           s.towerMythicPath = tw.mythicPath;
           s.maxHp = stats.soldierHp;
           if (!s.isDead) s.hp = stats.soldierHp;
@@ -2072,7 +2145,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
           s.slowPct = stats.slowPct;
           s.burnDps = stats.burnDps;
         }
-        for (let slot = existing.length; slot < stats.soldierCount; slot++) {
+        for (let slot = activeExisting.length; slot < stats.soldierCount; slot++) {
           const pos = getSoldierFormationPos(tw.rallyX, tw.rallyY, slot);
           w.soldiers.push({
             id: `sol-${w.idCounter++}`,
@@ -2080,6 +2153,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             towerType: tw.type,
             towerLevel: tw.level,
             towerBranch: tw.branch,
+            towerFocusBranch: tw.focusBranch,
             towerMythicPath: tw.mythicPath,
             slotIndex: slot,
             x: tw.x,
@@ -2093,7 +2167,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             attackCooldown: stats.cooldown,
             attackTimer: 0,
             attackAnimTimer: 0,
-            respawnTimer: 1.0 + (slot - existing.length) * 1.1,
+            respawnTimer: 1.0 + (slot - activeExisting.length) * 1.1,
             isDead: true,
             engagedEnemyId: null,
             isReinforcement: false,
@@ -3184,6 +3258,17 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                     <span className="text-sky-300 font-mono-num shrink-0">
                       Cấp {selectedTower.level}/{TD_MAX_TOWER_LEVEL}
                     </span>
+                    {selectedTower.level >= 5 && selectedTower.focusBranch && (
+                      <span
+                        className={`text-[9px] font-bold px-1 rounded shrink-0 ${
+                          selectedTower.focusBranch === 'FOCUSED'
+                            ? 'bg-rose-950/90 text-rose-300 border border-rose-500/50'
+                            : 'bg-sky-950/90 text-sky-300 border border-sky-500/50'
+                        }`}
+                      >
+                        {selectedTower.focusBranch === 'FOCUSED' ? 'Ít MT' : 'Đa MT'}
+                      </span>
+                    )}
                   </div>
                   <div className="text-[10px] text-slate-300 font-mono-num leading-tight truncate">
                     {(() => {
@@ -3231,7 +3316,10 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                   {TD_MYTHIC_PATHS[selectedTower.type].map((mp) => {
-                    const mpCost = getDiscountedTdCost(mp.cost, upgrades);
+                    const mpCost = getDiscountedTdCost(
+                      getMythicUpgradeCost(mp.cost, selectedTower.focusBranch),
+                      upgrades
+                    );
                     const canAfford = snap.gold >= mpCost;
                     return (
                       <button
@@ -3333,14 +3421,83 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                   );
                 })}
 
-              {selectedTower.level >= 4 && selectedTower.level < 10 && (() => {
-                const nextLv = (selectedTower.level + 1) as TdTowerLevel;
+              {selectedTower.level === 4 && (() => {
                 const upCost = getDiscountedTdCost(
                   getExtraTowerUpgradeCost(
                     selectedTower.type,
                     selectedTower.level,
                     selectedTower.branch,
                     selectedTower.mythicPath
+                  ) ?? 0,
+                  upgrades
+                );
+                const canUp = snap.gold >= upCost;
+                const multiStats = getEffectiveTowerStats(
+                  { ...selectedTower, level: 5, focusBranch: 'MULTI' },
+                  upgrades
+                );
+                const focusedStats = getEffectiveTowerStats(
+                  { ...selectedTower, level: 5, focusBranch: 'FOCUSED' },
+                  upgrades
+                );
+                const isBar = selectedTower.type === 'BARRACKS';
+                const multiLabel = isBar
+                  ? `${multiStats.soldierCount} Lính · ST ${multiStats.soldierDamage} · ${(1 / multiStats.cooldown).toFixed(1)}/s`
+                  : `${multiStats.chainCount > 0 ? multiStats.chainCount : multiStats.targetCount} MT · ST ${multiStats.damage} · ${(1 / multiStats.cooldown).toFixed(1)}/s`;
+                const focusedLabel = isBar
+                  ? `${focusedStats.soldierCount} Lính · ST ${focusedStats.soldierDamage} · ${(1 / focusedStats.cooldown).toFixed(1)}/s`
+                  : `${focusedStats.chainCount > 0 ? focusedStats.chainCount : focusedStats.targetCount} MT · ST ${focusedStats.damage} · ${(1 / focusedStats.cooldown).toFixed(1)}/s`;
+                return (
+                  <>
+                    <button
+                      type="button"
+                      disabled={!canUp}
+                      onClick={() => handleUpgradeTower(selectedTower.id, undefined, undefined, 'MULTI')}
+                      className={`flex-1 min-w-[140px] px-2 py-1 rounded-lg border text-left flex items-center gap-1.5 ${
+                        canUp
+                          ? 'bg-[#1E293B] hover:bg-slate-700 border-sky-400/80 cursor-pointer'
+                          : 'bg-slate-900 border-slate-800 opacity-45 cursor-not-allowed'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-1 text-[10px] font-extrabold text-sky-300">
+                          <span className="truncate">Cấp 5 · Đa Mục Tiêu (-20% ST)</span>
+                          <span className="font-mono-num text-[#FACC15] shrink-0">{upCost}g</span>
+                        </div>
+                        <div className="text-[9px] text-slate-300 font-mono-num truncate">{multiLabel}</div>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!canUp}
+                      onClick={() => handleUpgradeTower(selectedTower.id, undefined, undefined, 'FOCUSED')}
+                      className={`flex-1 min-w-[140px] px-2 py-1 rounded-lg border text-left flex items-center gap-1.5 ${
+                        canUp
+                          ? 'bg-[#1E293B] hover:bg-slate-700 border-rose-400/80 cursor-pointer'
+                          : 'bg-slate-900 border-slate-800 opacity-45 cursor-not-allowed'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-1 text-[10px] font-extrabold text-rose-300">
+                          <span className="truncate">Cấp 5 · Ít MT (+Tốc & ++ST)</span>
+                          <span className="font-mono-num text-[#FACC15] shrink-0">{upCost}g</span>
+                        </div>
+                        <div className="text-[9px] text-slate-300 font-mono-num truncate">{focusedLabel}</div>
+                      </div>
+                    </button>
+                  </>
+                );
+              })()}
+
+              {selectedTower.level >= 5 && selectedTower.level < 10 && (() => {
+                const nextLv = (selectedTower.level + 1) as TdTowerLevel;
+                const upCost = getDiscountedTdCost(
+                  getExtraTowerUpgradeCost(
+                    selectedTower.type,
+                    selectedTower.level,
+                    selectedTower.branch,
+                    selectedTower.mythicPath,
+                    selectedTower.focusBranch
                   ) ?? 0,
                   upgrades
                 );
@@ -3367,7 +3524,11 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                       Cấp {nextLv}/{TD_MAX_TOWER_LEVEL} ({upCost}g) ·{' '}
                       {nextLv === 10
                         ? '+24% ST · Mở 4 Dạng Thức Tỉnh'
-                        : `+20% ST${nextLv === 5 || nextLv === 7 || nextLv === 9 ? ' · +MT' : ''}`}
+                        : `+20% ST${
+                            selectedTower.focusBranch !== 'FOCUSED' && (nextLv === 7 || nextLv === 9)
+                              ? ' · +MT'
+                              : ''
+                          }`}
                     </span>
                   </button>
                 );
@@ -3380,7 +3541,8 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                     selectedTower.type,
                     selectedTower.level,
                     selectedTower.branch,
-                    selectedTower.mythicPath
+                    selectedTower.mythicPath,
+                    selectedTower.focusBranch
                   ) ?? 0,
                   upgrades
                 );
