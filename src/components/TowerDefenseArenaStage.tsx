@@ -825,7 +825,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
           if (nearestGuard) {
             e.attackTimer = e.type === 'BOSS' ? 1.1 : e.type === 'MINIBOSS' ? 1.0 : 0.95;
             e.attackAnimTimer = 0.28;
-            const enemyAttackDmg =
+            const baseEnemyAttackDmg =
               e.type === 'BOSS'
                 ? 58
                 : e.type === 'MINIBOSS'
@@ -837,6 +837,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                       : e.type === 'WOLF' || e.type === 'SPIDER'
                         ? 14
                         : 11;
+            const enemyAttackDmg = baseEnemyAttackDmg * (1 + (lvl.level - 1) * 0.045);
             const netDmg = Math.max(2, enemyAttackDmg * (1 - nearestGuard.armor));
             nearestGuard.hp -= netDmg;
             w.effects.push({

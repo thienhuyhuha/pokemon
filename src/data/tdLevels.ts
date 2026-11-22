@@ -523,15 +523,30 @@ function makeWave(
 
 function buildWavesForStage(level: number, pathCount: number): TdWaveConfig[] {
   const totalWaves = Math.max(10, Math.min(16, 9 + Math.floor(level * 0.25)));
-  const hpScale = 1 + (level - 1) * 0.16;
+  // Strictly monotonic stage progression: every stage is ~9-12% tankier & faster than the previous one
+  const stageHpScale =
+    Math.pow(1.09, level - 1) * (1 + Math.min(0.25, (level - 1) * 0.025));
+  const stageSpeedMult = Number((1 + (level - 1) * 0.014).toFixed(3));
+  const intervalScale = Math.max(0.75, 1 - (level - 1) * 0.0085);
+  const isMilestoneBossStage = level % 5 === 0;
   const waves: TdWaveConfig[] = [];
 
   const getPath = (idx: number) => idx % pathCount;
 
+  // Mid-stage Boss vanguard waves exclusively for milestone Boss stages (5, 10, 15, 20, 25, 30)
+  const bossVanguardWaveA = isMilestoneBossStage
+    ? Math.max(6, Math.min(totalWaves - 3, 5 + Math.floor(level / 6)))
+    : -1;
+  const bossVanguardWaveB =
+    isMilestoneBossStage && level >= 10
+      ? Math.max(bossVanguardWaveA + 2, totalWaves - 2)
+      : -1;
+
   for (let w = 1; w <= totalWaves; w++) {
     const groups: TdWaveGroup[] = [];
-    // +10% monster HP compounding every wave
-    const waveScale = hpScale * Math.pow(1.1, w - 1);
+    // Starting from Wave 3 of every stage, monster base HP increases by +50%, plus +10% compounding every wave
+    const wave3Boost = w >= 3 ? 1.5 : 1.0;
+    const waveScale = stageHpScale * wave3Boost * Math.pow(1.1, w - 1);
     const altPath = getPath(w);
     const secondPath = getPath(w + 1);
     const thirdPath = getPath(w + 2);
@@ -539,162 +554,232 @@ function buildWavesForStage(level: number, pathCount: number): TdWaveConfig[] {
     if (w === 1) {
       groups.push({
         enemyType: 'GOBLIN',
-        count: 7 + Math.floor(level / 3),
-        interval: 0.55,
+        count: 7 + Math.floor(level / 2),
+        interval: 0.55 * intervalScale,
         delay: 0,
         pathIndex: 0,
         hpMult: waveScale,
+        speedMult: stageSpeedMult,
       });
       if (pathCount >= 2) {
         groups.push({
           enemyType: level >= 4 ? 'SPIDER' : 'GOBLIN',
-          count: 5 + Math.floor(level / 4),
-          interval: 0.58,
+          count: 5 + Math.floor(level / 3),
+          interval: 0.58 * intervalScale,
           delay: 0.45,
           pathIndex: 1,
           hpMult: waveScale,
+          speedMult: stageSpeedMult,
         });
       }
       if (pathCount >= 3) {
         groups.push({
           enemyType: 'WOLF',
-          count: 4 + Math.floor(level / 8),
-          interval: 0.5,
-          delay: 0.9,
+          count: 4 + Math.floor(level / 5),
+          interval: 0.5 * intervalScale,
+          delay: 0.85,
           pathIndex: 2,
           hpMult: waveScale,
+          speedMult: stageSpeedMult,
         });
       }
     } else if (w === totalWaves) {
       // Final Wave Climax (ALWAYS the strongest wave of the stage!)
-      const isBossStage = level % 5 === 0 || level >= 3;
-      const finalMult = 1.24;
+      const finalMult = 1.24 + Math.floor((level - 1) / 5) * 0.04;
+      const finalBossCount = isMilestoneBossStage
+        ? level >= 25
+          ? 4
+          : level >= 15
+            ? 3
+            : 2
+        : level >= 26
+          ? 3
+          : level >= 16
+            ? 2
+            : level >= 6
+              ? 1
+              : 0;
+
+      if (finalBossCount > 0) {
+        groups.push({
+          enemyType: 'BOSS',
+          count: finalBossCount,
+          interval: finalBossCount >= 3 ? 2.4 : 2.8,
+          delay: 1.5,
+          pathIndex: 0,
+          hpMult: waveScale * (1.28 + level * 0.012),
+          speedMult: stageSpeedMult,
+        });
+      }
+
+      groups.push({
+        enemyType: 'MINIBOSS',
+        count: 2 + Math.floor(level / 7),
+        interval: 1.15 * intervalScale,
+        delay: 1.0,
+        pathIndex: secondPath,
+        hpMult: waveScale * (finalMult + 0.04),
+        speedMult: stageSpeedMult,
+      });
+
+      groups.push({
+        enemyType: 'KNIGHT_DARK',
+        count: 4 + Math.floor(level / 3),
+        interval: 0.85 * intervalScale,
+        delay: 0.5,
+        pathIndex: secondPath,
+        hpMult: waveScale * finalMult,
+        speedMult: stageSpeedMult,
+      });
+
       groups.push({
         enemyType: 'ORC',
-        count: 8 + Math.floor(level / 3),
-        interval: 0.5,
+        count: 8 + Math.floor(level / 2.5),
+        interval: 0.48 * intervalScale,
         delay: 0,
         pathIndex: 0,
         hpMult: waveScale * finalMult,
+        speedMult: stageSpeedMult,
       });
-      groups.push({
-        enemyType: 'KNIGHT_DARK',
-        count: 4 + Math.floor(level / 4),
-        interval: 0.88,
-        delay: 0.6,
-        pathIndex: secondPath,
-        hpMult: waveScale * finalMult,
-      });
+
       groups.push({
         enemyType: 'GOLEM',
-        count: 3 + Math.floor(level / 5),
-        interval: 0.95,
-        delay: 1.0,
+        count: 3 + Math.floor(level / 4),
+        interval: 0.92 * intervalScale,
+        delay: 0.9,
         pathIndex: altPath,
         hpMult: waveScale * finalMult,
+        speedMult: stageSpeedMult,
       });
+
       groups.push({
-        enemyType: 'MINIBOSS',
-        count: level >= 25 ? 4 : level >= 12 ? 3 : 2,
-        interval: 1.2,
-        delay: 1.3,
-        pathIndex: 0,
-        hpMult: waveScale * 1.26,
-      });
-      if (isBossStage) {
-        groups.push({
-          enemyType: 'BOSS',
-          count: level >= 25 ? 2 : 1,
-          interval: 2.2,
-          delay: 1.9,
-          pathIndex: 0,
-          hpMult: waveScale * (1.28 + Math.floor(level / 10) * 0.2),
-        });
-      }
-      groups.push({
-        enemyType: level >= 8 ? 'NECRO' : 'SHAMAN',
-        count: 3 + Math.floor(level / 5),
-        interval: 0.95,
-        delay: 2.2,
+        enemyType: level >= 7 ? 'NECRO' : 'SHAMAN',
+        count: 3 + Math.floor(level / 4),
+        interval: 0.9 * intervalScale,
+        delay: 2.0,
         pathIndex: 0,
         hpMult: waveScale * finalMult,
+        speedMult: stageSpeedMult,
       });
+
       groups.push({
         enemyType: level >= 6 ? 'HARPY' : 'WYVERN',
-        count: 6 + Math.floor(level / 4),
-        interval: 0.48,
-        delay: 2.5,
+        count: 6 + Math.floor(level / 3.5),
+        interval: 0.46 * intervalScale,
+        delay: 2.3,
         pathIndex: secondPath,
         hpMult: waveScale * finalMult,
+        speedMult: stageSpeedMult,
       });
+
       if (pathCount >= 3) {
         groups.push({
           enemyType: 'WOLF',
-          count: 10 + Math.floor(level / 5),
-          interval: 0.38,
-          delay: 1.4,
+          count: 10 + Math.floor(level / 4),
+          interval: 0.38 * intervalScale,
+          delay: 1.3,
           pathIndex: thirdPath,
           hpMult: waveScale * finalMult,
+          speedMult: stageSpeedMult,
         });
       }
     } else {
       const swarmRotation: TdEnemyType[] = ['GOBLIN', 'WOLF', 'SPIDER', 'ORC'];
       const leadType = swarmRotation[(w + level) % swarmRotation.length];
 
+      // Milestone Boss Stage Vanguard Bosses (e.g. stages 5, 10, 15, 20, 25, 30)
+      if (w === bossVanguardWaveA) {
+        groups.push({
+          enemyType: 'BOSS',
+          count: level >= 30 ? 2 : 1,
+          interval: 3.0,
+          delay: 1.4,
+          pathIndex: 0,
+          hpMult: waveScale * (1.1 + level * 0.008),
+          speedMult: stageSpeedMult,
+        });
+      } else if (w === bossVanguardWaveB) {
+        groups.push({
+          enemyType: 'BOSS',
+          count: level >= 20 ? 2 : 1,
+          interval: 2.8,
+          delay: 1.3,
+          pathIndex: secondPath,
+          hpMult: waveScale * (1.15 + level * 0.009),
+          speedMult: stageSpeedMult,
+        });
+      } else if (level >= 21 && w === Math.floor(totalWaves * 0.7)) {
+        // Late-campaign mid-stage Boss pressure on stages 21+
+        groups.push({
+          enemyType: 'BOSS',
+          count: 1,
+          interval: 2.8,
+          delay: 1.5,
+          pathIndex: 0,
+          hpMult: waveScale * (1.12 + level * 0.008),
+          speedMult: stageSpeedMult,
+        });
+      }
+
       groups.push({
         enemyType: leadType,
-        count: 7 + Math.floor(w * 0.85) + Math.floor(level / 3),
-        interval: leadType === 'WOLF' || leadType === 'SPIDER' ? 0.44 : 0.52,
+        count: 7 + Math.floor(w * 0.85) + Math.floor(level / 2.5),
+        interval: (leadType === 'WOLF' || leadType === 'SPIDER' ? 0.44 : 0.52) * intervalScale,
         delay: 0,
         pathIndex: altPath,
         hpMult: waveScale,
+        speedMult: stageSpeedMult,
       });
 
       if (pathCount >= 2 && w >= 2) {
         const flankType = swarmRotation[(w + level + 1) % swarmRotation.length];
         groups.push({
           enemyType: flankType,
-          count: 5 + Math.floor(w * 0.6),
-          interval: 0.5,
-          delay: 0.55,
+          count: 5 + Math.floor(w * 0.65) + Math.floor(level / 5),
+          interval: 0.5 * intervalScale,
+          delay: 0.5,
           pathIndex: secondPath,
           hpMult: waveScale,
+          speedMult: stageSpeedMult,
         });
       }
 
       if (w >= 2 && (level >= 2 || w >= 4)) {
-        const tankType: TdEnemyType = level >= 8 && w % 2 === 0 ? 'KNIGHT_DARK' : 'GOLEM';
+        const tankType: TdEnemyType = level >= 7 && w % 2 === 0 ? 'KNIGHT_DARK' : 'GOLEM';
         groups.push({
           enemyType: tankType,
-          count: 1 + Math.floor((w + level) / 6),
-          interval: 1.25,
-          delay: 0.85,
+          count: 1 + Math.floor((w + level) / 5),
+          interval: 1.2 * intervalScale,
+          delay: 0.8,
           pathIndex: 0,
           hpMult: waveScale,
+          speedMult: stageSpeedMult,
         });
       }
 
       if (w >= 3 && (level >= 2 || w >= 5)) {
-        const airType: TdEnemyType = level >= 6 && w % 2 === 1 ? 'HARPY' : 'WYVERN';
+        const airType: TdEnemyType = level >= 5 && w % 2 === 1 ? 'HARPY' : 'WYVERN';
         groups.push({
           enemyType: airType,
-          count: 3 + Math.floor((w + level) / 5),
-          interval: 0.62,
-          delay: 1.2,
+          count: 3 + Math.floor((w + level) / 4.5),
+          interval: 0.6 * intervalScale,
+          delay: 1.15,
           pathIndex: secondPath,
           hpMult: waveScale,
+          speedMult: stageSpeedMult,
         });
       }
 
       if (w >= 5 || (w >= 4 && level >= 3)) {
-        const supportType: TdEnemyType = level >= 7 && w % 2 === 0 ? 'NECRO' : 'SHAMAN';
+        const supportType: TdEnemyType = level >= 6 && w % 2 === 0 ? 'NECRO' : 'SHAMAN';
         groups.push({
           enemyType: supportType,
-          count: 1 + Math.floor(w / 4) + Math.floor(level / 9),
-          interval: 1.35,
-          delay: 1.5,
+          count: 1 + Math.floor(w / 4) + Math.floor(level / 7),
+          interval: 1.3 * intervalScale,
+          delay: 1.45,
           pathIndex: altPath,
           hpMult: waveScale,
+          speedMult: stageSpeedMult,
         });
       }
 
@@ -702,112 +787,133 @@ function buildWavesForStage(level: number, pathCount: number): TdWaveConfig[] {
       if (w === 8) {
         groups.push({
           enemyType: 'KNIGHT_DARK',
-          count: 2 + Math.floor(level / 6),
-          interval: 1.05,
-          delay: 1.1,
+          count: 2 + Math.floor(level / 5),
+          interval: 1.0 * intervalScale,
+          delay: 1.05,
           pathIndex: 0,
           hpMult: waveScale * 1.06,
+          speedMult: stageSpeedMult,
         });
         groups.push({
           enemyType: 'ORC',
-          count: 6 + Math.floor(level / 4),
-          interval: 0.48,
-          delay: 1.6,
+          count: 6 + Math.floor(level / 3.5),
+          interval: 0.48 * intervalScale,
+          delay: 1.5,
           pathIndex: secondPath,
           hpMult: waveScale * 1.05,
+          speedMult: stageSpeedMult,
         });
         groups.push({
           enemyType: 'WYVERN',
-          count: 3 + Math.floor(level / 6),
-          interval: 0.58,
-          delay: 2.0,
+          count: 3 + Math.floor(level / 5),
+          interval: 0.56 * intervalScale,
+          delay: 1.9,
           pathIndex: altPath,
           hpMult: waveScale * 1.05,
+          speedMult: stageSpeedMult,
         });
       } else if (w === 9) {
         groups.push({
           enemyType: 'MINIBOSS',
-          count: 1 + Math.floor(level / 12),
-          interval: 1.4,
-          delay: 1.15,
+          count: 1 + Math.floor(level / 9),
+          interval: 1.35 * intervalScale,
+          delay: 1.1,
           pathIndex: 0,
           hpMult: waveScale * 1.08,
+          speedMult: stageSpeedMult,
         });
         groups.push({
           enemyType: 'KNIGHT_DARK',
-          count: 3 + Math.floor(level / 5),
-          interval: 0.95,
-          delay: 1.5,
+          count: 3 + Math.floor(level / 4.5),
+          interval: 0.92 * intervalScale,
+          delay: 1.45,
           pathIndex: secondPath,
           hpMult: waveScale * 1.08,
+          speedMult: stageSpeedMult,
         });
         groups.push({
           enemyType: level >= 5 ? 'NECRO' : 'SHAMAN',
-          count: 2 + Math.floor(level / 8),
-          interval: 1.15,
-          delay: 2.0,
+          count: 2 + Math.floor(level / 7),
+          interval: 1.1 * intervalScale,
+          delay: 1.9,
           pathIndex: 0,
           hpMult: waveScale * 1.08,
+          speedMult: stageSpeedMult,
         });
         groups.push({
           enemyType: 'HARPY',
-          count: 4 + Math.floor(level / 5),
-          interval: 0.52,
-          delay: 2.3,
+          count: 4 + Math.floor(level / 4.5),
+          interval: 0.5 * intervalScale,
+          delay: 2.2,
           pathIndex: thirdPath,
           hpMult: waveScale * 1.06,
+          speedMult: stageSpeedMult,
         });
-      } else if (w === 10) {
+      } else if (w === 10 && totalWaves > 10) {
         groups.push({
           enemyType: 'MINIBOSS',
-          count: 2 + Math.floor(level / 9),
-          interval: 1.3,
+          count: 2 + Math.floor(level / 8),
+          interval: 1.25 * intervalScale,
           delay: 1.0,
           pathIndex: 0,
           hpMult: waveScale * 1.12,
+          speedMult: stageSpeedMult,
         });
         groups.push({
           enemyType: 'KNIGHT_DARK',
           count: 3 + Math.floor(level / 4),
-          interval: 0.9,
-          delay: 1.4,
+          interval: 0.88 * intervalScale,
+          delay: 1.35,
           pathIndex: secondPath,
           hpMult: waveScale * 1.1,
+          speedMult: stageSpeedMult,
         });
         groups.push({
           enemyType: 'GOLEM',
-          count: 2 + Math.floor(level / 5),
-          interval: 1.05,
-          delay: 1.7,
+          count: 2 + Math.floor(level / 4.5),
+          interval: 1.0 * intervalScale,
+          delay: 1.65,
           pathIndex: altPath,
           hpMult: waveScale * 1.1,
+          speedMult: stageSpeedMult,
         });
         groups.push({
           enemyType: 'NECRO',
-          count: 2 + Math.floor(level / 7),
-          interval: 1.15,
-          delay: 2.1,
+          count: 2 + Math.floor(level / 6),
+          interval: 1.1 * intervalScale,
+          delay: 2.0,
           pathIndex: 0,
           hpMult: waveScale * 1.1,
+          speedMult: stageSpeedMult,
         });
         groups.push({
           enemyType: 'HARPY',
           count: 5 + Math.floor(level / 4),
-          interval: 0.5,
-          delay: 2.3,
+          interval: 0.48 * intervalScale,
+          delay: 2.2,
           pathIndex: secondPath,
           hpMult: waveScale * 1.08,
+          speedMult: stageSpeedMult,
         });
       }
 
-      if (w === Math.floor(totalWaves * 0.65) && level >= 4 && w !== 8 && w !== 9 && w !== 10) {
+      if (
+        w === Math.floor(totalWaves * 0.65) &&
+        level >= 4 &&
+        w !== 8 &&
+        w !== 9 &&
+        w !== 10 &&
+        w !== bossVanguardWaveA &&
+        w !== bossVanguardWaveB
+      ) {
         groups.push({
           enemyType: 'MINIBOSS',
-          count: 1,
-          interval: 1,
-          delay: 1.8,
+          count: 1 + Math.floor(level / 15),
+          interval: 1.1 * intervalScale,
+          delay: 1.7,
           pathIndex: 0,
-          hpMult: waveScale * 0.95,
+          hpMult: waveScale * 0.98,
+          speedMult: stageSpeedMult,
         });
       }
     }
@@ -2259,6 +2365,17 @@ export function getTdLevelConfig(level: number): TdLevelConfig {
 
 export function getAllTdLevels(): TdLevelConfig[] {
   return TD_LEVELS;
+}
+
+export function getStageBossCount(level: number): number {
+  const cfg = getTdLevelConfig(level);
+  let total = 0;
+  for (const w of cfg.waves) {
+    for (const g of w.groups) {
+      if (g.enemyType === 'BOSS') total += g.count;
+    }
+  }
+  return total;
 }
 
 export function getTotalStarsEarnedInTd(levels: Record<number, { stars?: number }>): number {

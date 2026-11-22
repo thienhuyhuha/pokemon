@@ -25,6 +25,7 @@ import {
   DEFAULT_TD_UPGRADES,
   getAllTdLevels,
   getSpentUpgradeStars,
+  getStageBossCount,
   getTotalStarsEarnedInTd,
   TD_MAX_LEVEL,
   TD_UPGRADE_TRACKS,
@@ -299,7 +300,7 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
                         ) : lv.level % 5 === 0 ? (
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-950/90 border border-rose-500/60 text-[10px] font-bold text-rose-200">
                             <TdEnemyPreview type="BOSS" className="w-5 h-5" />
-                            <span>Boss + Hộ Vệ</span>
+                            <span>{getStageBossCount(lv.level)} Boss</span>
                           </span>
                         ) : (
                           <Play className="w-4 h-4 text-emerald-400 fill-current" />
