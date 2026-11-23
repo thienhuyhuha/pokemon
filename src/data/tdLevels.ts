@@ -524,7 +524,7 @@ export const TD_TOWERS: Record<TdTowerType, TdTowerConfig> = {
   KNIGHT_GUARD: {
     type: 'KNIGHT_GUARD',
     name: 'Long Kỵ Sĩ',
-    roleLabel: 'Triệu hồi Kỵ Sĩ · Phóng thương lửa & Chém lan',
+    roleLabel: 'Triệu hồi Kỵ Sĩ · Phun lửa thẳng mỗi 3s đẩy lùi ~5 bước',
     damageKind: 'MELEE',
     canHitAir: true,
     unlockStage: 10,

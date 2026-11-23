@@ -373,6 +373,7 @@ export interface TdBuiltTower {
   castWindupTimer: number;
   castWindupMax: number;
   castTargetId: string | null;
+  specialSkillTimer?: number;
 }
 
 export interface TdEnemyEntity {
@@ -420,6 +421,7 @@ export interface TdEnemyEntity {
   healAuraTimer: number;
   hitFlashTimer: number;
   distanceTraveled: number;
+  knockbackDist?: number;
 }
 
 export interface TdSoldierEntity {
@@ -509,6 +511,7 @@ export interface TdEffectBurst {
     | 'MUZZLE'
     | 'FROST_NOVA'
     | 'FIRE_BLAST'
+    | 'FIRE_BREATH'
     | 'CHRONO_PULSE';
   x: number;
   y: number;

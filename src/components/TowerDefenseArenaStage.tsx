@@ -1472,7 +1472,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
           }
         }
 
-        // Move freely along path waypoints (monsters can always walk past guards)
+        // Move freely along path waypoints (or slide backward when knocked back!)
         const path = lvl.paths[e.pathIndex] ?? lvl.paths[0];
         const targetWp = path[e.waypointIndex];
         if (!targetWp) {
@@ -1485,6 +1485,43 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             sound.playGameOver();
             onLoseRef.current(w.enemiesSlain, w.score);
             return;
+          }
+          continue;
+        }
+
+        if (e.knockbackDist && e.knockbackDist > 0) {
+          let pushStep = Math.min(e.knockbackDist, 420 * dt);
+          e.knockbackDist = Math.max(0, e.knockbackDist - pushStep);
+          while (pushStep > 0) {
+            const prevIdx = Math.max(0, e.waypointIndex - 1);
+            const prevWp = path[prevIdx];
+            if (!prevWp) {
+              e.knockbackDist = 0;
+              break;
+            }
+            const bx = prevWp.x - e.x;
+            const by = prevWp.y - e.y;
+            const dPrev = Math.hypot(bx, by);
+            if (dPrev <= pushStep) {
+              e.x = prevWp.x;
+              e.y = prevWp.y;
+              e.distanceTraveled = Math.max(0, e.distanceTraveled - dPrev);
+              pushStep -= dPrev;
+              if (e.waypointIndex > 1) {
+                e.waypointIndex -= 1;
+              } else {
+                e.knockbackDist = 0;
+                break;
+              }
+            } else if (dPrev > 0) {
+              e.x += (bx / dPrev) * pushStep;
+              e.y += (by / dPrev) * pushStep;
+              e.distanceTraveled = Math.max(0, e.distanceTraveled - pushStep);
+              pushStep = 0;
+            } else {
+              e.knockbackDist = 0;
+              break;
+            }
           }
           continue;
         }
@@ -1520,6 +1557,82 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
       for (const tw of w.towers) {
         if (tw.recoilTimer > 0) tw.recoilTimer = Math.max(0, tw.recoilTimer - dt);
         if (tw.type === 'BARRACKS') continue;
+
+        // Long Kỵ Sĩ (KNIGHT_GUARD): Ultimate straight-line Dragon Fire Breath every 3s
+        if (tw.type === 'KNIGHT_GUARD') {
+          tw.specialSkillTimer = Math.max(0, (tw.specialSkillTimer ?? 1.2) - dt);
+          if (tw.specialSkillTimer <= 0) {
+            const dragonStats = getEffectiveTowerStats(tw, upg);
+            let leadTarget: TdEnemyEntity | null = null;
+            for (const e of w.enemies) {
+              if (e.hp <= 0) continue;
+              if (e.flying && !dragonStats.canHitAir) continue;
+              if (dist(tw.x, tw.y, e.x, e.y) <= dragonStats.range) {
+                if (!leadTarget || e.distanceTraveled > leadTarget.distanceTraveled) {
+                  leadTarget = e;
+                }
+              }
+            }
+            if (leadTarget) {
+              tw.specialSkillTimer = 3.0;
+              const dx = leadTarget.x - tw.x;
+              const dy = leadTarget.y - tw.y;
+              const dLen = Math.max(1, Math.hypot(dx, dy));
+              const ux = dx / dLen;
+              const uy = dy / dLen;
+              const beamLen = Math.max(dragonStats.range, 220);
+              const originX = tw.x;
+              const originY = tw.y - 8;
+              const endX = originX + ux * beamLen;
+              const endY = originY + uy * beamLen;
+              tw.facingAngle = Math.atan2(dy, dx);
+              tw.recoilTimer = 0.34;
+
+              const breathDmg = Math.max(18, Math.round(dragonStats.damage * 1.45));
+              const breathBurnDps = Math.max(
+                24,
+                dragonStats.burnDps > 0 ? dragonStats.burnDps : Math.round(dragonStats.damage * 0.55)
+              );
+
+              for (const e of [...w.enemies]) {
+                if (e.hp <= 0) continue;
+                if (e.flying && !dragonStats.canHitAir) continue;
+                const vx = e.x - tw.x;
+                const vy = e.y - tw.y;
+                const proj = vx * ux + vy * uy;
+                const perp = Math.abs(vx * -uy + vy * ux);
+                if (proj >= -12 && proj <= beamLen + 16 && perp <= 26 + e.radius * 0.45) {
+                  applyDamageToEnemy(w, e, breathDmg, 'MAGIC', tw.id, {
+                    magicPiercePct: Math.max(0.35, dragonStats.armorPiercePct * 0.55),
+                    trueDamagePct: dragonStats.trueDamagePct,
+                  });
+                  if (e.hp > 0) {
+                    if (e.burnTimer <= 0) e.burnTickTimer = 0.5;
+                    e.burnDps = Math.max(e.burnDps, breathBurnDps);
+                    e.burnTimer = 4.0;
+                    e.burnSourceTowerId = tw.id;
+                    // Push enemy back ~5 footsteps along the road
+                    const pushAmt = e.isBoss ? 75 : 95;
+                    e.knockbackDist = Math.min(140, (e.knockbackDist ?? 0) + pushAmt);
+                  }
+                }
+              }
+
+              w.effects.push({
+                id: `fx-${w.idCounter++}`,
+                kind: 'FIRE_BREATH',
+                x: originX,
+                y: originY,
+                targetX: endX,
+                targetY: endY,
+                radius: 26,
+                ttl: 0.44,
+                maxTtl: 0.44,
+              });
+              sound.playTdMagic();
+            }
+          }
+        }
 
         // Check nearby Valkyrie / Chronomancer inspiring haste aura
         let hasteMult = 1;
@@ -2001,6 +2114,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
         castWindupTimer: 0,
         castWindupMax: 0.22,
         castTargetId: null,
+        specialSkillTimer: type === 'KNIGHT_GUARD' ? 1.2 : undefined,
       };
       w.towers.push(newTower);
 
@@ -2924,6 +3038,49 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             );
           }
 
+          if (fx.kind === 'FIRE_BREATH' && fx.targetX !== undefined && fx.targetY !== undefined) {
+            const bdx = fx.targetX - fx.x;
+            const bdy = fx.targetY - fx.y;
+            const beamLen = Math.max(20, Math.hypot(bdx, bdy));
+            const beamDeg = (Math.atan2(bdy, bdx) * 180) / Math.PI;
+            const pulseW = 1 + Math.sin(progress * Math.PI) * 0.28;
+            const surgeX = beamLen * (0.18 + progress * 0.72);
+            return (
+              <g
+                key={fx.id}
+                transform={`translate(${fx.x}, ${fx.y}) rotate(${beamDeg})`}
+                opacity={alpha}
+                className="pointer-events-none"
+              >
+                {/* Outer Crimson Flame Jet */}
+                <path
+                  d={`M0,${-6 * pulseW} L${beamLen * 0.88},${-18 * pulseW} L${beamLen},0 L${beamLen * 0.88},${18 * pulseW} L0,${6 * pulseW} Z`}
+                  fill="#DC2626"
+                  opacity="0.46"
+                />
+                {/* Mid Blazing Orange Flame Stream */}
+                <path
+                  d={`M0,${-4 * pulseW} Q${beamLen * 0.45},${-12 * pulseW} ${beamLen * 0.92},${-8 * pulseW} L${beamLen},0 L${beamLen * 0.92},${8 * pulseW} Q${beamLen * 0.45},${12 * pulseW} 0,${4 * pulseW} Z`}
+                  fill="#F97316"
+                  opacity="0.78"
+                />
+                {/* Inner White-Gold Dragon Core */}
+                <path
+                  d={`M0,-2 L${beamLen * 0.88},${-3.8 * pulseW} L${beamLen},0 L${beamLen * 0.88},${3.8 * pulseW} L0,2 Z`}
+                  fill="#FEF08A"
+                  opacity="0.95"
+                />
+                {/* Surging Forward Flame Chevron */}
+                <polygon
+                  points={`${surgeX - 18},-9 ${surgeX + 12},0 ${surgeX - 18},9 ${surgeX - 8},0`}
+                  fill="#FFFFFF"
+                  opacity="0.82"
+                />
+                <circle cx="2" cy="0" r={8 * alpha + 3} fill="#FEF08A" opacity="0.85" />
+              </g>
+            );
+          }
+
           if (fx.kind === 'CHAIN' && fx.targetX !== undefined && fx.targetY !== undefined) {
             const dx = fx.targetX - fx.x;
             const dy = fx.targetY - fx.y;
@@ -3279,7 +3436,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                       }
                       if (selectedTower.type === 'KNIGHT_GUARD') {
                         const burnStr = eff.burnDps > 0 ? ` · Đốt ${eff.burnDps}/s` : '';
-                        return `${eff.soldierCount} Kỵ (${eff.soldierHp} HP) · Thương ${eff.damage}${burnStr} · Hạ ${selectedTower.kills}`;
+                        return `${eff.soldierCount} Kỵ (${eff.soldierHp} HP) · Thương ${eff.damage}${burnStr} · Phun lửa 3s (Đẩy ~5 bước) · Hạ ${selectedTower.kills}`;
                       }
                       const slowStr = eff.slowPct > 0 ? ` · Chậm ${Math.round(eff.slowPct * 100)}%` : '';
                       const burnStr = eff.burnDps > 0 ? ` · Đốt ${eff.burnDps}/s` : '';
