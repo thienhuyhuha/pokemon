@@ -187,7 +187,8 @@ function dist(ax: number, ay: number, bx: number, by: number): number {
 
 function getEnemyHealMultiplier(enemy: TdEnemyEntity): number {
   let mult = 1;
-  if (enemy.poisonTimer > 0) mult *= 0.5;
+  if (enemy.heavyPoisonTimer && enemy.heavyPoisonTimer > 0) mult *= 0.2;
+  else if (enemy.poisonTimer > 0) mult *= 0.5;
   if (enemy.burnTimer > 0) mult *= 0.8;
   return mult;
 }
@@ -282,9 +283,11 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
   }
   const baseSlowSplash = branchCfg?.slowSplashRadius ?? tierStats.slowSplashRadius ?? 0;
   let slowSplashRadius =
-    baseSlowSplash > 0 || (mythicCfg?.slowSplashBonus ?? 0) > 0
-      ? Math.max(55, baseSlowSplash) + (mythicCfg?.slowSplashBonus ?? 0) + mythicTiers * 2
-      : 0;
+    tower.type === 'MAGE' && tower.level >= 4 && resolvedFocus === 'FOCUSED'
+      ? 10
+      : baseSlowSplash > 0 || (mythicCfg?.slowSplashBonus ?? 0) > 0
+        ? Math.max(55, baseSlowSplash) + (mythicCfg?.slowSplashBonus ?? 0) + mythicTiers * 2
+        : 0;
 
   const basePoison = branchCfg?.poisonDps ?? tierStats.poisonDps ?? 0;
   const poisonDps = basePoison > 0 ? Math.round(damage * (mythicCfg?.poisonMult ?? 1)) : 0;
@@ -317,11 +320,11 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
       : 0;
 
   let auraHastePct = branchCfg?.auraHastePct ?? tierStats.auraHastePct ?? 0;
+  let auraDamageBonusPct = branchCfg?.auraDamageBonusPct ?? tierStats.auraDamageBonusPct ?? 0;
   if (tower.type === 'VALKYRIE') {
-    if (tower.level >= 4) {
-      const valkProg = Math.min(1, (tower.level - 4) / 16); // Lv 4..20
-      auraHastePct = 0.85 + valkProg * 1.15 + (mythicCfg?.auraHasteBonus ?? 0);
-    }
+    const lv = Math.min(20, Math.max(1, tower.level));
+    auraHastePct = lv >= 20 ? 2.5 : Math.min(2.0, Number((1.0 + (lv - 1) * 0.1).toFixed(2)));
+    auraDamageBonusPct = lv >= 20 ? 3.0 : Number((1.0 + (lv - 1) * 0.1).toFixed(2));
   } else if (auraHastePct > 0 && (midTiers > 0 || mythicTiers > 0)) {
     auraHastePct = Math.min(
       0.75,
@@ -329,16 +332,13 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
     );
   }
 
-  // Vệ Binh (BARRACKS) Crit Chance & Crit Damage Aura (scales across Lv 1..30, capped at 30% & 300%)
+  // Vệ Binh (BARRACKS): Lv 1 = +1% BK / +10% STBK -> Lv 29 = 29% / 290% -> Lv 30 = 30% + 10% (40%) / 300% + 200% (500%)
   let auraCritChancePct = branchCfg?.auraCritChancePct ?? tierStats.auraCritChancePct ?? 0;
   let auraCritDamageBonus = branchCfg?.auraCritDamageBonus ?? tierStats.auraCritDamageBonus ?? 0;
-  if (tower.type === 'BARRACKS' && tower.level >= 4) {
-    const lvProg = Math.min(1, (tower.level - 4) / 26); // Lv 4..30
-    const isFocusedCrit = branchCfg?.focusBranch === 'FOCUSED';
-    auraCritChancePct +=
-      lvProg * (isFocusedCrit ? 0.08 : 0.1) + (mythicCfg?.auraCritChanceBonus ?? 0) * 0.5;
-    auraCritDamageBonus +=
-      lvProg * (isFocusedCrit ? 1.15 : 1.35) + (mythicCfg?.auraCritDamageBonus ?? 0) * 0.6;
+  if (tower.type === 'BARRACKS') {
+    const lv = Math.min(30, Math.max(1, tower.level));
+    auraCritChancePct = Number((lv * 0.01 + (lv >= 30 ? 0.1 : 0)).toFixed(4));
+    auraCritDamageBonus = Number((lv * 0.1 + (lv >= 30 ? 2.0 : 0)).toFixed(2));
   }
 
   const canHitAir = cfg.canHitAir || tower.branch === 'TESLA_COIL' || Boolean(mythicCfg?.grantCanHitAir);
@@ -428,8 +428,9 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
     const u = upgrades.barracks ?? 0;
     if (tower.type === 'BARRACKS') {
       if (u >= 1) range = Math.round(range * 1.15);
-      if (u >= 2) auraCritChancePct += 0.04;
-      if (u >= 3) auraCritDamageBonus += 0.3;
+      if (u >= 2) range = Math.round(range * 1.08);
+      if (u >= 3) range = Math.round(range * 1.1);
+      if (u >= 5) range = Math.round(range * 1.12);
     } else {
       if (u >= 1) {
         soldierHp = Math.round(soldierHp * 1.25);
@@ -468,11 +469,11 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
   if (tower.type === 'VALKYRIE' || tower.type === 'CHRONOMANCER') {
     const u = upgrades.support ?? 0;
     if (tower.type === 'VALKYRIE') {
-      if (u >= 1) auraHastePct += 0.14;
-      if (u >= 2) auraHastePct += 0.12;
+      if (u >= 1) range = Math.round(range * 1.08);
+      if (u >= 2) range = Math.round(range * 1.08);
       if (u >= 3) range = Math.round(range * 1.15);
-      if (u >= 4) auraHastePct += 0.18;
-      if (u >= 5) auraHastePct += 0.25;
+      if (u >= 4) range = Math.round(range * 1.1);
+      if (u >= 5) range = Math.round(range * 1.12);
     } else {
       if (u >= 1) damage = Math.round(damage * 1.14);
       if (u >= 2) auraHastePct = Math.min(0.8, auraHastePct + 0.08);
@@ -526,19 +527,20 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
     slowPct = 0;
     slowSplashRadius = 0;
   } else if (tower.type === 'BARRACKS') {
-    // Barracks is pure Crit Chance (max 30%) + Crit Damage (max +300%) buffer
+    // Barracks is pure Crit Chance (up to 40% at Lv30) + Crit Damage (up to +500% at Lv30) buffer
     damage = 0;
     slowPct = 0;
     slowSplashRadius = 0;
-    auraCritChancePct = Math.min(0.3, auraCritChancePct);
-    auraCritDamageBonus = Math.min(3.0, auraCritDamageBonus);
+    auraCritChancePct = Math.min(0.4, auraCritChancePct);
+    auraCritDamageBonus = Math.min(5.0, auraCritDamageBonus);
   } else if (tower.type === 'VALKYRIE') {
-    // Valkyrie is pure Attack Speed buffer (max +200%)
+    // Valkyrie buffs Attack Speed (up to +250% at Lv20) + Pre-crit Damage (up to +3x at Lv20)
     damage = 0;
     slowPct = 0;
     slowSplashRadius = 0;
     targetCount = 0;
-    auraHastePct = Math.min(2.0, auraHastePct);
+    auraHastePct = Math.min(2.5, auraHastePct);
+    auraDamageBonusPct = Math.min(3.0, auraDamageBonusPct);
   }
 
   if (tower.type === 'MAGE') {
@@ -561,7 +563,7 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
       targetCount = targetCount >= 6 ? 2 : 1;
       if (tower.type === 'MAGE') {
         targetCount = 1;
-        slowSplashRadius = 0;
+        slowSplashRadius = 10;
       }
       if (chainCount > 0) {
         chainCount = Math.max(2, Math.floor(chainCount * 0.4));
@@ -580,6 +582,16 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
     }
   }
 
+  if (tower.type === 'MAGE' && tower.level >= 4 && resolvedFocus === 'FOCUSED') {
+    targetCount = 1;
+    slowSplashRadius = 10;
+  }
+
+  if (tower.type === 'ASSASSIN' && tower.level >= 4 && resolvedFocus === 'FOCUSED') {
+    damage = Math.round(damage * 1.3);
+    targetCount = tower.level >= 20 ? 2 : 1;
+  }
+
   if (tower.type === 'ARTILLERY') {
     // Artillery always fires 1 heavy shell that blasts ALL enemies in splashRadius (never capped at 5 targets)
     targetCount = 1;
@@ -588,6 +600,14 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
 
   const executeBelowPct =
     tower.type === 'ASSASSIN' && tower.level >= 4 && resolvedFocus === 'FOCUSED' ? 0.1 : 0;
+
+  const heavyPoisonChance =
+    tower.type === 'ASSASSIN' && tower.level >= 4 && resolvedFocus === 'MULTI' ? 0.01 : 0;
+
+  const detonateChance =
+    tower.type === 'PYROMANCER' && tower.level >= 4 && resolvedFocus === 'FOCUSED' ? 0.01 : 0;
+  const detonateMult = detonateChance > 0 ? 5 : 0;
+  const detonateRadius = detonateChance > 0 ? 100 : 0;
 
   const breathCooldown =
     tower.type === 'KNIGHT_GUARD'
@@ -633,14 +653,19 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
     poisonDps: effectivePoisonDps,
     poisonPctPerTick,
     poisonSpreadRadius: effectivePoisonSpread,
+    heavyPoisonChance,
     burnDps,
     burnKind,
     burnPctPerSec,
+    detonateChance,
+    detonateMult,
+    detonateRadius,
     stunChance,
     critChance,
     critMult,
     chainCount,
     auraHastePct,
+    auraDamageBonusPct,
     auraCritChancePct,
     auraCritDamageBonus,
     executeBelowPct,
@@ -1364,6 +1389,39 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             e.poisonSourceTowerId = undefined;
           }
         }
+        if (e.heavyPoisonTimer && e.heavyPoisonTimer > 0) {
+          e.heavyPoisonTimer -= dt;
+          e.heavyPoisonTickTimer = (e.heavyPoisonTickTimer ?? 1.0) - dt;
+          let diedFromHeavyPoison = false;
+          while (e.heavyPoisonTickTimer <= 0 && e.hp > 0) {
+            e.heavyPoisonTickTimer += 1.0;
+            const hpDmg = Math.max(1, e.maxHp * 0.01);
+            applyDamageToEnemy(w, e, hpDmg, 'TRUE', e.heavyPoisonSourceTowerId);
+            w.effects.push({
+              id: `fx-${w.idCounter++}`,
+              kind: 'HIT',
+              x: e.x,
+              y: e.y - 12,
+              radius: 12,
+              color: '#A855F7',
+              ttl: 0.25,
+              maxTtl: 0.25,
+            });
+            if (e.hp <= 0) {
+              diedFromHeavyPoison = true;
+              break;
+            }
+          }
+          if (diedFromHeavyPoison) {
+            w.enemies.splice(i, 1);
+            continue;
+          }
+          if (e.heavyPoisonTimer <= 0) {
+            e.heavyPoisonTimer = 0;
+            e.heavyPoisonTickTimer = 0;
+            e.heavyPoisonSourceTowerId = undefined;
+          }
+        }
         if (e.burnTimer > 0) {
           e.burnTimer -= dt;
           e.burnTickTimer -= dt;
@@ -1752,8 +1810,8 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
         // Pure Aura Support Towers do not fire projectiles
         if (tw.type === 'BARRACKS' || tw.type === 'VALKYRIE') continue;
 
-        // Pháp Sư (MAGE): Every 10s, Root up to 3 highest-HP targets in range for 2s (NOT accelerated by Thánh Nữ!)
-        if (tw.type === 'MAGE') {
+        // Pháp Sư Đơn Mục Tiêu (MAGE FOCUSED): Every 10s, Root up to 3 highest-HP targets in range for 2s (NOT accelerated by Thánh Nữ!)
+        if (tw.type === 'MAGE' && tw.level >= 4 && tw.focusBranch === 'FOCUSED') {
           tw.specialSkillTimer = Math.max(0, (tw.specialSkillTimer ?? 2.0) - dt);
           if (tw.specialSkillTimer <= 0) {
             const mageStats = getEffectiveTowerStats(tw, upg);
@@ -1868,13 +1926,17 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
           }
         }
 
-        // Check nearby Valkyrie / Chronomancer inspiring haste aura (normal attacks only, capped at +200%)
+        // Check nearby Valkyrie / Chronomancer inspiring haste & pre-crit damage aura (normal attacks only)
         let hasteMult = 1;
+        let bonusDmgMult = 0;
         for (const auraTw of hasteAuras) {
           if (auraTw.id === tw.id) continue;
           const auraStats = getEffectiveTowerStats(auraTw, upg);
           if (dist(tw.x, tw.y, auraTw.x, auraTw.y) <= auraStats.range) {
             hasteMult = Math.max(hasteMult, 1 + auraStats.auraHastePct);
+            if (auraTw.type === 'VALKYRIE' && auraStats.auraDamageBonusPct > 0) {
+              bonusDmgMult = Math.max(bonusDmgMult, auraStats.auraDamageBonusPct);
+            }
           }
         }
 
@@ -1941,6 +2003,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
         // Tesla Coil & Artillery EMP handle multi-target instant lightning bursts
         if (tw.branch === 'TESLA_COIL' || tw.mythicPath === 'ARTILLERY_EMP') {
           const chainKind = tw.type === 'ARTILLERY' ? 'SPLASH' : 'MAGIC';
+          const chainBaseDmg = Math.round(stats.damage * (1 + bonusDmgMult));
           const pierceOpts = {
             armorPiercePct: stats.armorPiercePct,
             magicPiercePct: stats.magicPiercePct,
@@ -1950,7 +2013,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             if (seedTarget.hp <= 0) continue;
             const hitSet = new Set<string>([seedTarget.id]);
             let current: TdEnemyEntity = seedTarget;
-            applyDamageToEnemy(w, current, stats.damage, chainKind, tw.id, pierceOpts);
+            applyDamageToEnemy(w, current, chainBaseDmg, chainKind, tw.id, pierceOpts);
             if (stats.slowPct > 0) {
               current.slowPct = Math.max(current.slowPct, stats.slowPct);
               current.slowTimer = 2.6;
@@ -1982,7 +2045,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
               }
               if (!nextJump) break;
               hitSet.add(nextJump.id);
-              applyDamageToEnemy(w, nextJump, Math.round(stats.damage * 0.8), chainKind, tw.id, pierceOpts);
+              applyDamageToEnemy(w, nextJump, Math.round(chainBaseDmg * 0.8), chainKind, tw.id, pierceOpts);
               if (stats.slowPct > 0) {
                 nextJump.slowPct = Math.max(nextJump.slowPct, stats.slowPct);
                 nextJump.slowTimer = 2.4;
@@ -2005,7 +2068,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
           continue;
         }
 
-        // Compute Vệ Binh (BARRACKS) Crit Chance (+30% max) & Crit Damage (+300% max) Aura
+        // Compute Vệ Binh (BARRACKS) Crit Chance (+40% max at Lv30) & Crit Damage (+500% max at Lv30) Aura
         let bonusCritChance = 0;
         let bonusCritDamage = 0;
         for (const critTw of critAuras) {
@@ -2015,8 +2078,8 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             bonusCritDamage = Math.max(bonusCritDamage, cStats.auraCritDamageBonus);
           }
         }
-        bonusCritChance = Math.min(0.3, bonusCritChance);
-        bonusCritDamage = Math.min(3.0, bonusCritDamage);
+        bonusCritChance = Math.min(0.4, bonusCritChance);
+        bonusCritDamage = Math.min(5.0, bonusCritDamage);
         const effCritChance = Math.min(1, stats.critChance + bonusCritChance);
         const effCritMult = stats.critMult + bonusCritDamage;
 
@@ -2056,8 +2119,9 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
           tw.type === 'PYROMANCER' ||
           tw.type === 'CHRONOMANCER';
 
+        const normalDmgWithAura = Math.round(stats.damage * (1 + bonusDmgMult));
         targets.forEach((tgt, idx) => {
-          let finalDmg = stats.damage;
+          let finalDmg = normalDmgWithAura;
           let isCrit = false;
           if (effCritChance > 0 && Math.random() < effCritChance) {
             finalDmg = Math.round(finalDmg * effCritMult);
@@ -2097,6 +2161,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             progress: 0,
             duration: projDur,
             damage: finalDmg,
+            normalDamage: normalDmgWithAura,
             damageKind: isMagicType ? 'MAGIC' : tw.type === 'ARTILLERY' ? 'SPLASH' : 'PHYSICAL',
             splashRadius: stats.splashRadius,
             slowPct: stats.slowPct,
@@ -2104,9 +2169,13 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             poisonDps: stats.poisonDps,
             poisonPctPerTick: stats.poisonPctPerTick,
             poisonSpreadRadius: stats.poisonSpreadRadius,
+            heavyPoisonChance: stats.heavyPoisonChance,
             burnDps: stats.burnDps,
             burnKind: stats.burnKind,
             burnPctPerSec: stats.burnPctPerSec,
+            detonateChance: stats.detonateChance,
+            detonateMult: stats.detonateMult,
+            detonateRadius: stats.detonateRadius,
             stunChance: stats.stunChance,
             stunDuration: 1.2,
             chainCount: stats.chainCount,
@@ -2299,6 +2368,61 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                   }
                 }
               }
+              if (
+                liveTarget.hp > 0 &&
+                p.heavyPoisonChance &&
+                p.heavyPoisonChance > 0 &&
+                Math.random() < p.heavyPoisonChance
+              ) {
+                if (!liveTarget.heavyPoisonTimer || liveTarget.heavyPoisonTimer <= 0) {
+                  liveTarget.heavyPoisonTickTimer = 1.0;
+                }
+                liveTarget.heavyPoisonTimer = 60.0;
+                liveTarget.heavyPoisonSourceTowerId = p.sourceTowerId;
+                w.effects.push({
+                  id: `fx-${w.idCounter++}`,
+                  kind: 'HIT',
+                  x: liveTarget.x,
+                  y: liveTarget.y - 16,
+                  radius: 22,
+                  label: 'ĐỘC NẶNG!',
+                  color: '#A855F7',
+                  ttl: 0.75,
+                  maxTtl: 0.75,
+                });
+              }
+            }
+            if (p.detonateChance && p.detonateChance > 0 && Math.random() < p.detonateChance) {
+              const detRadius = p.detonateRadius ?? 100;
+              const detBase = p.normalDamage ?? p.damage;
+              const detDmg = Math.round(detBase * (p.detonateMult ?? 5));
+              for (const nearby of [...w.enemies]) {
+                if (nearby.hp <= 0) continue;
+                if (dist(p.targetX, p.targetY, nearby.x, nearby.y) <= detRadius) {
+                  applyDamageToEnemy(w, nearby, detDmg, 'MAGIC', p.sourceTowerId, pierceOpts);
+                }
+              }
+              w.effects.push({
+                id: `fx-${w.idCounter++}`,
+                kind: 'FIRE_BLAST',
+                x: p.targetX,
+                y: p.targetY,
+                radius: detRadius,
+                ttl: 0.45,
+                maxTtl: 0.45,
+              });
+              w.effects.push({
+                id: `fx-${w.idCounter++}`,
+                kind: 'HIT',
+                x: p.targetX,
+                y: p.targetY - 22,
+                radius: 24,
+                label: 'KÍCH NỔ x5!',
+                color: '#F97316',
+                ttl: 0.85,
+                maxTtl: 0.85,
+              });
+              sound.playTdMeteor();
             }
             // Mage / Frost Valkyrie / Chronomancer AoE Slow Pulse
             if (p.slowSplashRadius && p.slowSplashRadius > 0 && p.slowPct > 0) {
@@ -2488,15 +2612,18 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
       const cfg = TD_TOWERS[tw.type];
       const maxLv = getTowerMaxLevel(tw.type);
       const slotMult = getTowerSlotCostMultiplier(twIdx + 1);
+      const resolvedBranchId = branchId ?? (cfg.singleBranch ? cfg.branches[0]?.id : undefined);
+      const resolvedMythicId =
+        mythicPathId ?? (cfg.singleBranch ? TD_MYTHIC_PATHS[tw.type][0]?.id : undefined);
       let baseCost = 0;
       if (tw.level === 1 || tw.level === 2) {
         baseCost = cfg.tiers[tw.level].cost;
-      } else if (tw.level === 3 && branchId) {
-        const branchCfg = cfg.branches.find((b) => b.id === branchId);
+      } else if (tw.level === 3 && resolvedBranchId) {
+        const branchCfg = cfg.branches.find((b) => b.id === resolvedBranchId);
         if (!branchCfg) return;
         baseCost = branchCfg.cost;
-      } else if (tw.level === 10 && mythicPathId) {
-        const mythicCfg = getMythicPathConfig(tw.type, mythicPathId);
+      } else if (tw.level === 10 && resolvedMythicId) {
+        const mythicCfg = getMythicPathConfig(tw.type, resolvedMythicId);
         if (!mythicCfg) return;
         baseCost = getMythicUpgradeCost(mythicCfg.cost, tw.focusBranch);
       } else if (tw.level >= 4 && tw.level < maxLv && tw.level !== 10) {
@@ -2519,14 +2646,14 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
       tw.totalSpent += cost;
       if (tw.level < 3) {
         tw.level = (tw.level + 1) as TdTowerLevel;
-      } else if (tw.level === 3 && branchId) {
-        const pickedBranch = cfg.branches.find((b) => b.id === branchId);
+      } else if (tw.level === 3 && resolvedBranchId) {
+        const pickedBranch = cfg.branches.find((b) => b.id === resolvedBranchId);
         tw.level = 4;
-        tw.branch = branchId;
+        tw.branch = resolvedBranchId;
         tw.focusBranch = cfg.singleBranch ? 'MULTI' : (focusBranch ?? pickedBranch?.focusBranch ?? 'MULTI');
-      } else if (tw.level === 10 && mythicPathId) {
+      } else if (tw.level === 10 && resolvedMythicId) {
         tw.level = 11;
-        tw.mythicPath = mythicPathId;
+        tw.mythicPath = resolvedMythicId;
       } else if (tw.level >= 4 && tw.level < maxLv) {
         tw.level = (tw.level + 1) as TdTowerLevel;
       }
@@ -3115,6 +3242,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                 hitFlash={e.hitFlashTimer > 0}
                 slowed={e.slowTimer > 0}
                 poisoned={e.poisonTimer > 0}
+                heavyPoisoned={Boolean(e.heavyPoisonTimer && e.heavyPoisonTimer > 0)}
                 burned={e.burnTimer > 0 && e.burnKind !== 'DEEP'}
                 deepBurned={e.burnTimer > 0 && e.burnKind === 'DEEP'}
                 rooted={Boolean(e.rootTimer && e.rootTimer > 0)}
@@ -3798,6 +3926,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
         let recvCritChance = 0;
         let recvCritDmg = 0;
         let recvHaste = 0;
+        let recvDmgBonus = 0;
         if (selectedTower.type !== 'BARRACKS' && selectedTower.type !== 'VALKYRIE') {
           for (const ally of snap.towers) {
             if (ally.id === selectedTower.id) continue;
@@ -3810,19 +3939,108 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
               if (ally.type === 'VALKYRIE' || ally.type === 'CHRONOMANCER') {
                 recvHaste = Math.max(recvHaste, allyStats.auraHastePct);
               }
+              if (ally.type === 'VALKYRIE' && allyStats.auraDamageBonusPct > 0) {
+                recvDmgBonus = Math.max(recvDmgBonus, allyStats.auraDamageBonusPct);
+              }
             }
           }
-          recvCritChance = Math.min(0.3, recvCritChance);
-          recvCritDmg = Math.min(3.0, recvCritDmg);
+          recvCritChance = Math.min(0.4, recvCritChance);
+          recvCritDmg = Math.min(5.0, recvCritDmg);
         }
 
         const scaleSlotCost = (base: number) =>
           getDiscountedTdCost(Math.round(base * slotMult), upgrades);
 
+        const statCells: { label: string; value: string; tone?: string }[] = [];
+        if (selectedTower.type === 'BARRACKS') {
+          statCells.push(
+            { label: 'Buff TL BK', value: `+${Math.round(eff.auraCritChancePct * 100)}%`, tone: 'text-amber-300' },
+            { label: 'Buff ST BK', value: `+${Math.round(eff.auraCritDamageBonus * 100)}%`, tone: 'text-rose-300' },
+            { label: 'Tầm', value: `${eff.range}px` }
+          );
+        } else if (selectedTower.type === 'VALKYRIE') {
+          statCells.push(
+            { label: 'Buff Tốc', value: `+${Math.round(eff.auraHastePct * 100)}%`, tone: 'text-amber-300' },
+            { label: 'Buff ST', value: `+${eff.auraDamageBonusPct.toFixed(1)}x`, tone: 'text-rose-300' },
+            { label: 'Tầm', value: `${eff.range}px` }
+          );
+        } else {
+          const totalTargets = eff.chainCount > 0 ? eff.chainCount : eff.targetCount;
+          const totalCritPct = Math.min(100, Math.round((eff.critChance + recvCritChance) * 100));
+          const totalCritMult = (eff.critMult + recvCritDmg).toFixed(1);
+          const effectiveSpd = (Number(atkSpd) * (1 + recvHaste)).toFixed(1);
+          const displayDmg = recvDmgBonus > 0 ? Math.round(eff.damage * (1 + recvDmgBonus)) : eff.damage;
+
+          statCells.push(
+            { label: 'Sát thương', value: recvDmgBonus > 0 ? `${displayDmg} (+${recvDmgBonus.toFixed(1)}x)` : `${displayDmg}`, tone: 'text-amber-300' },
+            { label: 'Tốc đánh', value: recvHaste > 0 ? `${effectiveSpd}/s (+${Math.round(recvHaste * 100)}%)` : `${atkSpd}/s` },
+            { label: 'Tầm', value: `${eff.range}px` },
+            { label: 'Mục tiêu', value: eff.splashRadius > 0 ? `Vùng ${eff.splashRadius}px` : `${totalTargets}` }
+          );
+          if (totalCritPct > 0) {
+            statCells.push({ label: 'Chí mạng', value: `${totalCritPct}% (x${totalCritMult})`, tone: 'text-yellow-300' });
+          }
+          if (eff.slowPct > 0) {
+            statCells.push({
+              label: 'Làm chậm',
+              value: eff.slowSplashRadius > 0 ? `${Math.round(eff.slowPct * 100)}% (${eff.slowSplashRadius}px)` : `${Math.round(eff.slowPct * 100)}%`,
+              tone: 'text-sky-300',
+            });
+          }
+          if (selectedTower.type === 'MAGE' && selectedTower.level >= 4 && selectedTower.focusBranch === 'FOCUSED') {
+            statCells.push({ label: 'Trói chân', value: '3 MT · 2s/10s', tone: 'text-cyan-300' });
+          }
+          if (selectedTower.type === 'KNIGHT_GUARD') {
+            statCells.push(
+              { label: 'Kỵ sĩ', value: `${eff.soldierCount} (${eff.soldierHp} HP)` },
+              { label: 'Phun lửa', value: `${eff.breathCooldown.toFixed(1)}s · 8 bước`, tone: 'text-orange-300' }
+            );
+          }
+          if (eff.stunChance > 0) {
+            statCells.push({ label: 'Choáng', value: `${(eff.stunChance * 100).toFixed(1)}%`, tone: 'text-yellow-300' });
+          }
+          if (eff.executeBelowPct > 0) {
+            statCells.push({ label: 'Kết liễu', value: `<${Math.round(eff.executeBelowPct * 100)}% HP`, tone: 'text-rose-300' });
+          }
+          if (eff.poisonPctPerTick > 0 || eff.poisonDps > 0) {
+            statCells.push({
+              label: 'Độc',
+              value: eff.poisonPctPerTick > 0 ? `${(eff.poisonPctPerTick * 100).toFixed(1)}%/2s` : `${eff.poisonDps}/s`,
+              tone: 'text-emerald-300',
+            });
+          }
+          if (eff.heavyPoisonChance > 0) {
+            statCells.push({ label: 'Độc nặng', value: `${Math.round(eff.heavyPoisonChance * 100)}% · 60s`, tone: 'text-purple-300' });
+          }
+          if (eff.burnPctPerSec > 0 || eff.burnDps > 0) {
+            statCells.push({
+              label: eff.burnKind === 'DEEP' ? 'Bỏng sâu' : 'Bỏng',
+              value: eff.burnPctPerSec > 0 ? `${Math.round(eff.burnPctPerSec * 100)}%/s · 5s` : `${eff.burnDps}/s`,
+              tone: 'text-orange-300',
+            });
+          }
+          if (eff.detonateChance > 0) {
+            statCells.push({ label: 'Kích nổ', value: `${Math.round(eff.detonateChance * 100)}% · x${eff.detonateMult} (${eff.detonateRadius}px)`, tone: 'text-amber-300' });
+          }
+          if (eff.auraHastePct > 0) {
+            statCells.push({ label: 'Buff Tốc', value: `+${Math.round(eff.auraHastePct * 100)}%`, tone: 'text-purple-300' });
+          }
+          if (eff.armorPiercePct > 0) {
+            statCells.push({ label: 'X.Giáp', value: `${Math.round(eff.armorPiercePct * 100)}%` });
+          }
+          if (eff.magicPiercePct > 0) {
+            statCells.push({ label: 'X.Kháng', value: `${Math.round(eff.magicPiercePct * 100)}%` });
+          }
+          if (eff.trueDamagePct > 0) {
+            statCells.push({ label: 'ST Chuẩn', value: `${Math.round(eff.trueDamagePct * 100)}%` });
+          }
+          statCells.push({ label: 'Hạ gục', value: `${selectedTower.kills}` });
+        }
+
         return (
           <div
             onClick={(e) => e.stopPropagation()}
-            className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 w-[95%] max-w-xl max-h-[68vh] overflow-y-auto rounded-xl bg-[#0F172A]/95 backdrop-blur-md border border-sky-400/80 p-2 shadow-2xl flex flex-col gap-1.5"
+            className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 w-[95%] max-w-xl max-h-[68vh] overflow-y-auto rounded-xl bg-[#0F172A]/95 backdrop-blur-md border border-sky-400/80 p-2.5 shadow-2xl flex flex-col gap-2"
           >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
@@ -3859,58 +4077,10 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                       </span>
                     )}
                     {slotBonusPct > 0 && (
-                      <span className="text-[9px] font-bold px-1 rounded bg-amber-950/90 text-amber-300 border border-amber-500/50 shrink-0">
+                      <span className="text-[9px] font-bold px-1 rounded bg-amber-950/90 text-amber-300 border border-amber-500/50 shrink-0 font-mono-num">
                         CT#{slotNumber} (+{slotBonusPct}%)
                       </span>
                     )}
-                  </div>
-                  <div className="text-[10px] text-slate-300 font-mono-num leading-tight truncate">
-                    {(() => {
-                      if (selectedTower.type === 'BARRACKS') {
-                        return `Buff +${Math.round(eff.auraCritChancePct * 100)}% Tỷ lệ BK · +${Math.round(eff.auraCritDamageBonus * 100)}% ST Bạo kích · Tầm ${eff.range}px`;
-                      }
-                      if (selectedTower.type === 'VALKYRIE') {
-                        return `Buff Tốc đánh +${Math.round(eff.auraHastePct * 100)}% (Không tăng tốc tuyệt chiêu) · Tầm ${eff.range}px`;
-                      }
-                      if (selectedTower.type === 'KNIGHT_GUARD') {
-                        const burnStr = eff.burnDps > 0 ? ` · Đốt ${eff.burnDps}/s` : '';
-                        return `${eff.soldierCount} Kỵ (${eff.soldierHp} HP) · Thương ${eff.damage}${burnStr} · Phun lửa ${eff.breathCooldown.toFixed(1)}s (Đẩy 8 bước, tối đa 20 lần) · Hạ ${selectedTower.kills}`;
-                      }
-                      if (selectedTower.type === 'MAGE') {
-                        return `Chậm ${Math.round(eff.slowPct * 100)}%${eff.slowSplashRadius > 0 ? ` (${eff.slowSplashRadius}px)` : ' (Đơn MT)'} · Trói 3 quái 2s/10s · Tầm ${eff.range}px · Hạ ${selectedTower.kills}`;
-                      }
-                      if (selectedTower.type === 'ARTILLERY') {
-                        const stunStr = `Choáng ${(eff.stunChance * 100).toFixed(1)}%`;
-                        const hasteRecvStr = recvHaste > 0 ? ` · Buff Tốc +${Math.round(recvHaste * 100)}%` : '';
-                        return `ST ${eff.damage} · ${atkSpd}/s · Vùng nổ ${eff.splashRadius}px · ${stunStr} · X.Giáp ${Math.round(eff.armorPiercePct * 100)}%${hasteRecvStr} · Hạ ${selectedTower.kills}`;
-                      }
-                      const totalCritPct = Math.min(100, Math.round((eff.critChance + recvCritChance) * 100));
-                      const critStr = totalCritPct > 0 ? ` · BK ${totalCritPct}% (x${(eff.critMult + recvCritDmg).toFixed(1)})` : '';
-                      const execStr = eff.executeBelowPct > 0 ? ` · Kết liễu <10% HP` : '';
-                      const poisonStr =
-                        eff.poisonPctPerTick > 0
-                          ? ` · Độc ${(eff.poisonPctPerTick * 100).toFixed(1)}% HP/2s`
-                          : eff.poisonDps > 0
-                            ? ` · Độc ${eff.poisonDps}/s`
-                            : '';
-                      const slowStr = eff.slowPct > 0 ? ` · Chậm ${Math.round(eff.slowPct * 100)}%` : '';
-                      const burnStr =
-                        eff.burnPctPerSec > 0
-                          ? eff.burnKind === 'DEEP'
-                            ? ` · Bỏng sâu ${Math.round(eff.burnPctPerSec * 100)}% HP/s (5s)`
-                            : ` · Bỏng thường ${Math.round(eff.burnPctPerSec * 100)}% HP/s (5s)`
-                          : eff.burnDps > 0
-                            ? ` · Đốt ${eff.burnDps}/s`
-                            : '';
-                      const auraStr = eff.auraHastePct > 0 ? ` · Tốc +${Math.round(eff.auraHastePct * 100)}%` : '';
-                      const hasteRecvStr = recvHaste > 0 ? ` · Buff Tốc +${Math.round(recvHaste * 100)}%` : '';
-                      const pierceStr = eff.armorPiercePct > 0 ? ` · X.Giáp ${Math.round(eff.armorPiercePct * 100)}%` : '';
-                      const mPierceStr = eff.magicPiercePct > 0 ? ` · X.Kháng ${Math.round(eff.magicPiercePct * 100)}%` : '';
-                      const trueStr = eff.trueDamagePct > 0 ? ` · Chuẩn ${Math.round(eff.trueDamagePct * 100)}%` : '';
-                      return `ST ${eff.damage} · ${atkSpd}/s · ${
-                        eff.chainCount > 0 ? eff.chainCount : eff.targetCount
-                      } MT${critStr}${execStr}${poisonStr}${slowStr}${burnStr}${auraStr}${hasteRecvStr}${pierceStr}${mPierceStr}${trueStr} · Hạ ${selectedTower.kills}`;
-                    })()}
                   </div>
                 </div>
               </div>
@@ -3924,15 +4094,36 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
               </button>
             </div>
 
-            {/* Level 10 -> 11: Either Single Awakening Button (for singleBranch towers) or 4-Card Mythic Awakening Row */}
+            {/* Compact Rectangular Stat Grid (Numerical only, no prose explanations) */}
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-1">
+              {statCells.map((cell) => (
+                <div
+                  key={cell.label}
+                  className="rounded-md bg-[#131C31] border border-slate-700/70 px-2 py-1 flex flex-col"
+                >
+                  <span className="text-[9px] font-semibold text-slate-400 leading-none truncate">
+                    {cell.label}
+                  </span>
+                  <span
+                    className={`text-[11px] font-extrabold font-mono-num leading-tight mt-0.5 truncate ${
+                      cell.tone ?? 'text-white'
+                    }`}
+                  >
+                    {cell.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Level 10 -> 11: 4-Card Mythic Awakening ONLY for Dual-Branch Heroes (no prose) */}
             {selectedTower.level === 10 && !cfg.singleBranch && (
               <div className="flex flex-col gap-1">
                 <div className="flex items-center justify-between text-[10px] font-extrabold text-amber-300 px-0.5">
                   <span className="flex items-center gap-1">
                     <Sparkles className="w-3 h-3 text-[#FACC15]" />
-                    Thức Tỉnh Cấp 11 (4 Dạng Tối Thượng)
+                    Thức Tỉnh Cấp 11
                   </span>
-                  <span className="font-mono-num text-slate-300">Vàng: {snap.gold}g</span>
+                  <span className="font-mono-num text-slate-300">{snap.gold}g</span>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                   {TD_MYTHIC_PATHS[selectedTower.type].map((mp) => {
@@ -3940,6 +4131,10 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                       getMythicUpgradeCost(mp.cost, selectedTower.focusBranch)
                     );
                     const canAfford = snap.gold >= mpCost;
+                    const mpStats = getEffectiveTowerStats(
+                      { ...selectedTower, level: 11, mythicPath: mp.id },
+                      upgrades
+                    );
                     return (
                       <button
                         key={mp.id}
@@ -3952,20 +4147,20 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                             : 'bg-slate-900/80 border-slate-800 opacity-45 cursor-not-allowed'
                         }`}
                       >
-                        <div className="w-10 h-10 rounded-md bg-[#0F172A] flex items-center justify-center shrink-0">
+                        <div className="w-9 h-9 rounded-md bg-[#0F172A] flex items-center justify-center shrink-0">
                           <TdTowerPreview
                             type={selectedTower.type}
                             level={11}
                             branch={selectedTower.branch}
                             mythicPath={mp.id}
-                            className="w-10 h-10"
+                            className="w-9 h-9"
                           />
                         </div>
                         <div className="text-[10px] font-extrabold leading-tight truncate max-w-full" style={{ color: mp.accentColor }}>
                           {mp.name}
                         </div>
-                        <div className="text-[9px] text-slate-300 line-clamp-2 leading-tight">
-                          {mp.shortDesc}
+                        <div className="text-[9px] text-slate-300 font-mono-num leading-tight truncate max-w-full">
+                          ST {mpStats.damage} · {(1 / mpStats.cooldown).toFixed(1)}/s · {mpStats.chainCount > 0 ? mpStats.chainCount : mpStats.targetCount} MT
                         </div>
                         <span className="font-mono-num text-[10px] font-extrabold text-[#FACC15]">
                           {mpCost}g
@@ -4002,31 +4197,51 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                 );
               })()}
 
-              {selectedTower.level === 3 &&
-                (cfg.singleBranch ? [cfg.branches[0]] : cfg.branches).map((br) => {
+              {/* Lv 3 -> Lv 4: Single-branch heroes upgrade directly in 1 click without branch modal */}
+              {selectedTower.level === 3 && cfg.singleBranch && (() => {
+                const br = cfg.branches[0];
+                const brCost = scaleSlotCost(br.cost);
+                const canAfford = snap.gold >= brCost;
+                return (
+                  <button
+                    type="button"
+                    disabled={!canAfford}
+                    onClick={() => handleUpgradeTower(selectedTower.id, br.id, undefined, 'MULTI')}
+                    className={`flex-1 min-h-[40px] px-2.5 py-1 rounded-lg font-extrabold text-xs flex items-center justify-center gap-1.5 ${
+                      canAfford
+                        ? 'bg-[#FACC15] hover:bg-yellow-300 text-slate-950 cursor-pointer'
+                        : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                    }`}
+                  >
+                    <TdTowerPreview type={selectedTower.type} level={4} branch={br.id} className="w-7 h-7 shrink-0" />
+                    <TrendingUp className="w-3.5 h-3.5 shrink-0" />
+                    <span className="font-mono-num">
+                      Cấp 4/{maxLv} · {brCost}g
+                    </span>
+                  </button>
+                );
+              })()}
+
+              {/* Lv 3 -> Lv 4: Dual-branch heroes show 2 compact numerical choice cards (no prose) */}
+              {selectedTower.level === 3 && !cfg.singleBranch &&
+                cfg.branches.map((br) => {
                   const brCost = scaleSlotCost(br.cost);
                   const canAfford = snap.gold >= brCost;
-                  const isFocused = !cfg.singleBranch && br.focusBranch === 'FOCUSED';
+                  const isFocused = br.focusBranch === 'FOCUSED';
                   const previewStats = getEffectiveTowerStats(
-                    { ...selectedTower, level: 4, branch: br.id, focusBranch: cfg.singleBranch ? 'MULTI' : br.focusBranch },
+                    { ...selectedTower, level: 4, branch: br.id, focusBranch: br.focusBranch },
                     upgrades
                   );
                   const statTxt =
-                    selectedTower.type === 'BARRACKS'
-                      ? `Buff +${Math.round(previewStats.auraCritChancePct * 100)}% BK · +${Math.round(previewStats.auraCritDamageBonus * 100)}% STBK`
-                      : selectedTower.type === 'VALKYRIE'
-                        ? `Buff Tốc đánh +${Math.round(previewStats.auraHastePct * 100)}% · ${previewStats.range}px`
-                      : selectedTower.type === 'MAGE'
-                        ? `Chậm ${Math.round(previewStats.slowPct * 100)}% · Trói 3 quái 2s`
-                        : selectedTower.type === 'ARTILLERY'
-                          ? `Nổ ${previewStats.splashRadius}px · ST ${previewStats.damage} · Choáng ${(previewStats.stunChance * 100).toFixed(1)}%`
-                          : `${previewStats.chainCount > 0 ? previewStats.chainCount : previewStats.targetCount} MT · ST ${previewStats.damage} · ${(1 / previewStats.cooldown).toFixed(1)}/s`;
+                    selectedTower.type === 'MAGE'
+                      ? `${previewStats.targetCount} MT · Chậm ${Math.round(previewStats.slowPct * 100)}% (${previewStats.slowSplashRadius}px)`
+                      : `${previewStats.chainCount > 0 ? previewStats.chainCount : previewStats.targetCount} MT · ST ${previewStats.damage} · ${(1 / previewStats.cooldown).toFixed(1)}/s`;
                   return (
                     <button
                       key={br.id}
                       type="button"
                       disabled={!canAfford}
-                      onClick={() => handleUpgradeTower(selectedTower.id, br.id, undefined, cfg.singleBranch ? 'MULTI' : br.focusBranch)}
+                      onClick={() => handleUpgradeTower(selectedTower.id, br.id, undefined, br.focusBranch)}
                       className={`flex-1 min-w-[175px] px-2 py-1.5 rounded-lg border text-left flex items-center gap-2 transition-all ${
                         canAfford
                           ? isFocused
@@ -4051,20 +4266,17 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                         <div className="flex items-center gap-1 mt-0.5">
                           <span
                             className={`text-[8.5px] font-extrabold px-1 rounded shrink-0 ${
-                              cfg.singleBranch
-                                ? 'bg-amber-950 text-amber-300 border border-amber-500/50'
-                                : isFocused
-                                  ? 'bg-rose-950 text-rose-300 border border-rose-500/50'
-                                  : 'bg-sky-950 text-sky-300 border border-sky-500/50'
+                              isFocused
+                                ? 'bg-rose-950 text-rose-300 border border-rose-500/50'
+                                : 'bg-sky-950 text-sky-300 border border-sky-500/50'
                             }`}
                           >
-                            {cfg.singleBranch ? 'Hướng Duy Nhất' : isFocused ? 'Đơn Mục Tiêu' : 'Đa Mục Tiêu'}
+                            {isFocused ? 'Đơn MT' : 'Đa MT'}
                           </span>
                           <span className="text-[9px] text-slate-200 font-mono-num truncate">
                             {statTxt}
                           </span>
                         </div>
-                        <div className="text-[9px] text-slate-400 truncate mt-0.5">{br.shortDesc}</div>
                       </div>
                     </button>
                   );
@@ -4092,9 +4304,9 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                       mythicPath={mp.id}
                       className="w-7 h-7 shrink-0"
                     />
-                    <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                    <TrendingUp className="w-3.5 h-3.5 shrink-0" />
                     <span className="font-mono-num truncate">
-                      Cấp 11/{maxLv} ({mpCost}g) · {mp.name}
+                      Cấp 11/{maxLv} · {mpCost}g
                     </span>
                   </button>
                 );
@@ -4112,19 +4324,6 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                   ) ?? 0
                 );
                 const canUp = snap.gold >= upCost;
-                const isFocused = selectedTower.focusBranch === 'FOCUSED';
-                const effectTag =
-                  selectedTower.type === 'BARRACKS'
-                    ? '+Buff BK'
-                    : selectedTower.type === 'VALKYRIE'
-                      ? '+Tốc Hào quang'
-                      : selectedTower.type === 'MAGE'
-                        ? '+Làm chậm'
-                        : isFocused
-                          ? '+40% ST'
-                          : nextLv === 10
-                            ? '+24% ST'
-                            : '+20% ST';
                 return (
                   <button
                     type="button"
@@ -4144,10 +4343,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                     />
                     <TrendingUp className="w-3.5 h-3.5 shrink-0" />
                     <span className="font-mono-num truncate">
-                      Cấp {nextLv}/{maxLv} ({upCost}g) ·{' '}
-                      {nextLv === 10 && !cfg.singleBranch
-                        ? `${effectTag} · Mở 4 Dạng Thức Tỉnh`
-                        : effectTag}
+                      Cấp {nextLv}/{maxLv} · {upCost}g
                     </span>
                   </button>
                 );
@@ -4165,18 +4361,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                   ) ?? 0
                 );
                 const canUp = snap.gold >= upCost;
-                const isFocused = selectedTower.focusBranch === 'FOCUSED';
                 const isPost20 = nextLv > 20;
-                const effectTag =
-                  selectedTower.type === 'BARRACKS'
-                    ? '+Buff BK & Tầm'
-                    : selectedTower.type === 'VALKYRIE'
-                      ? '+Tốc Hào quang'
-                      : selectedTower.type === 'MAGE'
-                        ? '+Làm chậm'
-                        : isFocused
-                          ? '+40% ST · +Tốc'
-                          : '+18% ST · +Tốc';
                 return (
                   <button
                     type="button"
@@ -4199,20 +4384,16 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                     />
                     <Sparkles className="w-3.5 h-3.5 shrink-0" />
                     <span className="font-mono-num truncate">
-                      Cấp {nextLv}/{maxLv} ({upCost}g) · {effectTag}
-                      {isPost20 ? ' (+100% vàng)' : ''}
+                      Cấp {nextLv}/{maxLv} · {upCost}g
                     </span>
                   </button>
                 );
               })()}
 
               {selectedTower.level >= maxLv && (
-                <div className="flex-1 min-h-[40px] px-2.5 rounded-lg bg-amber-950/60 border border-amber-400/60 text-amber-300 font-extrabold text-xs flex items-center justify-center gap-1.5">
+                <div className="flex-1 min-h-[40px] px-2.5 rounded-lg bg-amber-950/60 border border-amber-400/60 text-amber-300 font-extrabold text-xs flex items-center justify-center gap-1.5 font-mono-num">
                   <Sparkles className="w-3.5 h-3.5 text-[#FACC15]" />
-                  <span>
-                    Tối Đa ({maxLv}/{maxLv})
-                    {mythicCfg ? ` · ${mythicCfg.name}` : ''}
-                  </span>
+                  <span>Cấp {maxLv}/{maxLv}</span>
                 </div>
               )}
 

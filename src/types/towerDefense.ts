@@ -261,6 +261,7 @@ export interface TdTowerBranchConfig {
   critChance?: number;
   chainCount?: number;
   auraHastePct?: number;
+  auraDamageBonusPct?: number;
   auraCritChancePct?: number;
   auraCritDamageBonus?: number;
   soldierCount?: number;
@@ -321,6 +322,7 @@ export interface TdTowerTierStats {
   burnDps?: number;
   critChance?: number;
   auraHastePct?: number;
+  auraDamageBonusPct?: number;
   auraCritChancePct?: number;
   auraCritDamageBonus?: number;
   soldierCount?: number;
@@ -432,6 +434,9 @@ export interface TdEnemyEntity {
   poisonPctPerTick?: number;
   poisonTickTimer: number;
   poisonSourceTowerId?: string;
+  heavyPoisonTimer?: number;
+  heavyPoisonTickTimer?: number;
+  heavyPoisonSourceTowerId?: string;
   burnTimer: number;
   burnDps: number;
   burnKind?: 'NORMAL' | 'DEEP';
@@ -511,9 +516,14 @@ export interface TdProjectile {
   poisonDps: number;
   poisonPctPerTick?: number;
   poisonSpreadRadius?: number;
+  heavyPoisonChance?: number;
   burnDps?: number;
   burnKind?: 'NORMAL' | 'DEEP';
   burnPctPerSec?: number;
+  detonateChance?: number;
+  detonateMult?: number;
+  detonateRadius?: number;
+  normalDamage?: number;
   stunChance?: number;
   stunDuration?: number;
   chainCount: number;

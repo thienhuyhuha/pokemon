@@ -2366,6 +2366,7 @@ interface TdEnemySpriteProps {
   hitFlash: boolean;
   slowed: boolean;
   poisoned: boolean;
+  heavyPoisoned?: boolean;
   burned?: boolean;
   deepBurned?: boolean;
   rooted?: boolean;
@@ -2392,6 +2393,7 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
     hitFlash,
     slowed,
     poisoned,
+    heavyPoisoned = false,
     burned = false,
     deepBurned = false,
     rooted = false,
@@ -2451,13 +2453,15 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
             ? 'sepia(0.88) hue-rotate(-36deg) saturate(3.1) brightness(1.32)'
             : burned
               ? 'sepia(0.88) hue-rotate(-36deg) saturate(2.85) brightness(1.02)'
-              : poisoned && hitFlash
-                ? 'sepia(0.92) hue-rotate(74deg) saturate(2.9) brightness(1.42)'
-                : poisoned
-                  ? 'sepia(0.92) hue-rotate(74deg) saturate(2.7) brightness(0.96)'
-                  : hitFlash
-                    ? 'brightness(1.55) saturate(1.25)'
-                    : baseFilter;
+              : (poisoned || heavyPoisoned) && hitFlash
+                ? 'sepia(0.92) hue-rotate(74deg) saturate(3.1) brightness(1.42)'
+                : heavyPoisoned
+                  ? 'sepia(0.95) hue-rotate(96deg) saturate(3.2) contrast(1.12) brightness(0.9)'
+                  : poisoned
+                    ? 'sepia(0.92) hue-rotate(74deg) saturate(2.7) brightness(0.96)'
+                    : hitFlash
+                      ? 'brightness(1.55) saturate(1.25)'
+                      : baseFilter;
 
     if (animeSrc) {
       const boxSize = hideHud
@@ -2571,25 +2575,26 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
               </g>
             );
           })()}
-          {poisoned && (
+          {(poisoned || heavyPoisoned) && (
             <g className="pointer-events-none">
               <ellipse
                 cx="0"
                 cy="9"
                 rx={isBoss ? 30 : 14}
                 ry={isBoss ? 10 : 5}
-                fill="#22C55E"
-                opacity="0.28"
+                fill={heavyPoisoned ? '#7E22CE' : '#22C55E'}
+                opacity={heavyPoisoned ? '0.38' : '0.28'}
               />
               <circle
                 cx="0"
                 cy={isBoss ? -18 : -4}
                 r={isBoss ? 33 : 14.5}
                 fill="none"
-                stroke="#4ADE80"
-                strokeWidth="2"
+                stroke={heavyPoisoned ? '#C084FC' : '#4ADE80'}
+                strokeWidth={heavyPoisoned ? '2.4' : '2'}
+                strokeDasharray={heavyPoisoned ? '6 3' : undefined}
               />
-              <circle cx="-8" cy="-14" r="2.2" fill="#4ADE80" stroke="#052E16" strokeWidth="0.7" className="td-anim-orb" />
+              <circle cx="-8" cy="-14" r="2.2" fill={heavyPoisoned ? '#A855F7' : '#4ADE80'} stroke="#052E16" strokeWidth="0.7" className="td-anim-orb" />
               <circle cx="9" cy="-18" r="1.9" fill="#86EFAC" stroke="#052E16" strokeWidth="0.7" className="td-anim-orb" />
               <circle cx="2" cy="-22" r="1.6" fill="#22C55E" opacity="0.9" className="td-anim-orb" />
             </g>
@@ -3179,14 +3184,14 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
             <path d="M-12,-4 Q0,-8 12,-4" fill="none" stroke="#E0F2FE" strokeWidth="1.7" />
           </g>
         )}
-        {poisoned && (
+        {(poisoned || heavyPoisoned) && (
           <circle
             cx="0"
             cy="0"
             r={type === 'BOSS' ? 22 : 13.5}
             fill="none"
-            stroke="#4ADE80"
-            strokeWidth="1.8"
+            stroke={heavyPoisoned ? '#C084FC' : '#4ADE80'}
+            strokeWidth={heavyPoisoned ? '2.2' : '1.8'}
           />
         )}
         {(burned || deepBurned) && (() => {

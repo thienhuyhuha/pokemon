@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   ArrowLeft,
+  BookOpen,
   Castle,
   CheckCircle2,
   Coins,
@@ -17,6 +18,7 @@ import {
   Star,
   Volume2,
   VolumeX,
+  X,
 } from 'lucide-react';
 import {
   TD_MAP_ABYSS_URL,
@@ -32,15 +34,17 @@ import {
   getSpentUpgradeStars,
   getStageBossCount,
   getTotalStarsEarnedInTd,
+  getTowerMaxLevel,
   isTowerUnlocked,
   TD_MAX_LEVEL,
+  TD_MYTHIC_PATHS,
   TD_TOWER_BUILD_ORDER,
   TD_TOWERS,
   TD_UPGRADE_MAX_TIER,
   TD_UPGRADE_TRACKS,
 } from '../data/tdLevels';
 import { CloudSyncStatus } from '../firebase';
-import { TdBiomeId, TdSaveData, TdUpgradeTrackId, TdUpgrades } from '../types/towerDefense';
+import { TdBiomeId, TdSaveData, TdTowerType, TdUpgradeTrackId, TdUpgrades } from '../types/towerDefense';
 import { RememberedAccount } from '../utils/localAccountCache';
 import { AccountBar } from './AccountBar';
 import { TdEnemyPreview, TdTowerPreview } from './TdArtwork';
@@ -64,6 +68,73 @@ interface TdLevelSelectViewProps {
   onToggleBgm: () => void;
   onBack: () => void;
 }
+
+const HERO_HANDBOOK_DETAILS: Record<
+  TdTowerType,
+  {
+    summary: string;
+    scalingNote: string;
+    multiNote: string;
+    focusedNote?: string;
+  }
+> = {
+  ARCHER: {
+    summary: 'Xạ thủ tốc độ bắn cao và tỷ lệ chí mạng lớn, bắn được cả quái bay. Không gây độc và không làm chậm.',
+    scalingNote: 'Tối đa Cấp 30. Từ Cấp 20 đến 30 mỗi cấp tăng +100% chi phí vàng. Ở cấp cao bổ sung mục tiêu và tốc bắn.',
+    multiNote: 'Đa mục tiêu (Xạ Thủ Liên Thanh): Bắn liên hoàn nhiều mục tiêu cùng lúc với tốc độ cực nhanh và 32%+ Chí mạng.',
+    focusedNote: 'Đơn mục tiêu (Thần Tiễn Hoàng Gia): Tầm xa vượt trội, 42%+ Chí mạng và tăng +40% sát thương mỗi cấp từ Cấp 4.',
+  },
+  BARRACKS: {
+    summary: 'Công trình hỗ trợ thuần túy (không tấn công trực tiếp), tạo hào quang tăng Tỷ lệ Bạo kích và Sát thương Bạo kích cho mọi tướng trong tầm.',
+    scalingNote: '1 hướng duy nhất (không hiện bảng chọn nhánh). Bắt đầu Cấp 1: +1% Tỷ lệ BK & +10% ST Bạo kích; mỗi cấp tăng +1% / +10% cho đến Cấp 30 đạt 30% / 300%, đồng thời Cấp 30 thưởng thêm +10% BK & +200% ST Bạo kích (tổng 40% BK / +500% STBK). Từ Cấp 20→30 giá vàng +100%/cấp.',
+    multiNote: 'Hướng mặc định (Thánh Đàn Chí Mạng): Tự động nâng thẳng từ Cấp 1 đến Cấp 30 và mở rộng tầm hào quang.',
+  },
+  MAGE: {
+    summary: 'Pháp sư khống chế chuyên làm chậm và trói chân quái vật (đánh được quái bay).',
+    scalingNote: 'Tối đa Cấp 20. Hiệu quả làm chậm tăng dần từ Cấp 4 lên Cấp 20.',
+    multiNote: 'Đa mục tiêu (Băng Sương Diện Rộng): Phóng cầu băng lan rộng, làm chậm tối đa 55% ở Cấp 20. Không có kỹ năng trói chân.',
+    focusedNote: 'Đơn mục tiêu (Hàn Băng Tuyệt Đối): Chỉ đánh duy nhất 1 mục tiêu với vùng làm chậm lan tối đa 10px, làm chậm tối đa 80% ở Cấp 20. Cứ mỗi 10s tự động trói chân tối đa 3 quái máu cao nhất trong 2s.',
+  },
+  ARTILLERY: {
+    summary: 'Pháo binh hạng nặng chỉ đánh diện rộng theo vùng nổ (không đánh quái bay), sát thương cao hơn Hỏa Ngục Pháp Sư đa mục tiêu khoảng 30% và xuyên giáp mạnh.',
+    scalingNote: '1 hướng duy nhất đến Cấp 20. Xác suất gây choáng tăng từ 1% ở Cấp 1 lên 3% ở Cấp 20. Sát thương nổ trúng toàn bộ quái trong bán kính nổ.',
+    multiNote: 'Hướng mặc định (Xạ Thủ Siêu Pháo): Mở rộng bán kính pháo nổ, làm chậm nhẹ vùng nổ và giữ vững sát thương AoE.',
+  },
+  ASSASSIN: {
+    summary: 'Sát thủ cận chiến tầm gần tốc độ ra đòn nhanh, chí mạng cao, đánh được quái bay và không bao giờ làm chậm.',
+    scalingNote: 'Tối đa Cấp 20. Phân hóa rõ giữa cấu rỉa độc diện rộng và kết liễu đơn mục tiêu.',
+    multiNote: 'Đa mục tiêu (Độc Ảnh Xuyên Tâm): Gây Độc thường (mất 1% máu mỗi 2s, giảm 50% hồi máu) và có 1% tỷ lệ gây Độc Nặng (không thể giải hiệu ứng, mất 1% máu mỗi giây trong 60s, giảm 80% hồi máu).',
+    focusedNote: 'Đơn mục tiêu (Ảnh Kiếm Tất Sát): Tăng +30% sát thương, tối đa 1 mục tiêu trước Cấp 20 và tối đa 2 mục tiêu ở Cấp 20. Tự động kết liễu ngay lập tức quái bị đánh có HP < 10%.',
+  },
+  VALKYRIE: {
+    summary: 'Công trình hỗ trợ thuần túy, tăng Tốc độ đánh và Sát thương chưa bạo kích cho các tướng chiến đấu trong tầm (không tăng tốc hồi chiêu tuyệt chiêu).',
+    scalingNote: '1 hướng duy nhất đến Cấp 20. Cấp 1 buff +100% tốc đánh và +1.0x sát thương chưa bạo kích; mỗi cấp tăng +10% tốc đánh (tối đa +200% trước Cấp 20) và +0.1x sát thương. Đạt Cấp 20 đạt +3.0x sát thương và được thưởng thêm +50% tốc đánh (tổng +250% tốc đánh).',
+    multiNote: 'Hướng mặc định (Thiên Sứ Thánh Ca): Tự động nâng thẳng từ Cấp 1 lên Cấp 20.',
+  },
+  KNIGHT_GUARD: {
+    summary: 'Mở khóa sau Ải 10. Triệu hồi Kỵ Sĩ Rồng chặn đường kết hợp phóng thương và tuyệt chiêu Phun Lửa đường thẳng (đánh được quái bay).',
+    scalingNote: '1 hướng duy nhất đến Cấp 20. Tuyệt chiêu Phun Lửa có hồi chiêu giảm dần từ 5s (Cấp 1) xuống 2s (Cấp 20), không bị ảnh hưởng bởi hào quang tăng tốc của Thánh Nữ; đẩy lùi quái 8 bước chân, tối đa 20 lần mỗi mục tiêu cho mỗi công trình Long Kỵ Sĩ.',
+    multiNote: 'Hướng mặc định (Long Thương Hỏa Diễm): Tự động nâng cấp thẳng, tăng máu Kỵ sĩ, sát thương lửa đốt và tốc độ hồi chiêu phun lửa.',
+  },
+  PYROMANCER: {
+    summary: 'Mở khóa sau Ải 15. Pháp sư nguyên tố lửa xuyên kháng phép cao, gây thiêu đốt theo phần trăm máu tối đa.',
+    scalingNote: 'Tối đa Cấp 20. Quái vật có kháng bỏng thường và một số quái hỗ trợ có thể giải bỏng thường, nhưng không thể giải Bỏng Sâu.',
+    multiNote: 'Đa mục tiêu (Chúa Tể Hỏa Ngục): Phóng 4+ tia lửa gây Bỏng Thường trong 5s (mất 1% máu tối đa mỗi giây).',
+    focusedNote: 'Đơn mục tiêu (Phượng Hoàng Bất Diệt): Gây Bỏng Sâu trong 5s (mất 3% máu tối đa mỗi giây, bỏ qua kháng bỏng thường) và có 1% tỷ lệ tạo đòn Kích Nổ gây sát thương x5 đòn đánh thường trong vùng 100px.',
+  },
+  MECHANIST: {
+    summary: 'Mở khóa sau Ải 20. Công nghệ tầm siêu xa, bắn được quái bay và xuyên giáp vượt trội.',
+    scalingNote: 'Tối đa Cấp 20. Chuyên trị quái giáp dày và boss tầm xa.',
+    multiNote: 'Đa mục tiêu (Tổ Hợp Tên Lửa Hextech): Bắn loạt tên lửa nổ lan diện rộng trên không lẫn mặt đất.',
+    focusedNote: 'Đơn mục tiêu (Pháo Từ Trường Tối Thượng): Xuyên 85% Giáp kèm 35% Sát thương Chuẩn, tăng +40% sát thương mỗi cấp.',
+  },
+  CHRONOMANCER: {
+    summary: 'Mở khóa sau Ải 25. Thần sứ gây Sát thương Chuẩn bỏ qua giáp/kháng, kèm làm chậm nhẹ và hào quang tăng tốc độ đánh.',
+    scalingNote: 'Tối đa Cấp 20. Khắc tinh của quái vật kháng phép và giáp cao ở các ải cuối.',
+    multiNote: 'Đa mục tiêu (Chấp Pháp Thời Gian): 70% Sát thương Chuẩn, làm chậm lan 112px và buff tốc độ đánh cho đồng minh.',
+    focusedNote: 'Đơn mục tiêu (Thần Vương Hư Không): 100% Sát thương Chuẩn xuyên mọi loại giáp và kháng phép, +40% sức mạnh mỗi cấp.',
+  },
+};
 
 const BIOME_META: {
   id: TdBiomeId;
@@ -136,6 +207,8 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
   onBack,
 }) => {
   const [workshopOpen, setWorkshopOpen] = useState(false);
+  const [handbookOpen, setHandbookOpen] = useState(false);
+  const [handbookHero, setHandbookHero] = useState<TdTowerType>('ARCHER');
 
   const levels = getAllTdLevels();
   const totalStarsEarned = getTotalStarsEarnedInTd(saveData.levels);
@@ -194,8 +267,17 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
           <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
+              onClick={() => setHandbookOpen(true)}
+              className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#1E293B] hover:bg-slate-700 border border-sky-500/60 text-sky-200 font-extrabold text-xs sm:text-sm flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+            >
+              <BookOpen className="w-4 h-4 text-sky-400" />
+              <span>Cẩm Nang Tướng</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setWorkshopOpen(true)}
-              className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#FACC15] hover:bg-yellow-300 text-slate-950 font-extrabold text-xs sm:text-sm flex items-center gap-1.5 cursor-pointer shadow-[0_3px_0_#A16207]"
+              className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#FACC15] hover:bg-yellow-300 text-slate-950 font-extrabold text-xs sm:text-sm flex items-center gap-1.5 cursor-pointer shadow-[0_3px_0_#A16207] whitespace-nowrap"
             >
               <Hammer className="w-4 h-4" />
               <span>Xưởng Nâng Cấp</span>
@@ -648,6 +730,211 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Hero Handbook Modal (Cẩm Nang Tướng) */}
+      {handbookOpen && (() => {
+        const cfg = TD_TOWERS[handbookHero];
+        const info = HERO_HANDBOOK_DETAILS[handbookHero];
+        const maxLv = getTowerMaxLevel(handbookHero);
+        const mythics = TD_MYTHIC_PATHS[handbookHero];
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+            onClick={() => setHandbookOpen(false)}
+          >
+            <div
+              className="w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl bg-[#0F172A] border border-sky-500/60 p-4 sm:p-6 shadow-2xl flex flex-col gap-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-sky-500/15 border border-sky-400/50 flex items-center justify-center shrink-0">
+                    <BookOpen className="w-5 h-5 text-sky-400" />
+                  </div>
+                  <div>
+                    <h2 className="font-display text-lg sm:text-xl font-extrabold text-white">
+                      Cẩm Nang Tướng & Quy Tắc Chiến Đấu
+                    </h2>
+                    <p className="text-xs text-slate-400">
+                      Tra cứu đầy đủ cơ chế, công thức tăng cấp và nhánh tiến hóa trước khi vào trận.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setHandbookOpen(false)}
+                  aria-label="Đóng cẩm nang tướng"
+                  className="min-h-[36px] min-w-[36px] p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 cursor-pointer flex items-center justify-center"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Hero Selector Tabs */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {TD_TOWER_BUILD_ORDER.map((tType) => {
+                  const tCfg = TD_TOWERS[tType];
+                  const active = tType === handbookHero;
+                  return (
+                    <button
+                      key={tType}
+                      type="button"
+                      onClick={() => setHandbookHero(tType)}
+                      className={`p-2 rounded-xl border text-left flex items-center gap-2 transition-colors cursor-pointer ${
+                        active
+                          ? 'bg-[#1E293B] border-[#FACC15] text-white'
+                          : 'bg-[#131C31] border-slate-800 hover:border-slate-600 text-slate-300'
+                      }`}
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-[#0B1120] border border-slate-700/70 flex items-center justify-center shrink-0">
+                        <TdTowerPreview type={tType} level={4} branch={tCfg.branches[0]?.id} className="w-8 h-8" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-extrabold truncate">{tCfg.name}</div>
+                        <div className="text-[10px] font-mono-num text-slate-400">
+                          {tCfg.tiers[0].cost}g · Lv{getTowerMaxLevel(tType)}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Selected Hero Detail Card */}
+              <div className="rounded-xl bg-[#131C31] border border-slate-700/80 p-4 flex flex-col gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-16 h-16 rounded-xl bg-[#0B1120] border border-slate-700 flex items-center justify-center shrink-0">
+                      <TdTowerPreview
+                        type={handbookHero}
+                        level={4}
+                        branch={cfg.branches[0]?.id}
+                        className="w-14 h-14"
+                      />
+                    </div>
+                    <div>
+                      <h3 className="font-display text-lg font-extrabold text-white">
+                        {cfg.name}
+                      </h3>
+                      <div className="text-xs font-mono-num text-amber-300 mt-0.5">
+                        Giá xây: {cfg.tiers[0].cost}g · Tối đa Cấp {maxLv} ·{' '}
+                        {cfg.unlockStage ? `Mở khóa sau Ải ${cfg.unlockStage}` : 'Mở sẵn từ đầu'} ·{' '}
+                        {cfg.canHitAir ? 'Đánh được quái bay' : 'Chỉ đánh mặt đất'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="rounded-lg bg-[#0B1120] border border-slate-800 p-3">
+                    <div className="text-xs font-extrabold text-sky-300 mb-1">Vai trò & Cơ chế chính</div>
+                    <p className="text-xs text-slate-200 leading-relaxed">{info.summary}</p>
+                  </div>
+                  <div className="rounded-lg bg-[#0B1120] border border-slate-800 p-3">
+                    <div className="text-xs font-extrabold text-amber-300 mb-1">Quy tắc tăng cấp</div>
+                    <p className="text-xs text-slate-200 leading-relaxed font-mono-num">{info.scalingNote}</p>
+                  </div>
+                </div>
+
+                {/* Level 4 Branches */}
+                <div className="flex flex-col gap-2">
+                  <div className="text-xs font-extrabold text-white">
+                    {cfg.singleBranch ? 'Hướng phát triển mặc định (Cấp 4)' : 'Phân nhánh Cấp 4'}
+                  </div>
+                  <div className={`grid grid-cols-1 ${info.focusedNote ? 'md:grid-cols-2' : ''} gap-3`}>
+                    <div className="rounded-lg bg-[#0B1120] border border-sky-500/40 p-3 flex items-start gap-2.5">
+                      <TdTowerPreview
+                        type={handbookHero}
+                        level={4}
+                        branch={cfg.branches[0]?.id}
+                        className="w-10 h-10 shrink-0"
+                      />
+                      <div>
+                        <div className="text-xs font-extrabold text-sky-300">
+                          {cfg.branches[0]?.name} ({cfg.singleBranch ? 'Mặc định' : 'Đa mục tiêu'})
+                        </div>
+                        <p className="text-xs text-slate-300 leading-relaxed mt-0.5">{info.multiNote}</p>
+                      </div>
+                    </div>
+                    {info.focusedNote && cfg.branches[1] && (
+                      <div className="rounded-lg bg-[#0B1120] border border-rose-500/40 p-3 flex items-start gap-2.5">
+                        <TdTowerPreview
+                          type={handbookHero}
+                          level={4}
+                          branch={cfg.branches[1].id}
+                          className="w-10 h-10 shrink-0"
+                        />
+                        <div>
+                          <div className="text-xs font-extrabold text-rose-300">
+                            {cfg.branches[1].name} (Đơn mục tiêu)
+                          </div>
+                          <p className="text-xs text-slate-300 leading-relaxed mt-0.5">{info.focusedNote}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Level 11 Mythic Awakenings (only shown for dual-branch heroes) */}
+                {!cfg.singleBranch && mythics.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <div className="text-xs font-extrabold text-amber-300">
+                      4 Dạng Thức Tỉnh Cấp 11
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                      {mythics.map((mp) => (
+                        <div
+                          key={mp.id}
+                          className="rounded-lg bg-[#0B1120] border border-slate-800 p-2.5 flex flex-col gap-1"
+                        >
+                          <div className="flex items-center gap-2">
+                            <TdTowerPreview
+                              type={handbookHero}
+                              level={11}
+                              branch={cfg.branches[0]?.id}
+                              mythicPath={mp.id}
+                              className="w-8 h-8 shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <div className="text-xs font-extrabold truncate" style={{ color: mp.accentColor }}>
+                                {mp.name}
+                              </div>
+                              <div className="text-[10px] font-mono-num text-[#FACC15]">{mp.cost}g</div>
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-slate-300 leading-snug">{mp.shortDesc}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Global Battlefield Rules */}
+              <div className="rounded-xl bg-[#131C31] border border-slate-800 p-3.5 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-300">
+                <div>
+                  <div className="font-extrabold text-amber-300 mb-1">Chi phí theo số lượng công trình</div>
+                  <p className="leading-relaxed">
+                    Xây từ công trình thứ 3 giá xây và nâng cấp tăng +50%; từ công trình thứ 5 tăng +80% so với công trình đầu tiên.
+                  </p>
+                </div>
+                <div>
+                  <div className="font-extrabold text-rose-300 mb-1">Nhánh Đơn Mục Tiêu & Vàng cấp cao</div>
+                  <p className="leading-relaxed">
+                    Nhánh Đơn Mục Tiêu tăng +40% sức mạnh mỗi cấp và giá nâng cấp tăng +100%/cấp từ Cấp 10. Cung Thủ & Vệ Binh từ Cấp 20→30 giá vàng +100%/cấp.
+                  </p>
+                </div>
+                <div>
+                  <div className="font-extrabold text-emerald-300 mb-1">Kháng hiệu ứng & Giải trừ</div>
+                  <p className="leading-relaxed">
+                    Quái tinh nhuệ có thể kháng Bỏng Thường, Giáp, Kháng Phép và giải Độc thường/Trói chân/Làm chậm/Bỏng thường. Bỏng Sâu và Độc Nặng không thể bị giải trừ.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
