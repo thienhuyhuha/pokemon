@@ -1,10 +1,13 @@
 import {
+  TdArtifactBonuses,
+  TdArtifactRarity,
   TdBiomeId,
   TdBranchId,
   TdBuildPad,
   TdCombatFocus,
   TdEnemySpec,
   TdEnemyType,
+  TdHeroArtifact,
   TdLevelConfig,
   TdMapTheme,
   TdMythicPathConfig,
@@ -36,6 +39,7 @@ export function getTowerSlotCostMultiplier(slotNumber1Based: number): number {
 }
 
 export const TD_UPGRADE_MAX_TIER = 5;
+export const TD_CLEAR_UPGRADE_MAX_TIER = 10;
 
 export const DEFAULT_TD_UPGRADES: TdUpgrades = {
   archery: 0,
@@ -48,7 +52,273 @@ export const DEFAULT_TD_UPGRADES: TdUpgrades = {
   citadel: 0,
   lethality: 0,
   mastery: 0,
+  clearGold: 0,
+  clearPower: 0,
+  clearCitadel: 0,
+  clearArtifact: 0,
 };
+
+export interface TdClearUpgradeMeta {
+  id: 'clearGold' | 'clearPower' | 'clearCitadel' | 'clearArtifact';
+  name: string;
+  unlockStage: number;
+  shortBonus: string;
+  perLevelDesc: string;
+  tierCosts: number[];
+}
+
+export const TD_CLEAR_UPGRADE_TRACKS: TdClearUpgradeMeta[] = [
+  {
+    id: 'clearGold',
+    name: 'Chiến Lợi Phẩm Vượt Ải',
+    unlockStage: 1,
+    shortBonus: 'Tăng vàng khởi đầu & vàng hạ quái mọi ải',
+    perLevelDesc: 'Mỗi cấp: +6% Vàng khởi đầu & +4% Vàng hạ quái (Tối đa +60% / +40%)',
+    tierCosts: [1, 1, 2, 2, 2, 3, 3, 3, 4, 4],
+  },
+  {
+    id: 'clearPower',
+    name: 'Hào Khí Chinh Phạt',
+    unlockStage: 3,
+    shortBonus: 'Tăng sát thương & tốc đánh toàn tướng chiến đấu',
+    perLevelDesc: 'Mỗi cấp: +5% Sát thương & +3% Tốc độ đánh (Tối đa +50% ST / +30% Tốc)',
+    tierCosts: [1, 2, 2, 2, 3, 3, 3, 4, 4, 5],
+  },
+  {
+    id: 'clearCitadel',
+    name: 'Huyết Mạch Thành Trì',
+    unlockStage: 5,
+    shortBonus: 'Tăng máu thành trì & sát thương Mưa Thiên Thạch',
+    perLevelDesc: 'Mỗi cấp: +2 Máu Thành & +8% Sát thương Thiên Thạch (Tối đa +20 Tim / +80% ST)',
+    tierCosts: [1, 1, 2, 2, 2, 3, 3, 3, 4, 4],
+  },
+  {
+    id: 'clearArtifact',
+    name: 'Tinh Thông Thần Khí',
+    unlockStage: 8,
+    shortBonus: 'Khuếch đại chỉ số Thần Khí & giảm giá xây/nâng cấp',
+    perLevelDesc: 'Mỗi cấp: +6% Hiệu lực Thần Khí & -2% Giá xây/nâng cấp (Tối đa +60% / -20%)',
+    tierCosts: [2, 2, 2, 3, 3, 3, 4, 4, 4, 5],
+  },
+];
+
+export const TD_ARTIFACT_UNLOCK_LEVEL = 20;
+export const TD_ARTIFACT_OPEN_COST = 10000;
+
+export const TD_ARTIFACT_RARITY_META: Record<
+  TdArtifactRarity,
+  {
+    label: string;
+    shortLabel: string;
+    chancePct: number;
+    color: string;
+    borderClass: string;
+    bgClass: string;
+    rank: number;
+  }
+> = {
+  COMMON: {
+    label: 'Thường (Common)',
+    shortLabel: 'Common',
+    chancePct: 60,
+    color: '#94A3B8',
+    borderClass: 'border-slate-400/70',
+    bgClass: 'bg-slate-800/90',
+    rank: 1,
+  },
+  UNCOMMON: {
+    label: 'Tinh Xảo (Uncommon)',
+    shortLabel: 'Uncommon',
+    chancePct: 25,
+    color: '#34D399',
+    borderClass: 'border-emerald-400/75',
+    bgClass: 'bg-emerald-950/90',
+    rank: 2,
+  },
+  RARE: {
+    label: 'Hiếm (Rare)',
+    shortLabel: 'Rare',
+    chancePct: 10,
+    color: '#38BDF8',
+    borderClass: 'border-sky-400/80',
+    bgClass: 'bg-sky-950/90',
+    rank: 3,
+  },
+  EPIC: {
+    label: 'Sử Thi (Epic)',
+    shortLabel: 'Epic',
+    chancePct: 4,
+    color: '#C084FC',
+    borderClass: 'border-purple-400/85',
+    bgClass: 'bg-purple-950/90',
+    rank: 4,
+  },
+  LEGEND: {
+    label: 'Truyền Thuyết (Legend)',
+    shortLabel: 'Legend',
+    chancePct: 1,
+    color: '#FACC15',
+    borderClass: 'border-amber-300',
+    bgClass: 'bg-amber-950/95',
+    rank: 5,
+  },
+};
+
+export const TD_HERO_ARTIFACT_TEMPLATES: Record<
+  TdTowerType,
+  {
+    name: string;
+    tiers: Record<TdArtifactRarity, TdArtifactBonuses>;
+  }
+> = {
+  ARCHER: {
+    name: 'Cung Thần Nhật Nguyệt',
+    tiers: {
+      COMMON: { damagePct: 0.12, attackSpeedPct: 0.08, critChanceBonus: 0.04, critDamageBonus: 0.2 },
+      UNCOMMON: { damagePct: 0.2, attackSpeedPct: 0.14, critChanceBonus: 0.07, critDamageBonus: 0.35 },
+      RARE: { damagePct: 0.32, attackSpeedPct: 0.22, critChanceBonus: 0.11, critDamageBonus: 0.55 },
+      EPIC: { damagePct: 0.48, attackSpeedPct: 0.32, critChanceBonus: 0.16, critDamageBonus: 0.85 },
+      LEGEND: { damagePct: 0.75, attackSpeedPct: 0.48, critChanceBonus: 0.24, critDamageBonus: 1.3 },
+    },
+  },
+  BARRACKS: {
+    name: 'Cờ Lệnh Bất Diệt',
+    tiers: {
+      COMMON: { auraCritChanceBonus: 0.02, auraCritDamageBonus: 0.2, rangePct: 0.05 },
+      UNCOMMON: { auraCritChanceBonus: 0.04, auraCritDamageBonus: 0.4, rangePct: 0.08 },
+      RARE: { auraCritChanceBonus: 0.07, auraCritDamageBonus: 0.7, rangePct: 0.12 },
+      EPIC: { auraCritChanceBonus: 0.11, auraCritDamageBonus: 1.15, rangePct: 0.18 },
+      LEGEND: { auraCritChanceBonus: 0.18, auraCritDamageBonus: 1.8, rangePct: 0.25 },
+    },
+  },
+  MAGE: {
+    name: 'Trượng Hàn Tinh Vĩnh Cửu',
+    tiers: {
+      COMMON: { damagePct: 0.12, attackSpeedPct: 0.08, slowPctBonus: 0.03, magicPiercePct: 0.06 },
+      UNCOMMON: { damagePct: 0.2, attackSpeedPct: 0.14, slowPctBonus: 0.05, magicPiercePct: 0.1 },
+      RARE: { damagePct: 0.32, attackSpeedPct: 0.22, slowPctBonus: 0.08, magicPiercePct: 0.16 },
+      EPIC: { damagePct: 0.48, attackSpeedPct: 0.32, slowPctBonus: 0.12, magicPiercePct: 0.24 },
+      LEGEND: { damagePct: 0.75, attackSpeedPct: 0.48, slowPctBonus: 0.18, magicPiercePct: 0.36 },
+    },
+  },
+  ARTILLERY: {
+    name: 'Thần Pháo Thiên Lôi',
+    tiers: {
+      COMMON: { damagePct: 0.14, splashRadiusBonus: 10, stunChanceBonus: 0.01, armorPiercePct: 0.06 },
+      UNCOMMON: { damagePct: 0.22, splashRadiusBonus: 18, stunChanceBonus: 0.015, armorPiercePct: 0.1 },
+      RARE: { damagePct: 0.35, splashRadiusBonus: 28, stunChanceBonus: 0.025, armorPiercePct: 0.16 },
+      EPIC: { damagePct: 0.52, splashRadiusBonus: 40, stunChanceBonus: 0.04, armorPiercePct: 0.24 },
+      LEGEND: { damagePct: 0.8, splashRadiusBonus: 58, stunChanceBonus: 0.06, armorPiercePct: 0.35 },
+    },
+  },
+  ASSASSIN: {
+    name: 'Song Đao Đoạt Mệnh',
+    tiers: {
+      COMMON: { damagePct: 0.14, critChanceBonus: 0.05, critDamageBonus: 0.25, heavyPoisonChanceBonus: 0.005, executeBelowPctBonus: 0.01 },
+      UNCOMMON: { damagePct: 0.22, critChanceBonus: 0.08, critDamageBonus: 0.4, heavyPoisonChanceBonus: 0.01, executeBelowPctBonus: 0.02 },
+      RARE: { damagePct: 0.34, critChanceBonus: 0.13, critDamageBonus: 0.65, heavyPoisonChanceBonus: 0.018, executeBelowPctBonus: 0.035 },
+      EPIC: { damagePct: 0.5, critChanceBonus: 0.18, critDamageBonus: 0.95, heavyPoisonChanceBonus: 0.03, executeBelowPctBonus: 0.05 },
+      LEGEND: { damagePct: 0.78, critChanceBonus: 0.26, critDamageBonus: 1.45, heavyPoisonChanceBonus: 0.05, executeBelowPctBonus: 0.08 },
+    },
+  },
+  VALKYRIE: {
+    name: 'Cánh Thánh Quang Minh',
+    tiers: {
+      COMMON: { auraHasteBonus: 0.15, auraDamageBonus: 0.2, rangePct: 0.05 },
+      UNCOMMON: { auraHasteBonus: 0.28, auraDamageBonus: 0.4, rangePct: 0.08 },
+      RARE: { auraHasteBonus: 0.45, auraDamageBonus: 0.7, rangePct: 0.12 },
+      EPIC: { auraHasteBonus: 0.7, auraDamageBonus: 1.1, rangePct: 0.18 },
+      LEGEND: { auraHasteBonus: 1.1, auraDamageBonus: 1.8, rangePct: 0.25 },
+    },
+  },
+  KNIGHT_GUARD: {
+    name: 'Long Thương Hỏa Vũ',
+    tiers: {
+      COMMON: { soldierHpPct: 0.18, soldierDamagePct: 0.15, damagePct: 0.15, breathCooldownReductionPct: 0.08 },
+      UNCOMMON: { soldierHpPct: 0.3, soldierDamagePct: 0.24, damagePct: 0.24, breathCooldownReductionPct: 0.14 },
+      RARE: { soldierHpPct: 0.48, soldierDamagePct: 0.38, damagePct: 0.38, breathCooldownReductionPct: 0.22 },
+      EPIC: { soldierHpPct: 0.72, soldierDamagePct: 0.56, damagePct: 0.56, breathCooldownReductionPct: 0.32 },
+      LEGEND: { soldierHpPct: 1.1, soldierDamagePct: 0.85, damagePct: 0.85, breathCooldownReductionPct: 0.45 },
+    },
+  },
+  PYROMANCER: {
+    name: 'Ngọc Hỏa Phượng Hoàng',
+    tiers: {
+      COMMON: { damagePct: 0.14, burnPctBonus: 0.003, detonateChanceBonus: 0.005, magicPiercePct: 0.06 },
+      UNCOMMON: { damagePct: 0.22, burnPctBonus: 0.006, detonateChanceBonus: 0.01, magicPiercePct: 0.11 },
+      RARE: { damagePct: 0.34, burnPctBonus: 0.01, detonateChanceBonus: 0.018, magicPiercePct: 0.18 },
+      EPIC: { damagePct: 0.52, burnPctBonus: 0.015, detonateChanceBonus: 0.03, magicPiercePct: 0.26 },
+      LEGEND: { damagePct: 0.8, burnPctBonus: 0.025, detonateChanceBonus: 0.05, magicPiercePct: 0.4 },
+    },
+  },
+  MECHANIST: {
+    name: 'Lõi Hextech Vĩnh Cửu',
+    tiers: {
+      COMMON: { damagePct: 0.14, attackSpeedPct: 0.1, armorPiercePct: 0.06, trueDamagePct: 0.05 },
+      UNCOMMON: { damagePct: 0.22, attackSpeedPct: 0.16, armorPiercePct: 0.1, trueDamagePct: 0.09 },
+      RARE: { damagePct: 0.35, attackSpeedPct: 0.25, armorPiercePct: 0.15, trueDamagePct: 0.14 },
+      EPIC: { damagePct: 0.52, attackSpeedPct: 0.36, armorPiercePct: 0.22, trueDamagePct: 0.2 },
+      LEGEND: { damagePct: 0.8, attackSpeedPct: 0.52, armorPiercePct: 0.3, trueDamagePct: 0.3 },
+    },
+  },
+  CHRONOMANCER: {
+    name: 'Đồng Hồ Vũ Trụ',
+    tiers: {
+      COMMON: { damagePct: 0.12, attackSpeedPct: 0.1, auraHasteBonus: 0.05, slowPctBonus: 0.03 },
+      UNCOMMON: { damagePct: 0.2, attackSpeedPct: 0.16, auraHasteBonus: 0.09, slowPctBonus: 0.05 },
+      RARE: { damagePct: 0.32, attackSpeedPct: 0.25, auraHasteBonus: 0.14, slowPctBonus: 0.08 },
+      EPIC: { damagePct: 0.48, attackSpeedPct: 0.38, auraHasteBonus: 0.21, slowPctBonus: 0.12 },
+      LEGEND: { damagePct: 0.75, attackSpeedPct: 0.55, auraHasteBonus: 0.32, slowPctBonus: 0.18 },
+    },
+  },
+};
+
+export function rollHeroArtifact(towerType: TdTowerType): TdHeroArtifact {
+  const r = Math.random();
+  let rarity: TdArtifactRarity = 'LEGEND';
+  if (r < 0.6) rarity = 'COMMON';
+  else if (r < 0.85) rarity = 'UNCOMMON';
+  else if (r < 0.95) rarity = 'RARE';
+  else if (r < 0.99) rarity = 'EPIC';
+
+  const tpl = TD_HERO_ARTIFACT_TEMPLATES[towerType];
+  return {
+    id: `art-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    towerType,
+    name: tpl.name,
+    rarity,
+    bonuses: { ...tpl.tiers[rarity] },
+  };
+}
+
+export function formatArtifactBonusSummary(
+  bonuses: TdArtifactBonuses,
+  powerMult = 1
+): string[] {
+  const parts: string[] = [];
+  if (bonuses.damagePct) parts.push(`+${Math.round(bonuses.damagePct * powerMult * 100)}% ST`);
+  if (bonuses.attackSpeedPct) parts.push(`+${Math.round(bonuses.attackSpeedPct * powerMult * 100)}% Tốc`);
+  if (bonuses.critChanceBonus) parts.push(`+${Math.round(bonuses.critChanceBonus * powerMult * 100)}% BK`);
+  if (bonuses.critDamageBonus) parts.push(`+${Math.round(bonuses.critDamageBonus * powerMult * 100)}% STBK`);
+  if (bonuses.auraCritChanceBonus) parts.push(`+${Math.round(bonuses.auraCritChanceBonus * powerMult * 100)}% Buff BK`);
+  if (bonuses.auraCritDamageBonus) parts.push(`+${Math.round(bonuses.auraCritDamageBonus * powerMult * 100)}% Buff STBK`);
+  if (bonuses.auraHasteBonus) parts.push(`+${Math.round(bonuses.auraHasteBonus * powerMult * 100)}% Buff Tốc`);
+  if (bonuses.auraDamageBonus) parts.push(`+${(bonuses.auraDamageBonus * powerMult).toFixed(1)}x Buff ST`);
+  if (bonuses.rangePct) parts.push(`+${Math.round(bonuses.rangePct * powerMult * 100)}% Tầm`);
+  if (bonuses.splashRadiusBonus) parts.push(`+${Math.round(bonuses.splashRadiusBonus * powerMult)}px Nổ`);
+  if (bonuses.slowPctBonus) parts.push(`+${Math.round(bonuses.slowPctBonus * powerMult * 100)}% Chậm`);
+  if (bonuses.stunChanceBonus) parts.push(`+${(bonuses.stunChanceBonus * powerMult * 100).toFixed(1)}% Choáng`);
+  if (bonuses.burnPctBonus) parts.push(`+${(bonuses.burnPctBonus * powerMult * 100).toFixed(1)}%/s Bỏng`);
+  if (bonuses.detonateChanceBonus) parts.push(`+${(bonuses.detonateChanceBonus * powerMult * 100).toFixed(1)}% Kích nổ`);
+  if (bonuses.heavyPoisonChanceBonus) parts.push(`+${(bonuses.heavyPoisonChanceBonus * powerMult * 100).toFixed(1)}% Độc nặng`);
+  if (bonuses.executeBelowPctBonus) parts.push(`+${(bonuses.executeBelowPctBonus * powerMult * 100).toFixed(1)}% Kết liễu`);
+  if (bonuses.armorPiercePct) parts.push(`+${Math.round(bonuses.armorPiercePct * powerMult * 100)}% X.Giáp`);
+  if (bonuses.magicPiercePct) parts.push(`+${Math.round(bonuses.magicPiercePct * powerMult * 100)}% X.Kháng`);
+  if (bonuses.trueDamagePct) parts.push(`+${Math.round(bonuses.trueDamagePct * powerMult * 100)}% ST Chuẩn`);
+  if (bonuses.soldierHpPct) parts.push(`+${Math.round(bonuses.soldierHpPct * powerMult * 100)}% Máu Kỵ`);
+  if (bonuses.breathCooldownReductionPct) parts.push(`-${Math.round(bonuses.breathCooldownReductionPct * powerMult * 100)}% CD Phun lửa`);
+  return parts;
+}
 
 export interface TdUpgradeTrackMeta {
   id: TdUpgradeTrackId;
@@ -1697,9 +1967,12 @@ function pickBossTypeForWave(waveNumber: number, stageLevel: number): TdEnemyTyp
 
 function buildWavesForStage(level: number, pathCount: number): TdWaveConfig[] {
   const totalWaves = 40;
-  // Strictly monotonic stage progression across Stages 1 -> 30
+  // Strictly monotonic stage progression across Stages 1 -> 30 (+5% difficulty per stage from Stage 5+)
+  const lateStageDifficultyBoost = level >= 5 ? Math.pow(1.05, level - 4) : 1.0;
   const stageHpScale =
-    Math.pow(1.072, level - 1) * (1 + Math.min(0.25, (level - 1) * 0.025));
+    Math.pow(1.072, level - 1) *
+    (1 + Math.min(0.25, (level - 1) * 0.025)) *
+    lateStageDifficultyBoost;
   const stageSpeedMult = 1 + (level - 1) * 0.012;
   const intervalScale = Math.max(0.68, 1 - (level - 1) * 0.009);
   const isMilestoneBossStage = level % 5 === 0;
@@ -2129,6 +2402,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's1p10', x: 575, y: 470, rallyX: 545, rallyY: 390 },
       { id: 's1p11', x: 850, y: 70, rallyX: 805, rallyY: 165 },
       { id: 's1p12', x: 225, y: 470, rallyX: 250, rallyY: 390 },
+      { id: 's1p13', x: 500, y: 95, rallyX: 545, rallyY: 165 },
+      { id: 's1p14', x: 900, y: 420, rallyX: 900, rallyY: 320 },
     ],
     mapTheme: {
       tintColor: '#052E16',
@@ -2169,6 +2444,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's2p10', x: 100, y: 470, rallyX: 185, rallyY: 450 },
       { id: 's2p11', x: 475, y: 195, rallyX: 475, rallyY: 110 },
       { id: 's2p12', x: 275, y: 195, rallyX: 275, rallyY: 110 },
+      { id: 's2p13', x: 800, y: 70, rallyX: 740, rallyY: 110 },
+      { id: 's2p14', x: 75, y: 195, rallyX: 75, rallyY: 110 },
     ],
     mapTheme: {
       tintColor: '#064E3B',
@@ -2220,6 +2497,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's3p11', x: 350, y: 70, rallyX: 310, rallyY: 130 },
       { id: 's3p12', x: 375, y: 470, rallyX: 320, rallyY: 419 },
       { id: 's3p13', x: 725, y: 445, rallyX: 785, rallyY: 390 },
+      { id: 's3p14', x: 75, y: 70, rallyX: 75, rallyY: 130 },
+      { id: 's3p15', x: 725, y: 120, rallyX: 783, rallyY: 173 },
     ],
     mapTheme: {
       tintColor: '#1E1B4B',
@@ -2261,6 +2540,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's4p10', x: 250, y: 70, rallyX: 314, rallyY: 122 },
       { id: 's4p11', x: 400, y: 470, rallyX: 460, rallyY: 430 },
       { id: 's4p12', x: 425, y: 320, rallyX: 494, rallyY: 348 },
+      { id: 's4p13', x: 675, y: 70, rallyX: 590, rallyY: 115 },
+      { id: 's4p14', x: 825, y: 470, rallyX: 755, rallyY: 430 },
     ],
     mapTheme: {
       tintColor: '#0F172A',
@@ -2312,6 +2593,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's5p11', x: 325, y: 70, rallyX: 275, rallyY: 115 },
       { id: 's5p12', x: 350, y: 470, rallyX: 275, rallyY: 445 },
       { id: 's5p13', x: 200, y: 270, rallyX: 275, rallyY: 270 },
+      { id: 's5p14', x: 450, y: 195, rallyX: 450, rallyY: 280 },
+      { id: 's5p15', x: 600, y: 195, rallyX: 600, rallyY: 280 },
     ],
     mapTheme: {
       tintColor: '#14532D',
@@ -2356,6 +2639,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's6p10', x: 225, y: 470, rallyX: 225, rallyY: 365 },
       { id: 's6p11', x: 75, y: 470, rallyX: 75, rallyY: 365 },
       { id: 's6p12', x: 900, y: 145, rallyX: 900, rallyY: 245 },
+      { id: 's6p13', x: 575, y: 70, rallyX: 575, rallyY: 135 },
+      { id: 's6p14', x: 325, y: 70, rallyX: 325, rallyY: 135 },
     ],
     mapTheme: {
       tintColor: '#78350F',
@@ -2404,6 +2689,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's7p11', x: 75, y: 70, rallyX: 75, rallyY: 140 },
       { id: 's7p12', x: 200, y: 70, rallyX: 200, rallyY: 140 },
       { id: 's7p13', x: 625, y: 145, rallyX: 625, rallyY: 235 },
+      { id: 's7p14', x: 375, y: 70, rallyX: 360, rallyY: 140 },
+      { id: 's7p15', x: 625, y: 420, rallyX: 625, rallyY: 330 },
     ],
     mapTheme: {
       tintColor: '#92400E',
@@ -2453,6 +2740,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's8p10', x: 800, y: 70, rallyX: 738, rallyY: 124 },
       { id: 's8p11', x: 800, y: 470, rallyX: 743, rallyY: 413 },
       { id: 's8p12', x: 700, y: 195, rallyX: 700, rallyY: 120 },
+      { id: 's8p13', x: 325, y: 70, rallyX: 249, rallyY: 126 },
+      { id: 's8p14', x: 325, y: 470, rallyX: 249, rallyY: 414 },
     ],
     mapTheme: {
       tintColor: '#B45309',
@@ -2504,6 +2793,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's9p11', x: 450, y: 70, rallyX: 399, rallyY: 115 },
       { id: 's9p12', x: 250, y: 195, rallyX: 250, rallyY: 280 },
       { id: 's9p13', x: 250, y: 370, rallyX: 250, rallyY: 455 },
+      { id: 's9p14', x: 600, y: 195, rallyX: 600, rallyY: 280 },
+      { id: 's9p15', x: 600, y: 370, rallyX: 600, rallyY: 280 },
     ],
     mapTheme: {
       tintColor: '#92400E',
@@ -2557,6 +2848,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's10p11', x: 75, y: 70, rallyX: 75, rallyY: 155 },
       { id: 's10p12', x: 475, y: 170, rallyX: 475, rallyY: 90 },
       { id: 's10p13', x: 475, y: 395, rallyX: 475, rallyY: 475 },
+      { id: 's10p14', x: 75, y: 470, rallyX: 75, rallyY: 405 },
+      { id: 's10p15', x: 250, y: 320, rallyX: 225, rallyY: 405 },
     ],
     mapTheme: {
       tintColor: '#78350F',
@@ -2600,6 +2893,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's11p10', x: 825, y: 470, rallyX: 755, rallyY: 430 },
       { id: 's11p11', x: 500, y: 70, rallyX: 480, rallyY: 135 },
       { id: 's11p12', x: 675, y: 245, rallyX: 755, rallyY: 245 },
+      { id: 's11p13', x: 250, y: 70, rallyX: 250, rallyY: 135 },
+      { id: 's11p14', x: 275, y: 470, rallyX: 210, rallyY: 430 },
     ],
     mapTheme: {
       tintColor: '#450A0A',
@@ -2648,6 +2943,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's12p11', x: 300, y: 70, rallyX: 265, rallyY: 130 },
       { id: 's12p12', x: 325, y: 470, rallyX: 280, rallyY: 409 },
       { id: 's12p13', x: 250, y: 345, rallyX: 291, rallyY: 401 },
+      { id: 's12p14', x: 625, y: 70, rallyX: 670, rallyY: 140 },
+      { id: 's12p15', x: 625, y: 470, rallyX: 663, rallyY: 407 },
     ],
     mapTheme: {
       tintColor: '#7C2D12',
@@ -2688,6 +2985,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's13p9', x: 895, y: 430, rallyX: 820, rallyY: 430 },
       { id: 's13p10', x: 100, y: 195, rallyX: 165, rallyY: 245 },
       { id: 's13p11', x: 75, y: 470, rallyX: 165, rallyY: 460 },
+      { id: 's13p12', x: 900, y: 70, rallyX: 820, rallyY: 105 },
+      { id: 's13p13', x: 75, y: 320, rallyX: 165, rallyY: 320 },
     ],
     mapTheme: {
       tintColor: '#431407',
@@ -2739,6 +3038,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's14p11', x: 475, y: 70, rallyX: 431, rallyY: 120 },
       { id: 's14p12', x: 250, y: 370, rallyX: 250, rallyY: 455 },
       { id: 's14p13', x: 75, y: 195, rallyX: 75, rallyY: 110 },
+      { id: 's14p14', x: 250, y: 195, rallyX: 250, rallyY: 110 },
+      { id: 's14p15', x: 75, y: 370, rallyX: 75, rallyY: 455 },
     ],
     mapTheme: {
       tintColor: '#7F1D1D',
@@ -2792,6 +3093,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's15p11', x: 75, y: 70, rallyX: 75, rallyY: 155 },
       { id: 's15p12', x: 475, y: 395, rallyX: 560, rallyY: 395 },
       { id: 's15p13', x: 475, y: 170, rallyX: 560, rallyY: 170 },
+      { id: 's15p14', x: 75, y: 470, rallyX: 75, rallyY: 405 },
+      { id: 's15p15', x: 250, y: 320, rallyX: 225, rallyY: 405 },
     ],
     mapTheme: {
       tintColor: '#9A3412',
@@ -2835,6 +3138,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's16p10', x: 675, y: 395, rallyX: 725, rallyY: 315 },
       { id: 's16p11', x: 525, y: 470, rallyX: 455, rallyY: 435 },
       { id: 's16p12', x: 125, y: 320, rallyX: 195, rallyY: 320 },
+      { id: 's16p13', x: 800, y: 70, rallyX: 725, rallyY: 120 },
+      { id: 's16p14', x: 125, y: 470, rallyX: 195, rallyY: 435 },
     ],
     mapTheme: {
       tintColor: '#0C4A6E',
@@ -2885,6 +3190,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's17p11', x: 750, y: 70, rallyX: 675, rallyY: 138 },
       { id: 's17p12', x: 750, y: 470, rallyX: 685, rallyY: 411 },
       { id: 's17p13', x: 300, y: 70, rallyX: 354, rallyY: 132 },
+      { id: 's17p14', x: 275, y: 470, rallyX: 330, rallyY: 407 },
+      { id: 's17p15', x: 225, y: 145, rallyX: 275, rallyY: 202 },
     ],
     mapTheme: {
       tintColor: '#164E63',
@@ -2935,6 +3242,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's18p11', x: 700, y: 70, rallyX: 700, rallyY: 145 },
       { id: 's18p12', x: 825, y: 70, rallyX: 825, rallyY: 145 },
       { id: 's18p13', x: 375, y: 70, rallyX: 325, rallyY: 115 },
+      { id: 's18p14', x: 725, y: 470, rallyX: 784, rallyY: 400 },
+      { id: 's18p15', x: 575, y: 70, rallyX: 660, rallyY: 145 },
     ],
     mapTheme: {
       tintColor: '#1E1B4B',
@@ -2987,6 +3296,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's19p11', x: 900, y: 470, rallyX: 900, rallyY: 365 },
       { id: 's19p12', x: 600, y: 70, rallyX: 548, rallyY: 154 },
       { id: 's19p13', x: 775, y: 445, rallyX: 741, rallyY: 374 },
+      { id: 's19p14', x: 75, y: 195, rallyX: 75, rallyY: 280 },
+      { id: 's19p15', x: 75, y: 370, rallyX: 75, rallyY: 280 },
     ],
     mapTheme: {
       tintColor: '#0F172A',
@@ -3049,6 +3360,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's20p12', x: 600, y: 70, rallyX: 660, rallyY: 140 },
       { id: 's20p13', x: 875, y: 70, rallyX: 825, rallyY: 140 },
       { id: 's20p14', x: 600, y: 470, rallyX: 656, rallyY: 420 },
+      { id: 's20p15', x: 325, y: 70, rallyX: 255, rallyY: 105 },
+      { id: 's20p16', x: 325, y: 470, rallyX: 255, rallyY: 455 },
     ],
     mapTheme: {
       tintColor: '#3B0764',
@@ -3093,6 +3406,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's21p10', x: 575, y: 70, rallyX: 540, rallyY: 135 },
       { id: 's21p11', x: 875, y: 470, rallyX: 785, rallyY: 460 },
       { id: 's21p12', x: 250, y: 370, rallyX: 180, rallyY: 370 },
+      { id: 's21p13', x: 75, y: 70, rallyX: 75, rallyY: 135 },
+      { id: 's21p14', x: 350, y: 70, rallyX: 350, rallyY: 135 },
     ],
     mapTheme: {
       tintColor: '#2E1065',
@@ -3140,6 +3455,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's22p10', x: 350, y: 70, rallyX: 310, rallyY: 122 },
       { id: 's22p11', x: 400, y: 470, rallyX: 351, rallyY: 406 },
       { id: 's22p12', x: 275, y: 370, rallyX: 320, rallyY: 429 },
+      { id: 's22p13', x: 700, y: 70, rallyX: 741, rallyY: 134 },
+      { id: 's22p14', x: 675, y: 470, rallyX: 714, rallyY: 409 },
     ],
     mapTheme: {
       tintColor: '#064E3B',
@@ -3190,6 +3507,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's23p11', x: 500, y: 470, rallyX: 449, rallyY: 424 },
       { id: 's23p12', x: 75, y: 345, rallyX: 75, rallyY: 270 },
       { id: 's23p13', x: 75, y: 195, rallyX: 75, rallyY: 270 },
+      { id: 's23p14', x: 700, y: 70, rallyX: 639, rallyY: 129 },
+      { id: 's23p15', x: 250, y: 370, rallyX: 250, rallyY: 445 },
     ],
     mapTheme: {
       tintColor: '#1E1B4B',
@@ -3244,6 +3563,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's24p11', x: 800, y: 70, rallyX: 800, rallyY: 140 },
       { id: 's24p12', x: 75, y: 70, rallyX: 165, rallyY: 100 },
       { id: 's24p13', x: 400, y: 170, rallyX: 400, rallyY: 100 },
+      { id: 's24p14', x: 75, y: 470, rallyX: 165, rallyY: 460 },
+      { id: 's24p15', x: 550, y: 70, rallyX: 470, rallyY: 100 },
     ],
     mapTheme: {
       tintColor: '#3B0764',
@@ -3300,6 +3621,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's25p11', x: 400, y: 70, rallyX: 335, rallyY: 118 },
       { id: 's25p12', x: 400, y: 470, rallyX: 344, rallyY: 429 },
       { id: 's25p13', x: 750, y: 70, rallyX: 810, rallyY: 155 },
+      { id: 's25p14', x: 900, y: 220, rallyX: 900, rallyY: 280 },
+      { id: 's25p15', x: 850, y: 345, rallyX: 850, rallyY: 405 },
     ],
     mapTheme: {
       tintColor: '#2E1065',
@@ -3343,6 +3666,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's26p10', x: 775, y: 70, rallyX: 775, rallyY: 140 },
       { id: 's26p11', x: 75, y: 70, rallyX: 75, rallyY: 140 },
       { id: 's26p12', x: 550, y: 70, rallyX: 550, rallyY: 140 },
+      { id: 's26p13', x: 175, y: 470, rallyX: 245, rallyY: 415 },
+      { id: 's26p14', x: 275, y: 70, rallyX: 245, rallyY: 140 },
     ],
     mapTheme: {
       tintColor: '#0369A1',
@@ -3398,6 +3723,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's27p11', x: 775, y: 470, rallyX: 707, rallyY: 415 },
       { id: 's27p12', x: 425, y: 195, rallyX: 425, rallyY: 280 },
       { id: 's27p13', x: 425, y: 370, rallyX: 425, rallyY: 455 },
+      { id: 's27p14', x: 250, y: 70, rallyX: 316, rallyY: 134 },
+      { id: 's27p15', x: 775, y: 70, rallyX: 697, rallyY: 132 },
     ],
     mapTheme: {
       tintColor: '#0284C7',
@@ -3446,6 +3773,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's28p11', x: 900, y: 370, rallyX: 900, rallyY: 280 },
       { id: 's28p12', x: 525, y: 70, rallyX: 455, rallyY: 105 },
       { id: 's28p13', x: 525, y: 470, rallyX: 455, rallyY: 455 },
+      { id: 's28p14', x: 75, y: 370, rallyX: 75, rallyY: 455 },
+      { id: 's28p15', x: 75, y: 195, rallyX: 75, rallyY: 105 },
     ],
     mapTheme: {
       tintColor: '#1E3A8A',
@@ -3502,6 +3831,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's29p11', x: 750, y: 470, rallyX: 692, rallyY: 406 },
       { id: 's29p12', x: 600, y: 70, rallyX: 644, rallyY: 134 },
       { id: 's29p13', x: 600, y: 470, rallyX: 637, rallyY: 412 },
+      { id: 's29p14', x: 750, y: 70, rallyX: 684, rallyY: 138 },
+      { id: 's29p15', x: 350, y: 70, rallyX: 284, rallyY: 138 },
     ],
     mapTheme: {
       tintColor: '#0F172A',
@@ -3564,6 +3895,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's30p12', x: 600, y: 70, rallyX: 655, rallyY: 120 },
       { id: 's30p13', x: 900, y: 70, rallyX: 835, rallyY: 120 },
       { id: 's30p14', x: 900, y: 470, rallyX: 835, rallyY: 440 },
+      { id: 's30p15', x: 325, y: 70, rallyX: 245, rallyY: 100 },
+      { id: 's30p16', x: 325, y: 470, rallyX: 245, rallyY: 460 },
     ],
     mapTheme: {
       tintColor: '#B45309',
@@ -3597,13 +3930,17 @@ const TD_LEVELS: TdLevelConfig[] = STAGE_BLUEPRINTS.map((bp, idx) => {
               ? 'Cực hạn'
               : 'Huyền thoại';
 
+  const baseStartingGold = 230 + (level - 1) * 28 + (pathCount - 1) * 45;
+  const startingGold =
+    level >= 5 ? Math.round(baseStartingGold * Math.pow(1.1, level - 4)) : baseStartingGold;
+
   return {
     level,
     name: bp.name,
     biome: bp.biome,
     biomeName: bp.biomeName,
     difficultyLabel,
-    startingGold: 230 + (level - 1) * 28 + (pathCount - 1) * 45,
+    startingGold,
     startingLives: 20,
     paths: bp.paths,
     buildPads: bp.buildPads,
@@ -3632,8 +3969,18 @@ export function getStageBossCount(level: number): number {
   return total;
 }
 
-export function getTotalStarsEarnedInTd(levels: Record<number, { stars?: number }>): number {
-  return Object.values(levels).reduce((sum, item) => sum + (item?.stars ?? 0), 0);
+export function getStageClearBonusStars(level: number, isFirstClear: boolean): number {
+  const isBossMilestone = level % 5 === 0;
+  if (isFirstClear) return isBossMilestone ? 3 : 2;
+  return isBossMilestone ? 2 : 1;
+}
+
+export function getTotalStarsEarnedInTd(
+  levels: Record<number, { stars?: number }>,
+  bonusStars = 0
+): number {
+  const levelStars = Object.values(levels).reduce((sum, item) => sum + (item?.stars ?? 0), 0);
+  return levelStars + Math.max(0, Math.floor(bonusStars || 0));
 }
 
 export function getSpentUpgradeStars(upgrades: TdUpgrades): number {
@@ -3642,6 +3989,12 @@ export function getSpentUpgradeStars(upgrades: TdUpgrades): number {
     const lv = Math.max(0, Math.min(TD_UPGRADE_MAX_TIER, upgrades[track.id] ?? 0));
     for (let i = 0; i < lv; i++) {
       spent += track.tierCosts[i];
+    }
+  }
+  for (const clearTrack of TD_CLEAR_UPGRADE_TRACKS) {
+    const lv = Math.max(0, Math.min(TD_CLEAR_UPGRADE_MAX_TIER, upgrades[clearTrack.id] ?? 0));
+    for (let i = 0; i < lv; i++) {
+      spent += clearTrack.tierCosts[i];
     }
   }
   return spent;

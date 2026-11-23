@@ -34,6 +34,7 @@ import {
 } from './data/levels';
 import { preloadAllGameAssets } from './data/pokemonSprites';
 import {
+  getStageClearBonusStars,
   getTdLevelConfig,
   isTowerUnlocked,
   TD_MAX_LEVEL,
@@ -215,6 +216,9 @@ export default function App() {
     level: number;
     score: number;
     stars: number;
+    clearBonusStars?: number;
+    newAchievementStars?: number;
+    isFirstClear?: boolean;
     livesLeft: number;
     enemiesSlain: number;
   } | null>(null);
@@ -684,6 +688,7 @@ export default function App() {
               Math.min(TD_MAX_LEVEL, Number(data.highestUnlockedLevel) || 1)
             ),
             totalScore: Math.max(0, Number(data.totalScore) || 0),
+            bonusStars: Math.max(0, Number(data.bonusStars) || 0),
             levels: normalizeTdLevelsFromCloud(data.levels),
             upgrades: sanitizeTdUpgrades(data.upgrades),
           };
@@ -966,24 +971,46 @@ export default function App() {
       livesLeft: number,
       enemiesSlain: number
     ) => {
+      const prevSave = tdSaveRef.current;
+      const canSaveProgress = level <= prevSave.highestUnlockedLevel;
+
+      if (!canSaveProgress) {
+        setTdResultModal({
+          type: 'WIN',
+          level,
+          score: finalScore,
+          stars,
+          clearBonusStars: 0,
+          newAchievementStars: 0,
+          isFirstClear: false,
+          livesLeft,
+          enemiesSlain,
+        });
+        setGameState('ROUND_SUMMARY');
+        return;
+      }
+
+      const prevLv = prevSave.levels[level];
+      const isFirstClear = !prevLv?.completed;
+      const clearBonusStars = getStageClearBonusStars(level, isFirstClear);
+      const bestScore = Math.max(prevLv?.bestScore ?? 0, finalScore);
+      const bestStars = Math.max(prevLv?.stars ?? 0, stars);
+      const newAchievementStars = Math.max(0, bestStars - (prevLv?.stars ?? 0));
+      const bestLivesLeft = Math.max(prevLv?.bestLivesLeft ?? 0, livesLeft);
+      const scoreDelta = prevLv ? Math.max(0, finalScore - prevLv.bestScore) : finalScore;
+
       setTdResultModal({
         type: 'WIN',
         level,
         score: finalScore,
         stars,
+        clearBonusStars,
+        newAchievementStars,
+        isFirstClear,
         livesLeft,
         enemiesSlain,
       });
       setGameState('ROUND_SUMMARY');
-
-      const prevSave = tdSaveRef.current;
-      if (level > prevSave.highestUnlockedLevel) return;
-
-      const prevLv = prevSave.levels[level];
-      const bestScore = Math.max(prevLv?.bestScore ?? 0, finalScore);
-      const bestStars = Math.max(prevLv?.stars ?? 0, stars);
-      const bestLivesLeft = Math.max(prevLv?.bestLivesLeft ?? 0, livesLeft);
-      const scoreDelta = prevLv ? Math.max(0, finalScore - prevLv.bestScore) : finalScore;
 
       const nextSave: TdSaveData = {
         highestUnlockedLevel: Math.min(
@@ -991,6 +1018,7 @@ export default function App() {
           Math.max(prevSave.highestUnlockedLevel, level + 1)
         ),
         totalScore: prevSave.totalScore + scoreDelta,
+        bonusStars: (prevSave.bonusStars ?? 0) + clearBonusStars,
         levels: {
           ...prevSave.levels,
           [level]: {
@@ -1561,12 +1589,16 @@ export default function App() {
             stageName={tdLevelConfig.name}
             score={tdResultModal.score}
             stars={tdResultModal.stars}
+            clearBonusStars={tdResultModal.clearBonusStars}
+            newAchievementStars={tdResultModal.newAchievementStars}
+            isFirstClear={tdResultModal.isFirstClear}
             livesLeft={tdResultModal.livesLeft}
             startingLives={
               tdLevelConfig.startingLives +
               (tdSaveData.upgrades.citadel >= 1 ? 3 : 0) +
               (tdSaveData.upgrades.citadel >= 2 ? 3 : 0) +
-              (tdSaveData.upgrades.citadel >= 4 ? 4 : 0)
+              (tdSaveData.upgrades.citadel >= 4 ? 4 : 0) +
+              (tdSaveData.upgrades.clearCitadel ?? 0) * 2
             }
             enemiesSlain={tdResultModal.enemiesSlain}
             isPreviewMode={isPreviewMode && tdLevelConfig.level > tdSaveData.highestUnlockedLevel}

@@ -8,6 +8,9 @@ interface TdEndModalProps {
   stageName: string;
   score: number;
   stars: number;
+  clearBonusStars?: number;
+  newAchievementStars?: number;
+  isFirstClear?: boolean;
   livesLeft: number;
   startingLives: number;
   enemiesSlain: number;
@@ -23,6 +26,9 @@ export const TdEndModal: React.FC<TdEndModalProps> = ({
   stageName,
   score,
   stars,
+  clearBonusStars = 0,
+  newAchievementStars = 0,
+  isFirstClear = false,
   livesLeft,
   startingLives,
   enemiesSlain,
@@ -54,17 +60,37 @@ export const TdEndModal: React.FC<TdEndModalProps> = ({
         </div>
 
         {isWin && (
-          <div className="flex items-center justify-center gap-3 py-1">
-            {[1, 2, 3].map((idx) => (
-              <Star
-                key={idx}
-                className={`w-9 h-9 transition-transform ${
-                  idx <= stars
-                    ? 'fill-[#FACC15] text-[#FACC15] scale-110 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]'
-                    : 'text-slate-700'
-                }`}
-              />
-            ))}
+          <div className="flex flex-col items-center gap-2.5">
+            <div className="flex items-center justify-center gap-3 py-1">
+              {[1, 2, 3].map((idx) => (
+                <Star
+                  key={idx}
+                  className={`w-9 h-9 transition-transform ${
+                    idx <= stars
+                      ? 'fill-[#FACC15] text-[#FACC15] scale-110 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]'
+                      : 'text-slate-700'
+                  }`}
+                />
+              ))}
+            </div>
+            {(clearBonusStars > 0 || newAchievementStars > 0) && (
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {clearBonusStars > 0 && (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/20 border border-amber-400/70 text-xs font-extrabold text-[#FACC15] font-mono-num">
+                    <Star className="w-3.5 h-3.5 fill-[#FACC15] text-[#FACC15]" />
+                    <span>
+                      +{clearBonusStars}★ {isFirstClear ? 'Vượt ải lần đầu' : 'Thưởng vượt ải'}
+                    </span>
+                  </div>
+                )}
+                {newAchievementStars > 0 && (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/70 text-xs font-extrabold text-emerald-300 font-mono-num">
+                    <Star className="w-3.5 h-3.5 fill-emerald-300 text-emerald-300" />
+                    <span>+{newAchievementStars}★ Thành tích mới</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -121,7 +147,7 @@ export const TdEndModal: React.FC<TdEndModalProps> = ({
               className="min-h-[46px] rounded-xl bg-[#1E293B] hover:bg-slate-700 border border-slate-700 text-white font-bold text-sm flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <Grid3X3 className="w-4 h-4 text-sky-300" />
-              Bản đồ 15 Ải
+              Bản đồ 30 Ải
             </button>
           </div>
         </div>

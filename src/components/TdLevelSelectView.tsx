@@ -30,12 +30,20 @@ import {
 } from '../data/pokemonSprites';
 import {
   DEFAULT_TD_UPGRADES,
+  formatArtifactBonusSummary,
   getAllTdLevels,
   getSpentUpgradeStars,
   getStageBossCount,
+  getStageClearBonusStars,
   getTotalStarsEarnedInTd,
   getTowerMaxLevel,
   isTowerUnlocked,
+  TD_ARTIFACT_OPEN_COST,
+  TD_ARTIFACT_RARITY_META,
+  TD_ARTIFACT_UNLOCK_LEVEL,
+  TD_CLEAR_UPGRADE_MAX_TIER,
+  TD_CLEAR_UPGRADE_TRACKS,
+  TD_HERO_ARTIFACT_TEMPLATES,
   TD_MAX_LEVEL,
   TD_MYTHIC_PATHS,
   TD_TOWER_BUILD_ORDER,
@@ -44,7 +52,14 @@ import {
   TD_UPGRADE_TRACKS,
 } from '../data/tdLevels';
 import { CloudSyncStatus } from '../firebase';
-import { TdBiomeId, TdSaveData, TdTowerType, TdUpgradeTrackId, TdUpgrades } from '../types/towerDefense';
+import {
+  TdArtifactRarity,
+  TdBiomeId,
+  TdSaveData,
+  TdTowerType,
+  TdUpgradeTrackId,
+  TdUpgrades,
+} from '../types/towerDefense';
 import { RememberedAccount } from '../utils/localAccountCache';
 import { AccountBar } from './AccountBar';
 import { TdEnemyPreview, TdTowerPreview } from './TdArtwork';
@@ -207,11 +222,13 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
   onBack,
 }) => {
   const [workshopOpen, setWorkshopOpen] = useState(false);
+  const [workshopTab, setWorkshopTab] = useState<'BASE' | 'CLEAR'>('BASE');
   const [handbookOpen, setHandbookOpen] = useState(false);
   const [handbookHero, setHandbookHero] = useState<TdTowerType>('ARCHER');
 
   const levels = getAllTdLevels();
-  const totalStarsEarned = getTotalStarsEarnedInTd(saveData.levels);
+  const bonusStarsEarned = saveData.bonusStars ?? 0;
+  const totalStarsEarned = getTotalStarsEarnedInTd(saveData.levels, bonusStarsEarned);
   const spentStars = getSpentUpgradeStars(saveData.upgrades);
   const availableStars = Math.max(0, totalStarsEarned - spentStars);
   const completedCount = Object.values(saveData.levels).filter((l) => l.completed).length;
@@ -223,6 +240,26 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
     if (!meta) return;
     const currentLv = saveData.upgrades[trackId] ?? 0;
     if (currentLv >= TD_UPGRADE_MAX_TIER) return;
+    const cost = meta.tierCosts[currentLv];
+    if (availableStars < cost) return;
+    onUpdateUpgrades({
+      ...saveData.upgrades,
+      [trackId]: currentLv + 1,
+    });
+  };
+
+  const handleUpgradeClearTrack = (
+    trackId: 'clearGold' | 'clearPower' | 'clearCitadel' | 'clearArtifact'
+  ) => {
+    const meta = TD_CLEAR_UPGRADE_TRACKS.find((t) => t.id === trackId);
+    if (!meta) return;
+    const trackUnlocked =
+      isPreviewMode ||
+      Boolean(saveData.levels[meta.unlockStage]?.completed) ||
+      saveData.highestUnlockedLevel > meta.unlockStage;
+    if (!trackUnlocked) return;
+    const currentLv = saveData.upgrades[trackId] ?? 0;
+    if (currentLv >= TD_CLEAR_UPGRADE_MAX_TIER) return;
     const cost = meta.tierCosts[currentLv];
     if (availableStars < cost) return;
     onUpdateUpgrades({
@@ -259,6 +296,7 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
                 </h1>
                 <p className="text-xs text-slate-400 font-mono-num">
                   Đã thủ {completedCount}/{TD_MAX_LEVEL} ải · {totalStarsEarned}★
+                  {bonusStarsEarned > 0 ? ` (${bonusStarsEarned}★ vượt ải)` : ''}
                 </p>
               </div>
             </div>
@@ -354,7 +392,7 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
               onClick={() => setWorkshopOpen(true)}
               className="text-xs font-bold text-amber-300 hover:text-amber-200 underline underline-offset-4 cursor-pointer"
             >
-              Xem 10 nhánh Nâng Cấp Sao ({spentStars}/90★)
+              Xem Nâng Cấp Sao & Vượt Ải ({spentStars}★ đã dùng)
             </button>
           </div>
 
@@ -557,8 +595,13 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
                         <div className="font-display text-sm font-bold text-white line-clamp-1">
                           {lv.name}
                         </div>
-                        <div className="text-[11px] text-slate-400 mt-0.5">
-                          {lv.waves.length} đợt · {lv.paths.length} nhánh · {lv.difficultyLabel}
+                        <div className="text-[11px] text-slate-400 mt-0.5 flex items-center justify-between gap-1">
+                          <span className="truncate">
+                            {lv.waves.length} đợt · {lv.paths.length} nhánh
+                          </span>
+                          <span className="font-mono-num text-[10px] font-bold text-amber-300 shrink-0">
+                            +{getStageClearBonusStars(lv.level, !prog?.completed)}★ {prog?.completed ? 'thêm' : 'vượt ải'}
+                          </span>
                         </div>
                       </div>
 
@@ -579,7 +622,7 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
                           </span>
                         ) : (
                           <span className="text-[11px] text-slate-500">
-                            {unlocked ? 'Sẵn sàng' : 'Khóa'}
+                            {unlocked ? lv.difficultyLabel : 'Khóa'}
                           </span>
                         )}
                       </div>
@@ -602,112 +645,250 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
             className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl bg-[#131C31] border-2 border-amber-400/70 p-5 sm:p-6 shadow-2xl flex flex-col gap-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
               <div>
                 <h2 className="font-display text-xl font-extrabold text-white flex items-center gap-2">
                   <Hammer className="w-5 h-5 text-[#FACC15]" />
-                  Xưởng Nâng Cấp Binh Chủng (10 Nhánh · 5 Cấp)
+                  Xưởng Nâng Cấp Binh Chủng & Vượt Ải
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Dùng Sao (★) kiếm được từ các ải để tăng sức mạnh vĩnh viễn cho toàn quân. Có thể hoàn tác miễn phí bất cứ lúc nào.
+                  Dùng Sao thành tích & Sao thưởng vượt ải để nâng cấp vĩnh viễn. Hoàn tác miễn phí bất cứ lúc nào.
                 </p>
               </div>
-              <div className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-400/60 font-mono-num text-sm font-extrabold text-[#FACC15] shrink-0">
-                Còn {availableStars}★
+              <div className="flex items-center gap-2 shrink-0">
+                {bonusStarsEarned > 0 && (
+                  <span className="px-2.5 py-1.5 rounded-xl bg-emerald-950/80 border border-emerald-500/50 font-mono-num text-xs font-bold text-emerald-300">
+                    +{bonusStarsEarned}★ vượt ải
+                  </span>
+                )}
+                <div className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-400/60 font-mono-num text-sm font-extrabold text-[#FACC15]">
+                  Còn {availableStars}★
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {TD_UPGRADE_TRACKS.map((track) => {
-                const lv = saveData.upgrades[track.id] ?? 0;
-                const isMaxed = lv >= TD_UPGRADE_MAX_TIER;
-                const nextCost = !isMaxed ? track.tierCosts[lv] : 0;
-                const canAfford = !isMaxed && availableStars >= nextCost;
+            {/* Workshop Tabs */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setWorkshopTab('BASE')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-extrabold border transition-colors cursor-pointer ${
+                  workshopTab === 'BASE'
+                    ? 'bg-[#FACC15] text-slate-950 border-amber-300'
+                    : 'bg-[#0F172A] text-slate-300 border-slate-700 hover:border-slate-500'
+                }`}
+              >
+                Binh Chủng & Thành Trì (10 Nhánh)
+              </button>
+              <button
+                type="button"
+                onClick={() => setWorkshopTab('CLEAR')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-extrabold border transition-colors cursor-pointer flex items-center gap-1.5 ${
+                  workshopTab === 'CLEAR'
+                    ? 'bg-emerald-400 text-slate-950 border-emerald-200'
+                    : 'bg-[#0F172A] text-emerald-200 border-emerald-700/60 hover:border-emerald-500'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Nâng Cấp Vượt Ải (4 Nhánh · 10 Cấp)
+              </button>
+            </div>
 
-                return (
-                  <div
-                    key={track.id}
-                    className="rounded-xl bg-[#0F172A] border border-slate-700/80 p-3.5 flex flex-col justify-between gap-3"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-10 h-10 rounded-lg bg-amber-500/15 border border-amber-400/40 flex items-center justify-center shrink-0">
-                          {track.id === 'archery' ? (
-                            <TdTowerPreview type="ARCHER" level={4} branch="SNIPER_CRIT" className="w-9 h-9" />
-                          ) : track.id === 'magic' ? (
-                            <TdTowerPreview type="MAGE" level={4} branch="ARCANE_BEAM" className="w-9 h-9" />
-                          ) : track.id === 'barracks' ? (
-                            <TdTowerPreview type="BARRACKS" level={4} branch="PALADIN" className="w-9 h-9" />
-                          ) : track.id === 'artillery' ? (
-                            <TdTowerPreview type="ARTILLERY" level={4} branch="BIG_BERTHA" className="w-9 h-9" />
-                          ) : track.id === 'support' ? (
-                            <TdTowerPreview type="VALKYRIE" level={4} branch="SOLAR_SERAPH" className="w-9 h-9" />
-                          ) : track.id === 'economy' ? (
-                            <Coins className="w-5 h-5 text-[#FACC15]" />
-                          ) : track.id === 'spells' ? (
-                            <Flame className="w-5 h-5 text-orange-400" />
-                          ) : track.id === 'citadel' ? (
-                            <Shield className="w-5 h-5 text-sky-400" />
-                          ) : track.id === 'lethality' ? (
-                            <Crosshair className="w-5 h-5 text-rose-400" />
-                          ) : (
-                            <Sparkles className="w-5 h-5 text-purple-300" />
-                          )}
-                        </div>
-                        <div>
-                          <div className="font-display text-sm font-bold text-white">
-                            {track.name}
+            {workshopTab === 'BASE' ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {TD_UPGRADE_TRACKS.map((track) => {
+                  const lv = saveData.upgrades[track.id] ?? 0;
+                  const isMaxed = lv >= TD_UPGRADE_MAX_TIER;
+                  const nextCost = !isMaxed ? track.tierCosts[lv] : 0;
+                  const canAfford = !isMaxed && availableStars >= nextCost;
+
+                  return (
+                    <div
+                      key={track.id}
+                      className="rounded-xl bg-[#0F172A] border border-slate-700/80 p-3.5 flex flex-col justify-between gap-3"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-10 h-10 rounded-lg bg-amber-500/15 border border-amber-400/40 flex items-center justify-center shrink-0">
+                            {track.id === 'archery' ? (
+                              <TdTowerPreview type="ARCHER" level={4} branch="SNIPER_CRIT" className="w-9 h-9" />
+                            ) : track.id === 'magic' ? (
+                              <TdTowerPreview type="MAGE" level={4} branch="ARCANE_BEAM" className="w-9 h-9" />
+                            ) : track.id === 'barracks' ? (
+                              <TdTowerPreview type="BARRACKS" level={4} branch="PALADIN" className="w-9 h-9" />
+                            ) : track.id === 'artillery' ? (
+                              <TdTowerPreview type="ARTILLERY" level={4} branch="BIG_BERTHA" className="w-9 h-9" />
+                            ) : track.id === 'support' ? (
+                              <TdTowerPreview type="VALKYRIE" level={4} branch="SOLAR_SERAPH" className="w-9 h-9" />
+                            ) : track.id === 'economy' ? (
+                              <Coins className="w-5 h-5 text-[#FACC15]" />
+                            ) : track.id === 'spells' ? (
+                              <Flame className="w-5 h-5 text-orange-400" />
+                            ) : track.id === 'citadel' ? (
+                              <Shield className="w-5 h-5 text-sky-400" />
+                            ) : track.id === 'lethality' ? (
+                              <Crosshair className="w-5 h-5 text-rose-400" />
+                            ) : (
+                              <Sparkles className="w-5 h-5 text-purple-300" />
+                            )}
                           </div>
-                          <div className="text-[11px] text-slate-400">{track.shortBonus}</div>
+                          <div>
+                            <div className="font-display text-sm font-bold text-white">
+                              {track.name}
+                            </div>
+                            <div className="text-[11px] text-slate-400">{track.shortBonus}</div>
+                          </div>
                         </div>
+                        <span className="font-mono-num text-xs font-extrabold text-amber-300 shrink-0">
+                          Cấp {lv}/{TD_UPGRADE_MAX_TIER}
+                        </span>
                       </div>
-                      <span className="font-mono-num text-xs font-extrabold text-amber-300 shrink-0">
-                        Cấp {lv}/{TD_UPGRADE_MAX_TIER}
-                      </span>
-                    </div>
 
-                    <div className="flex flex-col gap-1 text-[11px]">
-                      {track.tierLabels.map((lbl, idx) => (
-                        <div
-                          key={lbl}
-                          className={`px-2 py-1 rounded ${
-                            idx < lv
-                              ? 'bg-emerald-950/60 text-emerald-300 font-semibold'
-                              : idx === lv
-                                ? 'bg-slate-800/80 text-slate-200'
-                                : 'text-slate-500'
-                          }`}
-                        >
-                          {idx + 1}. {lbl} ({track.tierCosts[idx]}★)
-                        </div>
-                      ))}
-                    </div>
+                      <div className="flex flex-col gap-1 text-[11px]">
+                        {track.tierLabels.map((lbl, idx) => (
+                          <div
+                            key={lbl}
+                            className={`px-2 py-1 rounded ${
+                              idx < lv
+                                ? 'bg-emerald-950/60 text-emerald-300 font-semibold'
+                                : idx === lv
+                                  ? 'bg-slate-800/80 text-slate-200'
+                                  : 'text-slate-500'
+                            }`}
+                          >
+                            {idx + 1}. {lbl} ({track.tierCosts[idx]}★)
+                          </div>
+                        ))}
+                      </div>
 
-                    <button
-                      type="button"
-                      disabled={!canAfford}
-                      onClick={() => handleUpgradeTrack(track.id)}
-                      className={`min-h-[38px] rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-colors ${
-                        isMaxed
-                          ? 'bg-emerald-950/50 border border-emerald-700/60 text-emerald-300 cursor-default'
-                          : canAfford
-                            ? 'bg-[#FACC15] hover:bg-yellow-300 text-slate-950 cursor-pointer'
-                            : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                      <button
+                        type="button"
+                        disabled={!canAfford}
+                        onClick={() => handleUpgradeTrack(track.id)}
+                        className={`min-h-[38px] rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-colors ${
+                          isMaxed
+                            ? 'bg-emerald-950/50 border border-emerald-700/60 text-emerald-300 cursor-default'
+                            : canAfford
+                              ? 'bg-[#FACC15] hover:bg-yellow-300 text-slate-950 cursor-pointer'
+                              : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                        }`}
+                      >
+                        {isMaxed ? (
+                          'Đã tối đa'
+                        ) : (
+                          <>
+                            <span>Nâng cấp</span>
+                            <span className="font-mono-num">({nextCost}★)</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {TD_CLEAR_UPGRADE_TRACKS.map((track) => {
+                  const lv = saveData.upgrades[track.id] ?? 0;
+                  const isUnlocked =
+                    isPreviewMode ||
+                    Boolean(saveData.levels[track.unlockStage]?.completed) ||
+                    saveData.highestUnlockedLevel > track.unlockStage;
+                  const isMaxed = lv >= TD_CLEAR_UPGRADE_MAX_TIER;
+                  const nextCost = !isMaxed ? track.tierCosts[lv] : 0;
+                  const canAfford = isUnlocked && !isMaxed && availableStars >= nextCost;
+
+                  return (
+                    <div
+                      key={track.id}
+                      className={`rounded-xl border p-4 flex flex-col justify-between gap-3 ${
+                        isUnlocked
+                          ? 'bg-[#0F172A] border-emerald-500/50'
+                          : 'bg-[#0F172A]/60 border-slate-800 opacity-80'
                       }`}
                     >
-                      {isMaxed ? (
-                        'Đã tối đa'
-                      ) : (
-                        <>
-                          <span>Nâng cấp</span>
-                          <span className="font-mono-num">({nextCost}★)</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-10 h-10 rounded-lg bg-emerald-500/15 border border-emerald-400/40 flex items-center justify-center shrink-0">
+                            {track.id === 'clearGold' ? (
+                              <Coins className="w-5 h-5 text-[#FACC15]" />
+                            ) : track.id === 'clearPower' ? (
+                              <Crosshair className="w-5 h-5 text-rose-400" />
+                            ) : track.id === 'clearCitadel' ? (
+                              <Shield className="w-5 h-5 text-sky-400" />
+                            ) : (
+                              <Sparkles className="w-5 h-5 text-purple-300" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="font-display text-sm font-bold text-white flex items-center gap-1.5 flex-wrap">
+                              <span>{track.name}</span>
+                              {!isUnlocked && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] font-bold text-amber-300">
+                                  <Lock className="w-2.5 h-2.5" />
+                                  Qua Ải {track.unlockStage}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-slate-400">{track.shortBonus}</div>
+                          </div>
+                        </div>
+                        <span className="font-mono-num text-xs font-extrabold text-emerald-300 shrink-0">
+                          Cấp {lv}/{TD_CLEAR_UPGRADE_MAX_TIER}
+                        </span>
+                      </div>
+
+                      <div className="rounded-lg bg-[#131C31] border border-slate-800 px-3 py-2 text-[11px] text-slate-200 leading-snug">
+                        {track.perLevelDesc}
+                      </div>
+
+                      {/* 10-Tier Progress Segments */}
+                      <div className="grid grid-cols-10 gap-1">
+                        {track.tierCosts.map((c, idx) => (
+                          <div
+                            key={`${track.id}-${idx}`}
+                            title={`Cấp ${idx + 1}: ${c}★`}
+                            className={`h-2 rounded-full transition-colors ${
+                              idx < lv
+                                ? 'bg-emerald-400'
+                                : idx === lv && isUnlocked
+                                  ? 'bg-amber-400/50'
+                                  : 'bg-slate-800'
+                            }`}
+                          />
+                        ))}
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={!canAfford}
+                        onClick={() => handleUpgradeClearTrack(track.id)}
+                        className={`min-h-[38px] rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-colors ${
+                          !isUnlocked
+                            ? 'bg-slate-800 text-amber-300/75 cursor-not-allowed'
+                            : isMaxed
+                              ? 'bg-emerald-950/60 border border-emerald-600/60 text-emerald-300 cursor-default'
+                              : canAfford
+                                ? 'bg-emerald-400 hover:bg-emerald-300 text-slate-950 cursor-pointer'
+                                : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                        }`}
+                      >
+                        {!isUnlocked ? (
+                          `Mở khóa sau khi vượt Ải ${track.unlockStage}`
+                        ) : isMaxed ? (
+                          'Đã tối đa (Cấp 10/10)'
+                        ) : (
+                          <>
+                            <span>Nâng cấp lên Cấp {lv + 1}</span>
+                            <span className="font-mono-num">({nextCost}★)</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800">
               <button
@@ -908,10 +1089,55 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
                     </div>
                   </div>
                 )}
+                {/* Thần Khí Hero Artifact Preview */}
+                {(() => {
+                  const artTpl = TD_HERO_ARTIFACT_TEMPLATES[handbookHero];
+                  const rarities: TdArtifactRarity[] = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGEND'];
+                  return (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-xs font-extrabold text-purple-300 flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-[#FACC15]" />
+                          <span>
+                            Thần Khí: {artTpl.name} (Mở từ Cấp {TD_ARTIFACT_UNLOCK_LEVEL} ·{' '}
+                            {TD_ARTIFACT_OPEN_COST.toLocaleString('vi-VN')}g/lần)
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-mono-num text-slate-400">
+                          60% Common · 25% Uncommon · 10% Rare · 4% Epic · 1% Legend
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+                        {rarities.map((rar) => {
+                          const rMeta = TD_ARTIFACT_RARITY_META[rar];
+                          const bonusList = formatArtifactBonusSummary(artTpl.tiers[rar]);
+                          return (
+                            <div
+                              key={rar}
+                              className={`rounded-lg border p-2 flex flex-col gap-1 ${rMeta.bgClass} ${rMeta.borderClass}`}
+                            >
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-[11px] font-extrabold" style={{ color: rMeta.color }}>
+                                  {rMeta.shortLabel}
+                                </span>
+                                <span className="text-[10px] font-mono-num text-slate-300">
+                                  {rMeta.chancePct}%
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-slate-200 leading-snug">
+                                {bonusList.join(' · ')}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Global Battlefield Rules */}
-              <div className="rounded-xl bg-[#131C31] border border-slate-800 p-3.5 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-300">
+              <div className="rounded-xl bg-[#131C31] border border-slate-800 p-3.5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs text-slate-300">
                 <div>
                   <div className="font-extrabold text-amber-300 mb-1">Chi phí theo số lượng công trình</div>
                   <p className="leading-relaxed">
@@ -928,6 +1154,12 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
                   <div className="font-extrabold text-emerald-300 mb-1">Kháng hiệu ứng & Giải trừ</div>
                   <p className="leading-relaxed">
                     Quái tinh nhuệ có thể kháng Bỏng Thường, Giáp, Kháng Phép và giải Độc thường/Trói chân/Làm chậm/Bỏng thường. Bỏng Sâu và Độc Nặng không thể bị giải trừ.
+                  </p>
+                </div>
+                <div>
+                  <div className="font-extrabold text-purple-300 mb-1">Sao Vượt Ải & Thần Khí Cấp 20</div>
+                  <p className="leading-relaxed">
+                    Mỗi lần qua ải nhận thêm +1★ đến +3★ vượt ải để nâng 4 nhánh Vượt Ải. Tướng đạt Cấp 20 có thể mở Thần Khí (10.000g/lần) nhận chỉ số riêng theo độ hiếm.
                   </p>
                 </div>
               </div>

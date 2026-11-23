@@ -135,13 +135,17 @@
           "type": "integer",
           "description": "Cumulative best score across completed Tower Defense stages."
         },
+        "bonusStars": {
+          "type": "integer",
+          "description": "Cumulative bonus stars earned from clearing stages (first-clear and repeat-clear stage rewards)."
+        },
         "levels": {
           "type": "object",
           "description": "Map of stage numbers ('1'..'30') to TdLevelProgress objects containing completed, stars, bestScore, and bestLivesLeft."
         },
         "upgrades": {
           "type": "object",
-          "description": "Map of 10 upgrade track levels (archery, magic, barracks, artillery, support, economy, spells, citadel, lethality, mastery), each integer 0..5."
+          "description": "Map of 10 standard upgrade track levels (0..5: archery, magic, barracks, artillery, support, economy, spells, citadel, lethality, mastery) and 4 stage-clear upgrade tracks (0..10: clearGold, clearPower, clearCitadel, clearArtifact)."
         },
         "createdAt": {
           "type": "string",

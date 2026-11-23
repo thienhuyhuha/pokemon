@@ -222,21 +222,36 @@ const TD_UPGRADE_KEYS = [
   'mastery',
 ] as const;
 
+const TD_CLEAR_UPGRADE_KEYS = [
+  'clearGold',
+  'clearPower',
+  'clearCitadel',
+  'clearArtifact',
+] as const;
+
+const ALL_TD_UPGRADE_KEYS: readonly string[] = [...TD_UPGRADE_KEYS, ...TD_CLEAR_UPGRADE_KEYS];
+
 export function isValidTdUpgradesPayload(up: unknown): boolean {
   if (!up || typeof up !== 'object' || Array.isArray(up)) return false;
   const record = up as Record<string, unknown>;
   const keys = Object.keys(record);
   if (!TD_UPGRADE_KEYS.every((k) => keys.includes(k))) return false;
-  if (!keys.every((k) => (TD_UPGRADE_KEYS as readonly string[]).includes(k))) return false;
-  return TD_UPGRADE_KEYS.every((k) => {
+  if (!keys.every((k) => ALL_TD_UPGRADE_KEYS.includes(k))) return false;
+  const baseValid = TD_UPGRADE_KEYS.every((k) => {
     const val = record[k];
     return typeof val === 'number' && Number.isInteger(val) && val >= 0 && val <= 5;
   });
+  const clearValid = TD_CLEAR_UPGRADE_KEYS.every((k) => {
+    if (!(k in record)) return true;
+    const val = record[k];
+    return typeof val === 'number' && Number.isInteger(val) && val >= 0 && val <= 10;
+  });
+  return baseValid && clearValid;
 }
 
 export const TD_UPGRADES_SECURITY_CASES = [
   {
-    name: 'Valid 10-track TD upgrades (0..5) allowed',
+    name: 'Valid 14-track TD upgrades (10 base 0..5 + 4 stage-clear 0..10) allowed',
     upgrades: {
       archery: 5,
       magic: 4,
@@ -248,6 +263,10 @@ export const TD_UPGRADES_SECURITY_CASES = [
       citadel: 3,
       lethality: 4,
       mastery: 5,
+      clearGold: 10,
+      clearPower: 6,
+      clearCitadel: 4,
+      clearArtifact: 8,
     },
     expected: true,
   },
@@ -264,6 +283,23 @@ export const TD_UPGRADES_SECURITY_CASES = [
       citadel: 0,
       lethality: 0,
       mastery: 0,
+    },
+    expected: false,
+  },
+  {
+    name: 'Out-of-bounds stage-clear upgrade tier (> 10) denied',
+    upgrades: {
+      archery: 0,
+      magic: 0,
+      barracks: 0,
+      artillery: 0,
+      support: 0,
+      economy: 0,
+      spells: 0,
+      citadel: 0,
+      lethality: 0,
+      mastery: 0,
+      clearGold: 11,
     },
     expected: false,
   },

@@ -187,7 +187,11 @@ service cloud.firestore {
           'spells',
           'citadel',
           'lethality',
-          'mastery'
+          'mastery',
+          'clearGold',
+          'clearPower',
+          'clearCitadel',
+          'clearArtifact'
         ])
         && up.archery is int && up.archery >= 0 && up.archery <= 5
         && up.magic is int && up.magic >= 0 && up.magic <= 5
@@ -198,7 +202,11 @@ service cloud.firestore {
         && up.spells is int && up.spells >= 0 && up.spells <= 5
         && up.citadel is int && up.citadel >= 0 && up.citadel <= 5
         && up.lethality is int && up.lethality >= 0 && up.lethality <= 5
-        && up.mastery is int && up.mastery >= 0 && up.mastery <= 5;
+        && up.mastery is int && up.mastery >= 0 && up.mastery <= 5
+        && (!('clearGold' in up) || (up.clearGold is int && up.clearGold >= 0 && up.clearGold <= 10))
+        && (!('clearPower' in up) || (up.clearPower is int && up.clearPower >= 0 && up.clearPower <= 10))
+        && (!('clearCitadel' in up) || (up.clearCitadel is int && up.clearCitadel >= 0 && up.clearCitadel <= 10))
+        && (!('clearArtifact' in up) || (up.clearArtifact is int && up.clearArtifact >= 0 && up.clearArtifact <= 10));
     }
 
     function isValidTowerDefenseProfile(data, userId) {
@@ -215,6 +223,7 @@ service cloud.firestore {
           'uid',
           'highestUnlockedLevel',
           'totalScore',
+          'bonusStars',
           'levels',
           'upgrades',
           'createdAt',
@@ -229,6 +238,7 @@ service cloud.firestore {
         && data.totalScore is int
         && data.totalScore >= 0
         && data.totalScore <= 500000000
+        && (!('bonusStars' in data) || (data.bonusStars is int && data.bonusStars >= 0 && data.bonusStars <= 100000))
         && data.levels is map
         && data.levels.size() <= 30
         && isValidTdUpgrades(data.upgrades)
@@ -241,9 +251,11 @@ service cloud.firestore {
         && incoming().highestUnlockedLevel >= existing().highestUnlockedLevel
         && incoming().highestUnlockedLevel <= incoming().levels.size() + 1
         && incoming().totalScore >= existing().totalScore
+        && (!('bonusStars' in existing()) || ('bonusStars' in incoming() && incoming().bonusStars >= existing().bonusStars))
         && incoming().diff(existing()).affectedKeys().hasOnly([
           'highestUnlockedLevel',
           'totalScore',
+          'bonusStars',
           'levels',
           'upgrades',
           'updatedAt'

@@ -153,9 +153,48 @@ export type TdUpgradeTrackId =
   | 'spells'
   | 'citadel'
   | 'lethality'
-  | 'mastery';
+  | 'mastery'
+  | 'clearGold'
+  | 'clearPower'
+  | 'clearCitadel'
+  | 'clearArtifact';
 
 export type TdUpgrades = Record<TdUpgradeTrackId, number>;
+
+export type TdArtifactRarity = 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC' | 'LEGEND';
+
+export interface TdArtifactBonuses {
+  damagePct?: number;
+  attackSpeedPct?: number;
+  rangePct?: number;
+  critChanceBonus?: number;
+  critDamageBonus?: number;
+  armorPiercePct?: number;
+  magicPiercePct?: number;
+  trueDamagePct?: number;
+  splashRadiusBonus?: number;
+  slowPctBonus?: number;
+  stunChanceBonus?: number;
+  burnPctBonus?: number;
+  detonateChanceBonus?: number;
+  heavyPoisonChanceBonus?: number;
+  executeBelowPctBonus?: number;
+  auraCritChanceBonus?: number;
+  auraCritDamageBonus?: number;
+  auraHasteBonus?: number;
+  auraDamageBonus?: number;
+  breathCooldownReductionPct?: number;
+  soldierHpPct?: number;
+  soldierDamagePct?: number;
+}
+
+export interface TdHeroArtifact {
+  id: string;
+  towerType: TdTowerType;
+  name: string;
+  rarity: TdArtifactRarity;
+  bonuses: TdArtifactBonuses;
+}
 
 export interface TdPoint {
   x: number;
@@ -239,6 +278,7 @@ export interface TdLevelProgress {
 export interface TdSaveData {
   highestUnlockedLevel: number;
   totalScore: number;
+  bonusStars?: number;
   levels: Record<number, TdLevelProgress>;
   upgrades: TdUpgrades;
 }
@@ -392,6 +432,7 @@ export interface TdBuiltTower {
   castWindupMax: number;
   castTargetId: string | null;
   specialSkillTimer?: number;
+  artifact?: TdHeroArtifact | null;
 }
 
 export interface TdEnemyEntity {

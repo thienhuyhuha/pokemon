@@ -27,6 +27,7 @@ import { DIAMOND_MAX_LEVEL } from './data/diamondLevels';
 import { MAX_LEVEL } from './data/levels';
 import {
   DEFAULT_TD_UPGRADES,
+  TD_CLEAR_UPGRADE_MAX_TIER,
   TD_MAX_LEVEL,
   TD_UPGRADE_MAX_TIER,
 } from './data/tdLevels';
@@ -244,8 +245,8 @@ export function normalizeDiamondLevelsFromCloud(
 
 export function sanitizeTdUpgrades(raw: unknown): TdUpgrades {
   const src = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  const clampTier = (val: unknown, fallback: number) =>
-    clampInt(Number(val ?? fallback), 0, TD_UPGRADE_MAX_TIER);
+  const clampTier = (val: unknown, fallback: number, maxTier = TD_UPGRADE_MAX_TIER) =>
+    clampInt(Number(val ?? fallback), 0, maxTier);
   return {
     archery: clampTier(src.archery, DEFAULT_TD_UPGRADES.archery),
     magic: clampTier(src.magic, DEFAULT_TD_UPGRADES.magic),
@@ -257,6 +258,10 @@ export function sanitizeTdUpgrades(raw: unknown): TdUpgrades {
     citadel: clampTier(src.citadel, DEFAULT_TD_UPGRADES.citadel),
     lethality: clampTier(src.lethality, DEFAULT_TD_UPGRADES.lethality),
     mastery: clampTier(src.mastery, DEFAULT_TD_UPGRADES.mastery),
+    clearGold: clampTier(src.clearGold, DEFAULT_TD_UPGRADES.clearGold, TD_CLEAR_UPGRADE_MAX_TIER),
+    clearPower: clampTier(src.clearPower, DEFAULT_TD_UPGRADES.clearPower, TD_CLEAR_UPGRADE_MAX_TIER),
+    clearCitadel: clampTier(src.clearCitadel, DEFAULT_TD_UPGRADES.clearCitadel, TD_CLEAR_UPGRADE_MAX_TIER),
+    clearArtifact: clampTier(src.clearArtifact, DEFAULT_TD_UPGRADES.clearArtifact, TD_CLEAR_UPGRADE_MAX_TIER),
   };
 }
 
@@ -467,6 +472,7 @@ export async function createTdProfile(
     uid,
     highestUnlockedLevel: clampInt(initialSave.highestUnlockedLevel, 1, TD_MAX_LEVEL),
     totalScore: clampInt(initialSave.totalScore, 0, 500000000),
+    bonusStars: clampInt(initialSave.bonusStars ?? 0, 0, 100000),
     levels: sanitizeTdLevelsMap(initialSave.levels),
     upgrades: sanitizeTdUpgrades(initialSave.upgrades),
     createdAt: serverTimestamp(),
@@ -490,6 +496,7 @@ export async function saveTdProgressToCloud(
     await updateDoc(docRef, {
       highestUnlockedLevel: clampInt(nextSave.highestUnlockedLevel, 1, TD_MAX_LEVEL),
       totalScore: clampInt(nextSave.totalScore, 0, 500000000),
+      bonusStars: clampInt(nextSave.bonusStars ?? 0, 0, 100000),
       levels: sanitizeTdLevelsMap(nextSave.levels),
       upgrades: sanitizeTdUpgrades(nextSave.upgrades),
       updatedAt: serverTimestamp(),

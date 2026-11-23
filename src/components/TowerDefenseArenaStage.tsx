@@ -31,11 +31,16 @@ import {
   TD_MAP_VOLCANO_URL,
 } from '../data/pokemonSprites';
 import {
+  formatArtifactBonusSummary,
   getExtraTowerUpgradeCost,
   getMythicPathConfig,
   getMythicUpgradeCost,
   getTowerMaxLevel,
   getTowerSlotCostMultiplier,
+  rollHeroArtifact,
+  TD_ARTIFACT_OPEN_COST,
+  TD_ARTIFACT_RARITY_META,
+  TD_ARTIFACT_UNLOCK_LEVEL,
   TD_ENEMIES,
   TD_MAX_LEVEL,
   TD_MYTHIC_PATHS,
@@ -51,6 +56,7 @@ import {
   TdEffectBurst,
   TdEnemyEntity,
   TdEnemyType,
+  TdHeroArtifact,
   TdLevelConfig,
   TdMythicPathId,
   TdPoint,
@@ -172,7 +178,9 @@ function isGarrisonTower(type: TdTowerType): boolean {
 
 function getDiscountedTdCost(baseCost: number, upgrades: TdUpgrades): number {
   const m = upgrades.mastery ?? 0;
-  const mult = m >= 5 ? 0.88 : m >= 3 ? 0.92 : m >= 1 ? 0.96 : 1;
+  const masteryMult = m >= 5 ? 0.88 : m >= 3 ? 0.92 : m >= 1 ? 0.96 : 1;
+  const clearDiscount = Math.min(0.2, Math.max(0, upgrades.clearArtifact ?? 0) * 0.02);
+  const mult = Math.max(0.68, masteryMult - clearDiscount);
   return Math.max(1, Math.round(baseCost * mult));
 }
 
@@ -512,12 +520,22 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
     cooldown *= 0.92;
   }
 
+  // 11. Stage-Clear Permanent Upgrade: Hào Khí Chinh Phạt (+5% ST & +3% Tốc đánh / cấp)
+  const clearPow = Math.max(0, upgrades.clearPower ?? 0);
+  if (clearPow > 0 && tower.type !== 'BARRACKS' && tower.type !== 'VALKYRIE') {
+    const powDmgMult = 1 + clearPow * 0.05;
+    const powSpdMult = 1 + clearPow * 0.03;
+    if (damage > 0) damage = Math.round(damage * powDmgMult);
+    if (soldierDamage > 0) soldierDamage = Math.round(soldierDamage * powDmgMult);
+    cooldown = Math.max(0.05, cooldown / powSpdMult);
+  }
+
   // Reduce all towers' attack & aura influence range and AoE radii by 30% (and cap late-game runaway)
   const maxRangeCap = tower.type === 'ARCHER' || tower.type === 'MECHANIST' ? 350 : 320;
   range = Math.min(maxRangeCap, Math.round(range * 0.7));
-  // Buff towers (BARRACKS & VALKYRIE): Lv 1 reduced by 20%, grows strictly +100% from Lv 1 -> Lv 20, no growth Lv 20 -> Lv 30
+  // Buff towers (BARRACKS & VALKYRIE): +20% buff aura range restored; grows +100% from Lv 1 -> Lv 20, flat Lv 20 -> Lv 30
   if (tower.type === 'BARRACKS' || tower.type === 'VALKYRIE') {
-    const baseLv1BuffRange = Math.round(cfg.tiers[0].range * 0.7 * 0.8);
+    const baseLv1BuffRange = Math.round(cfg.tiers[0].range * 0.7 * 0.8 * 1.2);
     const buffProgress = (Math.min(20, Math.max(1, tower.level)) - 1) / 19;
     range = Math.round(baseLv1BuffRange * (1 + buffProgress));
   }
@@ -617,25 +635,99 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
     chainCount = 0;
   }
 
+  // Hero Thần Khí (Lv 20+ Divine Artifact) bonuses amplified by clearArtifact stage upgrade
+  const art = tower.artifact?.bonuses;
+  const artMult = 1 + Math.max(0, upgrades.clearArtifact ?? 0) * 0.06;
+  if (art) {
+    if (art.damagePct && damage > 0) {
+      damage = Math.round(damage * (1 + art.damagePct * artMult));
+    }
+    if (art.attackSpeedPct && tower.type !== 'BARRACKS' && tower.type !== 'VALKYRIE') {
+      cooldown = Math.max(0.04, cooldown / (1 + art.attackSpeedPct * artMult));
+    }
+    if (art.rangePct) {
+      range = Math.round(range * (1 + art.rangePct * artMult));
+    }
+    if (art.splashRadiusBonus && splashRadius > 0) {
+      splashRadius += Math.round(art.splashRadiusBonus * artMult);
+    }
+    if (art.slowPctBonus && slowPct > 0) {
+      slowPct = Math.min(0.92, slowPct + art.slowPctBonus * artMult);
+    }
+    if (art.critChanceBonus && tower.type !== 'BARRACKS' && tower.type !== 'VALKYRIE') {
+      critChance = Math.min(1, critChance + art.critChanceBonus * artMult);
+    }
+    if (art.critDamageBonus && tower.type !== 'BARRACKS' && tower.type !== 'VALKYRIE') {
+      critMult += art.critDamageBonus * artMult;
+    }
+    if (art.armorPiercePct) {
+      armorPiercePct = Math.min(1, armorPiercePct + art.armorPiercePct * artMult);
+    }
+    if (art.magicPiercePct) {
+      magicPiercePct = Math.min(1, magicPiercePct + art.magicPiercePct * artMult);
+    }
+    if (art.trueDamagePct) {
+      trueDamagePct = Math.min(1, trueDamagePct + art.trueDamagePct * artMult);
+    }
+    if (art.auraHasteBonus && (tower.type === 'VALKYRIE' || tower.type === 'CHRONOMANCER')) {
+      auraHastePct += art.auraHasteBonus * artMult;
+    }
+    if (art.auraDamageBonus && tower.type === 'VALKYRIE') {
+      auraDamageBonusPct += art.auraDamageBonus * artMult;
+    }
+    if (art.auraCritChanceBonus && tower.type === 'BARRACKS') {
+      auraCritChancePct = Math.min(0.85, auraCritChancePct + art.auraCritChanceBonus * artMult);
+    }
+    if (art.auraCritDamageBonus && tower.type === 'BARRACKS') {
+      auraCritDamageBonus += art.auraCritDamageBonus * artMult;
+    }
+    if (art.soldierHpPct && isGarrisonTower(tower.type)) {
+      soldierHp = Math.round(soldierHp * (1 + art.soldierHpPct * artMult));
+    }
+    if (art.soldierDamagePct && isGarrisonTower(tower.type)) {
+      soldierDamage = Math.round(soldierDamage * (1 + art.soldierDamagePct * artMult));
+    }
+  }
+
   const executeBelowPct =
-    tower.type === 'ASSASSIN' && tower.level >= 4 && resolvedFocus === 'FOCUSED' ? 0.1 : 0;
+    tower.type === 'ASSASSIN' && tower.level >= 4 && resolvedFocus === 'FOCUSED'
+      ? 0.1 + (art?.executeBelowPctBonus ?? 0) * artMult
+      : 0;
 
   const heavyPoisonChance =
-    tower.type === 'ASSASSIN' && tower.level >= 4 && resolvedFocus === 'MULTI' ? 0.01 : 0;
+    tower.type === 'ASSASSIN' && tower.level >= 4 && resolvedFocus === 'MULTI'
+      ? 0.01 + (art?.heavyPoisonChanceBonus ?? 0) * artMult
+      : 0;
 
   const detonateChance =
-    tower.type === 'PYROMANCER' && tower.level >= 4 && resolvedFocus === 'FOCUSED' ? 0.01 : 0;
+    tower.type === 'PYROMANCER' && tower.level >= 4 && resolvedFocus === 'FOCUSED'
+      ? 0.01 + (art?.detonateChanceBonus ?? 0) * artMult
+      : 0;
   const detonateMult = detonateChance > 0 ? 5 : 0;
   const detonateRadius = detonateChance > 0 ? 100 : 0;
 
-  const breathCooldown =
+  const baseBreathCd =
     tower.type === 'KNIGHT_GUARD'
       ? Math.max(2.0, Number((5.0 - ((Math.min(20, tower.level) - 1) / 19) * 3.0).toFixed(2)))
+      : 0;
+  const breathCooldown =
+    tower.type === 'KNIGHT_GUARD'
+      ? Number(
+          (
+            baseBreathCd * Math.max(0.45, 1 - (art?.breathCooldownReductionPct ?? 0) * artMult)
+          ).toFixed(2)
+        )
       : 0;
 
   const stunChance =
     tower.type === 'ARTILLERY'
-      ? Number((0.01 + ((Math.min(20, tower.level) - 1) / 19) * 0.02).toFixed(4))
+      ? Number(
+          (
+            0.01 +
+            ((Math.min(20, tower.level) - 1) / 19) * 0.02 +
+            (art?.stunChanceBonus ?? 0) * artMult
+          ).toFixed(4)
+        )
       : 0;
 
   const burnKind: 'NORMAL' | 'DEEP' | undefined =
@@ -649,9 +741,7 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
 
   const burnPctPerSec =
     tower.type === 'PYROMANCER'
-      ? burnKind === 'DEEP'
-        ? 0.03
-        : 0.01
+      ? (burnKind === 'DEEP' ? 0.03 : 0.01) + (art?.burnPctBonus ?? 0) * artMult
       : 0;
 
   const poisonPctPerTick =
@@ -728,7 +818,8 @@ function finalizeEnemyDeath(
   if (enemy.isDeadProcessed) return;
   enemy.isDeadProcessed = true;
 
-  const bountyMult = upg.economy >= 5 ? 1.25 : upg.economy >= 2 ? 1.12 : 1;
+  const baseBountyMult = upg.economy >= 5 ? 1.25 : upg.economy >= 2 ? 1.12 : 1;
+  const bountyMult = baseBountyMult + Math.max(0, upg.clearGold ?? 0) * 0.04;
   const earnedGold = Math.round(enemy.bounty * bountyMult);
   w.gold += earnedGold;
   w.score += enemy.bounty * 12;
@@ -843,12 +934,14 @@ function finalizeEnemyDeath(
 
 function createInitialWorld(levelConfig: TdLevelConfig, upgrades: TdUpgrades): WorldState {
   const startGoldBonus = (upgrades.economy >= 1 ? 60 : 0) + (upgrades.economy >= 4 ? 100 : 0);
+  const clearGoldMult = 1 + Math.max(0, upgrades.clearGold ?? 0) * 0.06;
   const startLivesBonus =
     (upgrades.citadel >= 1 ? 3 : 0) +
     (upgrades.citadel >= 2 ? 3 : 0) +
-    (upgrades.citadel >= 4 ? 4 : 0);
+    (upgrades.citadel >= 4 ? 4 : 0) +
+    Math.max(0, upgrades.clearCitadel ?? 0) * 2;
   return {
-    gold: levelConfig.startingGold + startGoldBonus,
+    gold: Math.round((levelConfig.startingGold + startGoldBonus) * clearGoldMult),
     lives: levelConfig.startingLives + startLivesBonus,
     score: 0,
     enemiesSlain: 0,
@@ -921,6 +1014,10 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
   const [selectedPadId, setSelectedPadId] = useState<string | null>(null);
   const [selectedTowerId, setSelectedTowerId] = useState<string | null>(null);
   const [targeting, setTargeting] = useState<TargetingMode>({ kind: 'NONE' });
+  const [pendingArtifactOffer, setPendingArtifactOffer] = useState<{
+    towerId: string;
+    rolled: TdHeroArtifact;
+  } | null>(null);
 
   const speedRef = useRef<1 | 2 | 3 | 4>(speedMult);
   const autoWaveRef = useRef<boolean>(autoWave);
@@ -967,6 +1064,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
     setSnap(buildSnapshot(fresh, levelConfig));
     setSelectedPadId(null);
     setSelectedTowerId(null);
+    setPendingArtifactOffer(null);
     setTargeting({ kind: 'NONE' });
     setSpeedMult(1);
   }, [levelConfig, runNonce, upgrades]);
@@ -2097,8 +2195,8 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             bonusCritDamage = Math.max(bonusCritDamage, cStats.auraCritDamageBonus);
           }
         }
-        bonusCritChance = Math.min(0.4, bonusCritChance);
-        bonusCritDamage = Math.min(5.0, bonusCritDamage);
+        bonusCritChance = Math.min(0.85, bonusCritChance);
+        bonusCritDamage = Math.min(9.0, bonusCritDamage);
         const effCritChance = Math.min(1, stats.critChance + bonusCritChance);
         const effCritMult = stats.critMult + bonusCritDamage;
 
@@ -2779,10 +2877,97 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
       w.towers.splice(idx, 1);
       sound.playTdSell();
       setSelectedTowerId(null);
+      setPendingArtifactOffer((prev) => (prev?.towerId === towerId ? null : prev));
       setTargeting({ kind: 'NONE' });
       setSnap(buildSnapshot(w, levelConfig));
     },
     [levelConfig]
+  );
+
+  const syncGarrisonWithTowerStats = (w: WorldState, tw: TdBuiltTower, upg: TdUpgrades) => {
+    if (!isGarrisonTower(tw.type)) return;
+    const stats = getEffectiveTowerStats(tw, upg);
+    const activeExisting = w.soldiers.filter((s) => s.towerId === tw.id);
+    for (const s of activeExisting) {
+      const hpRatio = s.maxHp > 0 ? s.hp / s.maxHp : 1;
+      s.maxHp = stats.soldierHp;
+      if (!s.isDead) s.hp = Math.min(stats.soldierHp, Math.max(1, Math.round(stats.soldierHp * hpRatio)));
+      s.armor = stats.soldierArmor;
+      s.damage = stats.soldierDamage;
+      s.attackCooldown = stats.cooldown;
+      s.armorPiercePct = stats.armorPiercePct;
+      s.trueDamagePct = stats.trueDamagePct;
+      s.cleaveRadius = stats.cleaveRadius;
+      s.slowPct = stats.slowPct;
+      s.burnDps = stats.burnDps;
+    }
+  };
+
+  const handleOpenArtifact = useCallback(
+    (towerId: string) => {
+      const w = worldRef.current;
+      const tw = w.towers.find((t) => t.id === towerId);
+      if (!tw || tw.level < TD_ARTIFACT_UNLOCK_LEVEL) return;
+      if (w.gold < TD_ARTIFACT_OPEN_COST) return;
+
+      w.gold -= TD_ARTIFACT_OPEN_COST;
+      const rolled = rollHeroArtifact(tw.type);
+      const rolledMeta = TD_ARTIFACT_RARITY_META[rolled.rarity];
+      const currentRank = tw.artifact ? TD_ARTIFACT_RARITY_META[tw.artifact.rarity].rank : 0;
+
+      if (!tw.artifact || rolledMeta.rank > currentRank) {
+        tw.artifact = rolled;
+        syncGarrisonWithTowerStats(w, tw, upgradesRef.current);
+        setPendingArtifactOffer(null);
+        w.effects.push({
+          id: `fx-${w.idCounter++}`,
+          kind: 'HIT',
+          x: tw.x,
+          y: tw.y - 26,
+          radius: 26,
+          label: `THẦN KHÍ ${rolledMeta.shortLabel.toUpperCase()}!`,
+          color: rolledMeta.color,
+          ttl: 1.0,
+          maxTtl: 1.0,
+        });
+        sound.playTdUpgrade();
+      } else {
+        setPendingArtifactOffer({ towerId: tw.id, rolled });
+        sound.playTdBuild();
+      }
+      setSnap(buildSnapshot(w, levelConfig));
+    },
+    [levelConfig]
+  );
+
+  const handleResolveArtifactOffer = useCallback(
+    (equipNew: boolean) => {
+      if (!pendingArtifactOffer) return;
+      const w = worldRef.current;
+      if (equipNew) {
+        const tw = w.towers.find((t) => t.id === pendingArtifactOffer.towerId);
+        if (tw) {
+          tw.artifact = pendingArtifactOffer.rolled;
+          syncGarrisonWithTowerStats(w, tw, upgradesRef.current);
+          const meta = TD_ARTIFACT_RARITY_META[pendingArtifactOffer.rolled.rarity];
+          w.effects.push({
+            id: `fx-${w.idCounter++}`,
+            kind: 'HIT',
+            x: tw.x,
+            y: tw.y - 26,
+            radius: 24,
+            label: `TRANG BỊ ${meta.shortLabel.toUpperCase()}!`,
+            color: meta.color,
+            ttl: 0.9,
+            maxTtl: 0.9,
+          });
+          sound.playTdUpgrade();
+        }
+      }
+      setPendingArtifactOffer(null);
+      setSnap(buildSnapshot(w, levelConfig));
+    },
+    [levelConfig, pendingArtifactOffer]
   );
 
   const handleSvgMapClick = useCallback(
@@ -2801,7 +2986,8 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
       if (targeting.kind === 'METEOR') {
         const cdScale = upg.spells >= 4 ? 0.68 : upg.spells >= 1 ? 0.82 : 1;
         const dmgMult = upg.spells >= 5 ? 1.75 : upg.spells >= 2 ? 1.35 : 1;
-        const baseDmg = Math.round(280 * dmgMult);
+        const clearMeteorMult = 1 + Math.max(0, upg.clearCitadel ?? 0) * 0.08;
+        const baseDmg = Math.round(280 * dmgMult * clearMeteorMult);
         const eqWaveIndex = Math.round((w.waveIndex / Math.max(1, levelConfig.waves.length - 1)) * 99);
         const waveScale = 1 + eqWaveIndex * 0.65 + (levelConfig.level - 1) * 0.3;
         const dmg = Math.round(baseDmg * waveScale);
@@ -3117,6 +3303,20 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                 {isSel && (
                   <ellipse cx="0" cy="14" rx="27" ry="12" fill="none" stroke="#FACC15" strokeWidth="2.5" />
                 )}
+                {built.artifact && (
+                  <ellipse
+                    cx="0"
+                    cy="14"
+                    rx="23"
+                    ry="9.5"
+                    fill="none"
+                    stroke={TD_ARTIFACT_RARITY_META[built.artifact.rarity].color}
+                    strokeWidth="1.6"
+                    strokeDasharray="4 3"
+                    opacity="0.88"
+                    className="pointer-events-none"
+                  />
+                )}
                 <TdTowerSprite
                   type={built.type}
                   level={built.level}
@@ -3130,6 +3330,16 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                       : 0
                   }
                 />
+                {built.artifact && (
+                  <g transform="translate(15, -16)" className="pointer-events-none">
+                    <polygon
+                      points="0,-5.5 4.5,0 0,5.5 -4.5,0"
+                      fill={TD_ARTIFACT_RARITY_META[built.artifact.rarity].color}
+                      stroke="#0F172A"
+                      strokeWidth="1.3"
+                    />
+                  </g>
+                )}
                 {/* Crisp Level Badge (1..30) & Mythic Star */}
                 {(() => {
                   const mythicCfg = getMythicPathConfig(built.type, built.mythicPath);
@@ -3963,8 +4173,8 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
               }
             }
           }
-          recvCritChance = Math.min(0.4, recvCritChance);
-          recvCritDmg = Math.min(5.0, recvCritDmg);
+          recvCritChance = Math.min(0.85, recvCritChance);
+          recvCritDmg = Math.min(9.0, recvCritDmg);
         }
 
         const scaleSlotCost = (base: number) =>
@@ -4133,6 +4343,102 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                 </div>
               ))}
             </div>
+
+            {/* Hero Thần Khí (Unlocks at Lv 20, costs 10,000g per roll) */}
+            {(() => {
+              const artPowerMult = 1 + Math.max(0, upgrades.clearArtifact ?? 0) * 0.06;
+              const equipped = selectedTower.artifact;
+              const activeOffer =
+                pendingArtifactOffer?.towerId === selectedTower.id ? pendingArtifactOffer.rolled : null;
+              if (selectedTower.level < TD_ARTIFACT_UNLOCK_LEVEL) {
+                return (
+                  <div className="rounded-lg bg-[#131C31] border border-slate-800 px-2 py-1 text-[9.5px] text-slate-400 flex items-center justify-between gap-1">
+                    <span className="flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-purple-300" />
+                      <span>Thần Khí mở khóa ở Cấp {TD_ARTIFACT_UNLOCK_LEVEL}</span>
+                    </span>
+                    <span className="font-mono-num text-amber-300/80">10.000g</span>
+                  </div>
+                );
+              }
+              const canRollArtifact = snap.gold >= TD_ARTIFACT_OPEN_COST;
+              const eqMeta = equipped ? TD_ARTIFACT_RARITY_META[equipped.rarity] : null;
+              return (
+                <div className="rounded-lg bg-[#131C31] border border-purple-500/50 p-1.5 flex flex-col gap-1">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="min-w-0 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-[#FACC15] shrink-0" />
+                      {equipped && eqMeta ? (
+                        <span
+                          className="text-[10px] font-extrabold truncate"
+                          style={{ color: eqMeta.color }}
+                        >
+                          {equipped.name} ({eqMeta.shortLabel})
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-slate-300 truncate">
+                          Chưa có Thần Khí
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!canRollArtifact}
+                      onClick={() => handleOpenArtifact(selectedTower.id)}
+                      className={`px-2 py-0.5 rounded font-extrabold text-[9.5px] font-mono-num shrink-0 transition-colors ${
+                        canRollArtifact
+                          ? 'bg-purple-600 hover:bg-purple-500 text-white cursor-pointer'
+                          : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                      }`}
+                    >
+                      {equipped ? 'Đổi · 10.000g' : 'Mở · 10.000g'}
+                    </button>
+                  </div>
+                  {equipped && (
+                    <div className="text-[9px] text-slate-200 font-mono-num leading-snug">
+                      {formatArtifactBonusSummary(equipped.bonuses, artPowerMult).join(' · ')}
+                    </div>
+                  )}
+                  {!equipped && (
+                    <div className="text-[8.5px] text-slate-400 font-mono-num">
+                      60% Common · 25% Uncommon · 10% Rare · 4% Epic · 1% Legend
+                    </div>
+                  )}
+                  {activeOffer && (
+                    <div className="rounded bg-[#0B1120] border border-amber-400/70 p-1.5 flex flex-col gap-1 mt-0.5">
+                      <div className="flex items-center justify-between gap-1 text-[9.5px]">
+                        <span
+                          className="font-extrabold truncate"
+                          style={{ color: TD_ARTIFACT_RARITY_META[activeOffer.rarity].color }}
+                        >
+                          Mở được: {TD_ARTIFACT_RARITY_META[activeOffer.rarity].shortLabel}
+                        </span>
+                        <span className="text-[8.5px] text-slate-400">Giữ cũ hay đổi?</span>
+                      </div>
+                      <div className="text-[9px] text-amber-200 font-mono-num leading-snug">
+                        {formatArtifactBonusSummary(activeOffer.bonuses, artPowerMult).join(' · ')}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleResolveArtifactOffer(true)}
+                          className="flex-1 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[9.5px] font-extrabold cursor-pointer"
+                        >
+                          Trang bị mới
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleResolveArtifactOffer(false)}
+                          className="flex-1 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-100 text-[9.5px] font-bold cursor-pointer"
+                        >
+                          Giữ cũ
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Level 10 -> 11: Compact 4-Card Mythic Awakening with ultra-short description */}
             {selectedTower.level === 10 && !cfg.singleBranch && (

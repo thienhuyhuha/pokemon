@@ -4,6 +4,7 @@ import {
   DEFAULT_TD_UPGRADES,
   getSpentUpgradeStars,
   getTotalStarsEarnedInTd,
+  TD_CLEAR_UPGRADE_MAX_TIER,
   TD_MAX_LEVEL,
   TD_UPGRADE_MAX_TIER,
 } from '../data/tdLevels';
@@ -45,6 +46,7 @@ export const DEFAULT_DIAMOND_SAVE: DiamondSaveData = {
 export const DEFAULT_TD_SAVE: TdSaveData = {
   highestUnlockedLevel: 1,
   totalScore: 0,
+  bonusStars: 0,
   levels: {},
   upgrades: { ...DEFAULT_TD_UPGRADES },
 };
@@ -392,8 +394,8 @@ export function mergeDiamondSaveData(
 
 function sanitizeTdUpgradesLocal(raw: unknown): TdUpgrades {
   const src = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  const clamp = (v: unknown) =>
-    Math.max(0, Math.min(TD_UPGRADE_MAX_TIER, Math.floor(Number(v ?? 0) || 0)));
+  const clamp = (v: unknown, maxTier = TD_UPGRADE_MAX_TIER) =>
+    Math.max(0, Math.min(maxTier, Math.floor(Number(v ?? 0) || 0)));
   return {
     archery: clamp(src.archery),
     magic: clamp(src.magic),
@@ -405,6 +407,10 @@ function sanitizeTdUpgradesLocal(raw: unknown): TdUpgrades {
     citadel: clamp(src.citadel),
     lethality: clamp(src.lethality),
     mastery: clamp(src.mastery),
+    clearGold: clamp(src.clearGold, TD_CLEAR_UPGRADE_MAX_TIER),
+    clearPower: clamp(src.clearPower, TD_CLEAR_UPGRADE_MAX_TIER),
+    clearCitadel: clamp(src.clearCitadel, TD_CLEAR_UPGRADE_MAX_TIER),
+    clearArtifact: clamp(src.clearArtifact, TD_CLEAR_UPGRADE_MAX_TIER),
   };
 }
 
@@ -437,6 +443,7 @@ function parseTdSaveString(raw: string | null): TdSaveData | null {
         Math.min(TD_MAX_LEVEL, Math.floor(parsed.highestUnlockedLevel ?? 1))
       ),
       totalScore: Math.max(0, Math.floor(parsed.totalScore ?? 0)),
+      bonusStars: Math.max(0, Math.min(100000, Math.floor(parsed.bonusStars ?? 0))),
       levels: sanitizeTdLevelsRecord(parsed.levels),
       upgrades: sanitizeTdUpgradesLocal(parsed.upgrades),
     };
@@ -544,7 +551,12 @@ export function mergeTdSaveData(
     cloudNeedsUpdate = true;
   }
 
-  const totalStars = getTotalStarsEarnedInTd(mergedLevels);
+  const bonusStars = Math.max(cloudSave.bonusStars ?? 0, localSave.bonusStars ?? 0);
+  if (bonusStars > (cloudSave.bonusStars ?? 0)) {
+    cloudNeedsUpdate = true;
+  }
+
+  const totalStars = getTotalStarsEarnedInTd(mergedLevels, bonusStars);
   const cloudSpent = getSpentUpgradeStars(cloudSave.upgrades);
   const localSpent = getSpentUpgradeStars(localSave.upgrades);
   let mergedUpgrades = { ...cloudSave.upgrades };
@@ -557,6 +569,7 @@ export function mergeTdSaveData(
     merged: {
       highestUnlockedLevel,
       totalScore,
+      bonusStars,
       levels: mergedLevels,
       upgrades: mergedUpgrades,
     },
