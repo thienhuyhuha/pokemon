@@ -3095,6 +3095,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's15p13', x: 475, y: 170, rallyX: 560, rallyY: 170 },
       { id: 's15p14', x: 75, y: 470, rallyX: 75, rallyY: 405 },
       { id: 's15p15', x: 250, y: 320, rallyX: 225, rallyY: 405 },
+      { id: 's15p16', x: 750, y: 155, rallyX: 750, rallyY: 240 },
+      { id: 's15p17', x: 750, y: 415, rallyX: 750, rallyY: 335 },
     ],
     mapTheme: {
       tintColor: '#9A3412',
@@ -3140,6 +3142,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's16p12', x: 125, y: 320, rallyX: 195, rallyY: 320 },
       { id: 's16p13', x: 800, y: 70, rallyX: 725, rallyY: 120 },
       { id: 's16p14', x: 125, y: 470, rallyX: 195, rallyY: 435 },
+      { id: 's16p15', x: 365, y: 345, rallyX: 455, rallyY: 345 },
+      { id: 's16p16', x: 635, y: 315, rallyX: 725, rallyY: 315 },
     ],
     mapTheme: {
       tintColor: '#0C4A6E',
@@ -3192,6 +3196,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's17p13', x: 300, y: 70, rallyX: 354, rallyY: 132 },
       { id: 's17p14', x: 275, y: 470, rallyX: 330, rallyY: 407 },
       { id: 's17p15', x: 225, y: 145, rallyX: 275, rallyY: 202 },
+      { id: 's17p16', x: 435, y: 195, rallyX: 435, rallyY: 105 },
+      { id: 's17p17', x: 435, y: 365, rallyX: 435, rallyY: 455 },
     ],
     mapTheme: {
       tintColor: '#164E63',
@@ -3244,6 +3250,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's18p13', x: 375, y: 70, rallyX: 325, rallyY: 115 },
       { id: 's18p14', x: 725, y: 470, rallyX: 784, rallyY: 400 },
       { id: 's18p15', x: 575, y: 70, rallyX: 660, rallyY: 145 },
+      { id: 's18p16', x: 255, y: 205, rallyX: 325, rallyY: 205 },
+      { id: 's18p17', x: 255, y: 370, rallyX: 255, rallyY: 445 },
     ],
     mapTheme: {
       tintColor: '#1E1B4B',
@@ -3298,6 +3306,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's19p13', x: 775, y: 445, rallyX: 741, rallyY: 374 },
       { id: 's19p14', x: 75, y: 195, rallyX: 75, rallyY: 280 },
       { id: 's19p15', x: 75, y: 370, rallyX: 75, rallyY: 280 },
+      { id: 's19p16', x: 275, y: 190, rallyX: 275, rallyY: 100 },
+      { id: 's19p17', x: 275, y: 370, rallyX: 275, rallyY: 280 },
     ],
     mapTheme: {
       tintColor: '#0F172A',
@@ -3362,6 +3372,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's20p14', x: 600, y: 470, rallyX: 656, rallyY: 420 },
       { id: 's20p15', x: 325, y: 70, rallyX: 255, rallyY: 105 },
       { id: 's20p16', x: 325, y: 470, rallyX: 255, rallyY: 455 },
+      { id: 's20p17', x: 450, y: 190, rallyX: 450, rallyY: 280 },
+      { id: 's20p18', x: 450, y: 370, rallyX: 450, rallyY: 280 },
     ],
     mapTheme: {
       tintColor: '#3B0764',
@@ -3408,6 +3420,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's21p12', x: 250, y: 370, rallyX: 180, rallyY: 370 },
       { id: 's21p13', x: 75, y: 70, rallyX: 75, rallyY: 135 },
       { id: 's21p14', x: 350, y: 70, rallyX: 350, rallyY: 135 },
+      { id: 's21p15', x: 165, y: 215, rallyX: 165, rallyY: 135 },
+      { id: 's21p16', x: 455, y: 70, rallyX: 455, rallyY: 135 },
     ],
     mapTheme: {
       tintColor: '#2E1065',
@@ -3457,6 +3471,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's22p12', x: 275, y: 370, rallyX: 320, rallyY: 429 },
       { id: 's22p13', x: 700, y: 70, rallyX: 741, rallyY: 134 },
       { id: 's22p14', x: 675, y: 470, rallyX: 714, rallyY: 409 },
+      { id: 's22p15', x: 255, y: 205, rallyX: 255, rallyY: 115 },
+      { id: 's22p16', x: 895, y: 280, rallyX: 895, rallyY: 125 },
     ],
     mapTheme: {
       tintColor: '#064E3B',
@@ -3509,6 +3525,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's23p13', x: 75, y: 195, rallyX: 75, rallyY: 270 },
       { id: 's23p14', x: 700, y: 70, rallyX: 639, rallyY: 129 },
       { id: 's23p15', x: 250, y: 370, rallyX: 250, rallyY: 445 },
+      { id: 's23p16', x: 265, y: 190, rallyX: 265, rallyY: 270 },
+      { id: 's23p17', x: 440, y: 190, rallyX: 440, rallyY: 270 },
     ],
     mapTheme: {
       tintColor: '#1E1B4B',
@@ -3565,6 +3583,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's24p13', x: 400, y: 170, rallyX: 400, rallyY: 100 },
       { id: 's24p14', x: 75, y: 470, rallyX: 165, rallyY: 460 },
       { id: 's24p15', x: 550, y: 70, rallyX: 470, rallyY: 100 },
+      { id: 's24p16', x: 390, y: 375, rallyX: 470, rallyY: 375 },
+      { id: 's24p17', x: 870, y: 490, rallyX: 870, rallyY: 420 },
     ],
     mapTheme: {
       tintColor: '#3B0764',
@@ -3623,6 +3643,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's25p13', x: 750, y: 70, rallyX: 810, rallyY: 155 },
       { id: 's25p14', x: 900, y: 220, rallyX: 900, rallyY: 280 },
       { id: 's25p15', x: 850, y: 345, rallyX: 850, rallyY: 405 },
+      { id: 's25p16', x: 240, y: 190, rallyX: 240, rallyY: 280 },
+      { id: 's25p17', x: 240, y: 370, rallyX: 240, rallyY: 280 },
     ],
     mapTheme: {
       tintColor: '#2E1065',
@@ -3668,6 +3690,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's26p12', x: 550, y: 70, rallyX: 550, rallyY: 140 },
       { id: 's26p13', x: 175, y: 470, rallyX: 245, rallyY: 415 },
       { id: 's26p14', x: 275, y: 70, rallyX: 245, rallyY: 140 },
+      { id: 's26p15', x: 145, y: 335, rallyX: 245, rallyY: 335 },
+      { id: 's26p16', x: 615, y: 355, rallyX: 525, rallyY: 355 },
     ],
     mapTheme: {
       tintColor: '#0369A1',
@@ -3725,6 +3749,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's27p13', x: 425, y: 370, rallyX: 425, rallyY: 455 },
       { id: 's27p14', x: 250, y: 70, rallyX: 316, rallyY: 134 },
       { id: 's27p15', x: 775, y: 70, rallyX: 697, rallyY: 132 },
+      { id: 's27p16', x: 595, y: 195, rallyX: 595, rallyY: 280 },
+      { id: 's27p17', x: 595, y: 365, rallyX: 595, rallyY: 280 },
     ],
     mapTheme: {
       tintColor: '#0284C7',
@@ -3775,6 +3801,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's28p13', x: 525, y: 470, rallyX: 455, rallyY: 455 },
       { id: 's28p14', x: 75, y: 370, rallyX: 75, rallyY: 455 },
       { id: 's28p15', x: 75, y: 195, rallyX: 75, rallyY: 105 },
+      { id: 's28p16', x: 255, y: 195, rallyX: 255, rallyY: 105 },
+      { id: 's28p17', x: 255, y: 365, rallyX: 255, rallyY: 455 },
     ],
     mapTheme: {
       tintColor: '#1E3A8A',
@@ -3833,6 +3861,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's29p13', x: 600, y: 470, rallyX: 637, rallyY: 412 },
       { id: 's29p14', x: 750, y: 70, rallyX: 684, rallyY: 138 },
       { id: 's29p15', x: 350, y: 70, rallyX: 284, rallyY: 138 },
+      { id: 's29p16', x: 230, y: 200, rallyX: 230, rallyY: 280 },
+      { id: 's29p17', x: 230, y: 360, rallyX: 230, rallyY: 280 },
     ],
     mapTheme: {
       tintColor: '#0F172A',
@@ -3897,6 +3927,8 @@ const STAGE_BLUEPRINTS: StageMapBlueprint[] = [
       { id: 's30p14', x: 900, y: 470, rallyX: 835, rallyY: 440 },
       { id: 's30p15', x: 325, y: 70, rallyX: 245, rallyY: 100 },
       { id: 's30p16', x: 325, y: 470, rallyX: 245, rallyY: 460 },
+      { id: 's30p17', x: 450, y: 190, rallyX: 450, rallyY: 280 },
+      { id: 's30p18', x: 450, y: 370, rallyX: 450, rallyY: 280 },
     ],
     mapTheme: {
       tintColor: '#B45309',

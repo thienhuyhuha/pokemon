@@ -533,9 +533,9 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
   // Reduce all towers' attack & aura influence range and AoE radii by 30% (and cap late-game runaway)
   const maxRangeCap = tower.type === 'ARCHER' || tower.type === 'MECHANIST' ? 350 : 320;
   range = Math.min(maxRangeCap, Math.round(range * 0.7));
-  // Buff towers (BARRACKS & VALKYRIE): +20% buff aura range restored; grows +100% from Lv 1 -> Lv 20, flat Lv 20 -> Lv 30
+  // Buff towers (BARRACKS & VALKYRIE): +20% Lv1 buff aura range added; grows +100% from Lv 1 -> Lv 20, flat Lv 20 -> Lv 30
   if (tower.type === 'BARRACKS' || tower.type === 'VALKYRIE') {
-    const baseLv1BuffRange = Math.round(cfg.tiers[0].range * 0.7 * 0.8 * 1.2);
+    const baseLv1BuffRange = Math.round(cfg.tiers[0].range * 0.7 * 0.8 * 1.2 * 1.2);
     const buffProgress = (Math.min(20, Math.max(1, tower.level)) - 1) / 19;
     range = Math.round(baseLv1BuffRange * (1 + buffProgress));
   }
