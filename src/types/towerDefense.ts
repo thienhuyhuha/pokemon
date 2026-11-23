@@ -20,7 +20,17 @@ export type TdTowerLevel =
   | 17
   | 18
   | 19
-  | 20;
+  | 20
+  | 21
+  | 22
+  | 23
+  | 24
+  | 25
+  | 26
+  | 27
+  | 28
+  | 29
+  | 30;
 
 export type TdTowerType =
   | 'ARCHER'
@@ -251,6 +261,8 @@ export interface TdTowerBranchConfig {
   critChance?: number;
   chainCount?: number;
   auraHastePct?: number;
+  auraCritChancePct?: number;
+  auraCritDamageBonus?: number;
   soldierCount?: number;
   soldierHp?: number;
   soldierArmor?: number;
@@ -285,6 +297,8 @@ export interface TdMythicPathConfig {
   critMultBonus?: number;
   chainBonus?: number;
   auraHasteBonus?: number;
+  auraCritChanceBonus?: number;
+  auraCritDamageBonus?: number;
   soldierCountBonus?: number;
   soldierHpMult?: number;
   soldierArmorBonus?: number;
@@ -307,6 +321,8 @@ export interface TdTowerTierStats {
   burnDps?: number;
   critChance?: number;
   auraHastePct?: number;
+  auraCritChancePct?: number;
+  auraCritDamageBonus?: number;
   soldierCount?: number;
   soldierHp?: number;
   soldierArmor?: number;
@@ -324,6 +340,7 @@ export interface TdTowerConfig {
   damageKind: 'PHYSICAL' | 'MAGIC' | 'MELEE' | 'SPLASH';
   canHitAir: boolean;
   unlockStage?: number;
+  singleBranch?: boolean;
   tiers: [TdTowerTierStats, TdTowerTierStats, TdTowerTierStats]; // Lv 1, 2, 3
   branches: [TdTowerBranchConfig, TdTowerBranchConfig]; // Lv 4 choices
 }
@@ -340,6 +357,7 @@ export interface TdEnemySpec {
   flying: boolean;
   healsAllies?: boolean;
   cleansesAllies?: boolean;
+  normalBurnResist?: number; // 0..1 resistance against Normal Burn (ignored by Deep Burn)
   selfRegenPct?: number;
   isBoss?: boolean;
   summonInterval?: number;
@@ -391,6 +409,7 @@ export interface TdEnemyEntity {
   flying: boolean;
   healsAllies: boolean;
   cleansesAllies: boolean;
+  normalBurnResist: number;
   selfRegenPct: number;
   isBoss: boolean;
   summonTimer: number;
@@ -410,12 +429,17 @@ export interface TdEnemyEntity {
   slowPct: number;
   poisonTimer: number;
   poisonDps: number;
+  poisonPctPerTick?: number;
   poisonTickTimer: number;
   poisonSourceTowerId?: string;
   burnTimer: number;
   burnDps: number;
+  burnKind?: 'NORMAL' | 'DEEP';
+  burnPctPerSec?: number;
   burnTickTimer: number;
   burnSourceTowerId?: string;
+  rootTimer?: number;
+  stunTimer?: number;
   healAuraTimer: number;
   hitFlashTimer: number;
   distanceTraveled: number;
@@ -485,14 +509,21 @@ export interface TdProjectile {
   slowPct: number;
   slowSplashRadius?: number;
   poisonDps: number;
+  poisonPctPerTick?: number;
   poisonSpreadRadius?: number;
   burnDps?: number;
+  burnKind?: 'NORMAL' | 'DEEP';
+  burnPctPerSec?: number;
+  stunChance?: number;
+  stunDuration?: number;
   chainCount: number;
   armorPierce: boolean;
   armorPiercePct?: number;
   magicPiercePct?: number;
   trueDamagePct?: number;
   isCrit?: boolean;
+  critMult?: number;
+  canExecuteBelowPct?: number;
   sourceTowerId: string;
 }
 
@@ -509,6 +540,8 @@ export interface TdEffectBurst {
     | 'MONSTER_HIT'
     | 'MUZZLE'
     | 'FROST_NOVA'
+    | 'FROST_ROOT'
+    | 'STUN'
     | 'FIRE_BLAST'
     | 'FIRE_BREATH'
     | 'CHRONO_PULSE';

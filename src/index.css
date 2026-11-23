@@ -228,6 +228,7 @@
 
 .td-anim-torch {
   animation: tdTorchFlicker 480ms ease-in-out infinite;
+  transform-box: fill-box;
   transform-origin: center bottom;
 }
 

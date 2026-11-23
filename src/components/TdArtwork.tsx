@@ -2367,6 +2367,9 @@ interface TdEnemySpriteProps {
   slowed: boolean;
   poisoned: boolean;
   burned?: boolean;
+  deepBurned?: boolean;
+  rooted?: boolean;
+  stunned?: boolean;
   enraged?: boolean;
   facingLeft: boolean;
   isAttacking?: boolean;
@@ -2390,6 +2393,9 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
     slowed,
     poisoned,
     burned = false,
+    deepBurned = false,
+    rooted = false,
+    stunned = false,
     enraged = false,
     facingLeft,
     isAttacking = false,
@@ -2437,17 +2443,21 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
           : undefined;
 
     const combinedFilter =
-      burned && hitFlash
-        ? 'sepia(0.95) hue-rotate(-38deg) saturate(3.6) brightness(1.38)'
-        : burned
-          ? 'sepia(0.95) hue-rotate(-38deg) saturate(3.4) brightness(1.04)'
-          : poisoned && hitFlash
-            ? 'sepia(0.92) hue-rotate(74deg) saturate(2.9) brightness(1.42)'
-            : poisoned
-              ? 'sepia(0.92) hue-rotate(74deg) saturate(2.7) brightness(0.96)'
-              : hitFlash
-                ? 'brightness(1.55) saturate(1.25)'
-                : baseFilter;
+      deepBurned && hitFlash
+        ? 'sepia(0.95) hue-rotate(-52deg) saturate(3.4) brightness(1.35)'
+        : deepBurned
+          ? 'sepia(0.95) hue-rotate(-52deg) saturate(3.2) contrast(1.1) brightness(1.04)'
+          : burned && hitFlash
+            ? 'sepia(0.88) hue-rotate(-36deg) saturate(3.1) brightness(1.32)'
+            : burned
+              ? 'sepia(0.88) hue-rotate(-36deg) saturate(2.85) brightness(1.02)'
+              : poisoned && hitFlash
+                ? 'sepia(0.92) hue-rotate(74deg) saturate(2.9) brightness(1.42)'
+                : poisoned
+                  ? 'sepia(0.92) hue-rotate(74deg) saturate(2.7) brightness(0.96)'
+                  : hitFlash
+                    ? 'brightness(1.55) saturate(1.25)'
+                    : baseFilter;
 
     if (animeSrc) {
       const boxSize = hideHud
@@ -2547,6 +2557,20 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
               strokeDasharray="3 3"
             />
           )}
+          {rooted && (() => {
+            const rootScale = Math.max(0.75, boxSize / 36);
+            const rootY = anchorY - 1;
+            return (
+              <g transform={`translate(0, ${rootY}) scale(${rootScale})`} className="pointer-events-none">
+                <ellipse cx="0" cy="0" rx="18" ry="6.5" fill="#0284C7" opacity="0.38" stroke="#E0F2FE" strokeWidth="1.4" />
+                <polygon points="-15,1 -19,-14 -10,-4" fill="#7DD3FC" stroke="#FFFFFF" strokeWidth="0.9" />
+                <polygon points="15,1 19,-14 10,-4" fill="#7DD3FC" stroke="#FFFFFF" strokeWidth="0.9" />
+                <polygon points="-6,2 -7,-16 0,-6" fill="#BAE6FD" stroke="#FFFFFF" strokeWidth="0.9" />
+                <polygon points="6,2 7,-16 0,-6" fill="#BAE6FD" stroke="#FFFFFF" strokeWidth="0.9" />
+                <path d="M-14,-4 Q0,-9 14,-4" fill="none" stroke="#E0F2FE" strokeWidth="1.8" strokeDasharray="3 2" />
+              </g>
+            );
+          })()}
           {poisoned && (
             <g className="pointer-events-none">
               <ellipse
@@ -2570,27 +2594,65 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
               <circle cx="2" cy="-22" r="1.6" fill="#22C55E" opacity="0.9" className="td-anim-orb" />
             </g>
           )}
-          {burned && (
-            <g className="pointer-events-none">
-              <ellipse
-                cx="0"
-                cy="10"
-                rx={isBoss ? 30 : 14}
-                ry={isBoss ? 9 : 4.5}
-                fill="#EF4444"
-                opacity="0.38"
-              />
-              <circle
-                cx="0"
-                cy={isBoss ? -18 : -4}
-                r={isBoss ? 34 : 15}
-                fill="none"
-                stroke="#EF4444"
-                strokeWidth="1.8"
-                opacity="0.85"
-              />
-              <polygon points="-9,-6 -6,-17 -2,-8" fill="#EF4444" opacity="0.92" className="td-anim-torch" />
-              <polygon points="4,-8 8,-19 11,-6" fill="#FCA5A5" opacity="0.9" className="td-anim-torch" />
+          {(burned || deepBurned) && (() => {
+            const flameScale = Math.max(0.65, boxSize / 36) * (deepBurned ? 1.15 : 1);
+            const flameBaseY = anchorY - 2;
+            const sideX = Math.max(7, boxSize * 0.28);
+            const outerColor = deepBurned ? '#991B1B' : '#DC2626';
+            const midColor = deepBurned ? '#E11D48' : '#F97316';
+            const coreColor = deepBurned ? '#FDE047' : '#FEF08A';
+            return (
+              <g className="pointer-events-none">
+                <ellipse
+                  cx="0"
+                  cy={flameBaseY}
+                  rx={Math.max(12, boxSize * (deepBurned ? 0.42 : 0.36))}
+                  ry={isBoss ? 10 : 4.6}
+                  fill={outerColor}
+                  opacity={deepBurned ? 0.56 : 0.42}
+                />
+                <ellipse
+                  cx="0"
+                  cy={flameBaseY}
+                  rx={Math.max(8, boxSize * 0.24)}
+                  ry={isBoss ? 6.5 : 3}
+                  fill={midColor}
+                  opacity="0.52"
+                />
+                {/* Left Flame Tongue */}
+                <g transform={`translate(${-sideX}, ${flameBaseY}) scale(${flameScale * 0.85})`}>
+                  <g className="td-anim-torch">
+                    <path d="M-5,0 C-7,-7 -3,-14 0,-18 C3,-13 6,-7 4,0 Z" fill={outerColor} opacity="0.92" />
+                    <path d="M-2.8,0 C-4,-5 -1.5,-10 0,-13 C2,-9 3.5,-4.5 2.4,0 Z" fill={midColor} />
+                    <path d="M-1.3,0 C-1.8,-3.5 -0.6,-6.5 0,-8.5 C1,-6 1.8,-3 1.2,0 Z" fill={coreColor} />
+                  </g>
+                </g>
+                {/* Right Flame Tongue */}
+                <g transform={`translate(${sideX}, ${flameBaseY}) scale(${flameScale * 0.9})`}>
+                  <g className="td-anim-torch" style={{ animationDelay: '-180ms' }}>
+                    <path d="M-4.5,0 C-6,-7 -2.5,-14 0.5,-19 C3.5,-13.5 6.5,-7 4.5,0 Z" fill={outerColor} opacity="0.92" />
+                    <path d="M-2.5,0 C-3.5,-5 -1.2,-10 0.3,-13.5 C2,-9.5 3.5,-4.5 2.4,0 Z" fill={midColor} />
+                    <path d="M-1.1,0 C-1.6,-3.5 -0.5,-6.5 0.2,-8.8 C1,-6 1.7,-3 1.1,0 Z" fill={coreColor} />
+                  </g>
+                </g>
+                {/* Center Rising Flame */}
+                <g transform={`translate(0, ${flameBaseY + 1}) scale(${flameScale})`}>
+                  <g className="td-anim-torch" style={{ animationDelay: '-90ms' }}>
+                    <path d="M-5.5,0 C-8,-8 -3,-16 0,-21 C3,-15 7.5,-8 5,0 Z" fill={outerColor} opacity="0.88" />
+                    <path d="M-3,0 C-4.2,-5.5 -1.4,-11 0,-15 C1.8,-10.5 4,-5 2.8,0 Z" fill={midColor} opacity="0.95" />
+                    <path d="M-1.4,0 C-2,-3.5 -0.6,-7 0,-9.5 C1,-6.5 2,-3.2 1.3,0 Z" fill={coreColor} />
+                  </g>
+                </g>
+              </g>
+            );
+          })()}
+          {stunned && (
+            <g transform={`translate(0, ${barY - 6})`} className="pointer-events-none">
+              <ellipse cx="0" cy="0" rx={isBoss ? 18 : 11} ry="3.5" fill="none" stroke="#FACC15" strokeWidth="1.4" opacity="0.8" />
+              <g className="td-anim-spin">
+                <polygon points="0,-5 1.5,-1.5 5,0 1.5,1.5 0,5 -1.5,1.5 -5,0 -1.5,-1.5" fill="#FEF08A" stroke="#0F172A" strokeWidth="0.6" transform={`translate(${isBoss ? -14 : -9}, 0) scale(0.75)`} />
+                <polygon points="0,-5 1.5,-1.5 5,0 1.5,1.5 0,5 -1.5,1.5 -5,0 -1.5,-1.5" fill="#FACC15" stroke="#0F172A" strokeWidth="0.6" transform={`translate(${isBoss ? 14 : 9}, 0) scale(0.75)`} />
+              </g>
             </g>
           )}
 
@@ -2654,7 +2716,7 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
           opacity={hitFlash ? 0.68 : 1}
           style={
             burned
-              ? { filter: 'sepia(0.95) hue-rotate(-38deg) saturate(3.4) brightness(1.04)' }
+              ? { filter: 'sepia(0.88) hue-rotate(-36deg) saturate(2.85) brightness(1.02)' }
               : poisoned
                 ? { filter: 'sepia(0.92) hue-rotate(74deg) saturate(2.7) brightness(0.96)' }
                 : undefined
@@ -3109,6 +3171,14 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
             strokeDasharray="3 3"
           />
         )}
+        {rooted && (
+          <g transform={`translate(0, 9) scale(${isBoss ? 1.85 : isTitan || type === 'MINIBOSS' ? 1.3 : 1})`} className="pointer-events-none">
+            <ellipse cx="0" cy="0" rx="16" ry="5.5" fill="#0284C7" opacity="0.4" stroke="#E0F2FE" strokeWidth="1.3" />
+            <polygon points="-14,1 -17,-13 -9,-4" fill="#7DD3FC" stroke="#FFFFFF" strokeWidth="0.9" />
+            <polygon points="14,1 17,-13 9,-4" fill="#7DD3FC" stroke="#FFFFFF" strokeWidth="0.9" />
+            <path d="M-12,-4 Q0,-8 12,-4" fill="none" stroke="#E0F2FE" strokeWidth="1.7" />
+          </g>
+        )}
         {poisoned && (
           <circle
             cx="0"
@@ -3119,16 +3189,39 @@ export const TdEnemySprite: React.FC<TdEnemySpriteProps> = React.memo(
             strokeWidth="1.8"
           />
         )}
-        {burned && (
-          <circle
-            cx="0"
-            cy="0"
-            r={type === 'BOSS' ? 24 : 14.5}
-            fill="none"
-            stroke="#F97316"
-            strokeWidth="2"
-            strokeDasharray="4 2"
-          />
+        {(burned || deepBurned) && (() => {
+          const fallbackScale = (isBoss ? 1.9 : isTitan || type === 'MINIBOSS' ? 1.35 : isMite ? 0.7 : 1.0) * (deepBurned ? 1.15 : 1);
+          const sideX = isBoss ? 22 : 10;
+          const outerColor = deepBurned ? '#991B1B' : '#DC2626';
+          const midColor = deepBurned ? '#E11D48' : '#F97316';
+          return (
+            <g className="pointer-events-none">
+              <ellipse cx="0" cy="10" rx={isBoss ? 28 : 13} ry={isBoss ? 9 : 4.5} fill={outerColor} opacity={deepBurned ? 0.56 : 0.42} />
+              <g transform={`translate(${-sideX}, 9) scale(${fallbackScale * 0.85})`}>
+                <g className="td-anim-torch">
+                  <path d="M-5,0 C-7,-7 -3,-14 0,-18 C3,-13 6,-7 4,0 Z" fill={outerColor} opacity="0.92" />
+                  <path d="M-2.6,0 C-3.6,-5 -1.3,-10 0,-13 C1.8,-9 3.2,-4.5 2.2,0 Z" fill={midColor} />
+                  <path d="M-1.2,0 C-1.6,-3 -0.5,-6 0,-8 C0.9,-5.8 1.5,-2.8 1,0 Z" fill="#FEF08A" />
+                </g>
+              </g>
+              <g transform={`translate(${sideX}, 9) scale(${fallbackScale * 0.9})`}>
+                <g className="td-anim-torch" style={{ animationDelay: '-180ms' }}>
+                  <path d="M-4.5,0 C-6,-7 -2.5,-14 0.5,-19 C3.5,-13.5 6.5,-7 4.5,0 Z" fill={outerColor} opacity="0.92" />
+                  <path d="M-2.4,0 C-3.2,-5 -1,-10 0.3,-13 C2,-9 3.2,-4.5 2.2,0 Z" fill={midColor} />
+                  <path d="M-1,0 C-1.5,-3 -0.4,-6 0.2,-8.2 C0.9,-5.8 1.5,-2.8 1,0 Z" fill="#FEF08A" />
+                </g>
+              </g>
+            </g>
+          );
+        })()}
+        {stunned && (
+          <g transform={`translate(0, ${barY - 6})`} className="pointer-events-none">
+            <ellipse cx="0" cy="0" rx={isBoss ? 18 : 11} ry="3.5" fill="none" stroke="#FACC15" strokeWidth="1.4" opacity="0.8" />
+            <g className="td-anim-spin">
+              <polygon points="0,-5 1.5,-1.5 5,0 1.5,1.5 0,5 -1.5,1.5 -5,0 -1.5,-1.5" fill="#FEF08A" stroke="#0F172A" strokeWidth="0.6" transform={`translate(${isBoss ? -14 : -9}, 0) scale(0.75)`} />
+              <polygon points="0,-5 1.5,-1.5 5,0 1.5,1.5 0,5 -1.5,1.5 -5,0 -1.5,-1.5" fill="#FACC15" stroke="#0F172A" strokeWidth="0.6" transform={`translate(${isBoss ? 14 : 9}, 0) scale(0.75)`} />
+            </g>
+          </g>
         )}
 
         {!hideHud && (
