@@ -250,7 +250,6 @@ export interface TdTowerBranchConfig {
   critChance?: number;
   chainCount?: number;
   auraHastePct?: number;
-  healSoldierAmt?: number;
   soldierCount?: number;
   soldierHp?: number;
   soldierArmor?: number;
@@ -285,7 +284,6 @@ export interface TdMythicPathConfig {
   critMultBonus?: number;
   chainBonus?: number;
   auraHasteBonus?: number;
-  healSoldierMult?: number;
   soldierCountBonus?: number;
   soldierHpMult?: number;
   soldierArmorBonus?: number;
@@ -308,7 +306,6 @@ export interface TdTowerTierStats {
   burnDps?: number;
   critChance?: number;
   auraHastePct?: number;
-  healSoldierAmt?: number;
   soldierCount?: number;
   soldierHp?: number;
   soldierArmor?: number;
@@ -422,6 +419,7 @@ export interface TdEnemyEntity {
   hitFlashTimer: number;
   distanceTraveled: number;
   knockbackDist?: number;
+  pushCountByTower?: Record<string, number>;
 }
 
 export interface TdSoldierEntity {
