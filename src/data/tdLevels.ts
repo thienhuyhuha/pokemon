@@ -3930,7 +3930,7 @@ const TD_LEVELS: TdLevelConfig[] = STAGE_BLUEPRINTS.map((bp, idx) => {
               ? 'Cực hạn'
               : 'Huyền thoại';
 
-  const baseStartingGold = 230 + (level - 1) * 28 + (pathCount - 1) * 45;
+  const baseStartingGold = 500 + (level - 1) * 28 + (pathCount - 1) * 45;
   const startingGold =
     level >= 5 ? Math.round(baseStartingGold * Math.pow(1.1, level - 4)) : baseStartingGold;
 
