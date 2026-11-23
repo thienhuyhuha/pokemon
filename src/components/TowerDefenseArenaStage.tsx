@@ -210,7 +210,9 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
   // FOCUSED (Đơn Mục Tiêu Tất Sát) scales +40% power per level from Lv 4 upward!
   const midTiers = Math.min(6, Math.max(0, tower.level - 4));
   const mythicTiers = Math.max(0, tower.level - 10);
-  const isFocusedStance = tower.level >= 4 && tower.focusBranch === 'FOCUSED';
+  const resolvedFocus: TdCombatFocus =
+    tower.focusBranch ?? branchCfg?.focusBranch ?? 'MULTI';
+  const isFocusedStance = tower.level >= 4 && resolvedFocus === 'FOCUSED';
   const midDmgGrowth = isFocusedStance ? 1.4 : 1.2;
   const mythicDmgGrowth = isFocusedStance ? 1.4 : 1.18;
 
@@ -466,8 +468,7 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
   // 2) FOCUSED: Fewer targets, +43% attack speed, +45% initial power (+40%/level scaling above)
   let effectivePoisonDps = poisonDps;
   if (tower.level >= 4) {
-    const focus: TdCombatFocus = tower.focusBranch ?? 'MULTI';
-    if (focus === 'MULTI') {
+    if (resolvedFocus === 'MULTI') {
       damage = Math.round(damage * 0.8);
       soldierDamage = Math.round(soldierDamage * 0.8);
       burnDps = Math.round(burnDps * 0.8);
@@ -2187,9 +2188,10 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
       if (tw.level < 3) {
         tw.level = (tw.level + 1) as TdTowerLevel;
       } else if (tw.level === 3 && branchId) {
+        const pickedBranch = cfg.branches.find((b) => b.id === branchId);
         tw.level = 4;
         tw.branch = branchId;
-        tw.focusBranch = focusBranch ?? 'MULTI';
+        tw.focusBranch = focusBranch ?? pickedBranch?.focusBranch ?? 'MULTI';
       } else if (tw.level === 10 && mythicPathId) {
         tw.level = 11;
         tw.mythicPath = mythicPathId;
@@ -3520,76 +3522,59 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                 TD_TOWERS[selectedTower.type].branches.map((br) => {
                   const brCost = getDiscountedTdCost(br.cost, upgrades);
                   const canAfford = snap.gold >= brCost;
-                  const multiPreview = getEffectiveTowerStats(
-                    { ...selectedTower, level: 4, branch: br.id, focusBranch: 'MULTI' },
-                    upgrades
-                  );
-                  const focusedPreview = getEffectiveTowerStats(
-                    { ...selectedTower, level: 4, branch: br.id, focusBranch: 'FOCUSED' },
+                  const isFocused = br.focusBranch === 'FOCUSED';
+                  const previewStats = getEffectiveTowerStats(
+                    { ...selectedTower, level: 4, branch: br.id, focusBranch: br.focusBranch },
                     upgrades
                   );
                   const isBar = selectedTower.type === 'BARRACKS';
-                  const multiStatTxt = isBar
-                    ? `${multiPreview.soldierCount} Lính · ST ${multiPreview.soldierDamage}`
-                    : `${multiPreview.chainCount > 0 ? multiPreview.chainCount : multiPreview.targetCount} MT · ST ${multiPreview.damage}`;
-                  const focusedStatTxt = isBar
-                    ? `${focusedPreview.soldierCount} Lính · ST ${focusedPreview.soldierDamage}`
-                    : `${focusedPreview.chainCount > 0 ? focusedPreview.chainCount : focusedPreview.targetCount} MT · ST ${focusedPreview.damage}`;
+                  const statTxt = isBar
+                    ? `${previewStats.soldierCount} Lính · ST ${previewStats.soldierDamage} · ${(1 / previewStats.cooldown).toFixed(1)}/s`
+                    : `${previewStats.chainCount > 0 ? previewStats.chainCount : previewStats.targetCount} MT · ST ${previewStats.damage} · ${(1 / previewStats.cooldown).toFixed(1)}/s`;
                   return (
-                    <div
+                    <button
                       key={br.id}
-                      className="flex-1 min-w-[210px] p-1.5 rounded-lg border border-amber-400/60 bg-[#1E293B]/95 flex flex-col gap-1"
+                      type="button"
+                      disabled={!canAfford}
+                      onClick={() => handleUpgradeTower(selectedTower.id, br.id, undefined, br.focusBranch)}
+                      className={`flex-1 min-w-[175px] px-2 py-1.5 rounded-lg border text-left flex items-center gap-2 transition-all ${
+                        canAfford
+                          ? isFocused
+                            ? 'bg-[#1E293B] hover:bg-slate-700 border-rose-400/80 cursor-pointer'
+                            : 'bg-[#1E293B] hover:bg-slate-700 border-sky-400/80 cursor-pointer'
+                          : 'bg-slate-900 border-slate-800 opacity-45 cursor-not-allowed'
+                      }`}
                     >
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-8 h-8 rounded-md bg-[#0F172A] flex items-center justify-center shrink-0">
-                          <TdTowerPreview
-                            type={selectedTower.type}
-                            level={4}
-                            branch={br.id}
-                            className="w-8 h-8"
-                          />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-1 text-[11px] font-extrabold text-amber-300">
-                            <span className="truncate">{br.name}</span>
-                            <span className="font-mono-num shrink-0 text-[#FACC15]">{brCost}g</span>
-                          </div>
-                          <div className="text-[9px] text-slate-300 truncate">{br.shortDesc}</div>
-                        </div>
+                      <div className="w-8 h-8 rounded-md bg-[#0F172A] flex items-center justify-center shrink-0">
+                        <TdTowerPreview
+                          type={selectedTower.type}
+                          level={4}
+                          branch={br.id}
+                          className="w-8 h-8"
+                        />
                       </div>
-                      <div className="grid grid-cols-2 gap-1">
-                        <button
-                          type="button"
-                          disabled={!canAfford}
-                          onClick={() => handleUpgradeTower(selectedTower.id, br.id, undefined, 'MULTI')}
-                          className={`px-1.5 py-1 rounded border text-left transition-all ${
-                            canAfford
-                              ? 'bg-sky-950/80 hover:bg-sky-900 border-sky-400/75 cursor-pointer'
-                              : 'bg-slate-900 border-slate-800 opacity-45 cursor-not-allowed'
-                          }`}
-                        >
-                          <div className="text-[9px] font-extrabold text-sky-300 truncate">
-                            Cấp 4 · Đa Mục Tiêu (-20%)
-                          </div>
-                          <div className="text-[8.5px] text-slate-200 font-mono-num truncate">{multiStatTxt}</div>
-                        </button>
-                        <button
-                          type="button"
-                          disabled={!canAfford}
-                          onClick={() => handleUpgradeTower(selectedTower.id, br.id, undefined, 'FOCUSED')}
-                          className={`px-1.5 py-1 rounded border text-left transition-all ${
-                            canAfford
-                              ? 'bg-rose-950/80 hover:bg-rose-900 border-rose-400/75 cursor-pointer'
-                              : 'bg-slate-900 border-slate-800 opacity-45 cursor-not-allowed'
-                          }`}
-                        >
-                          <div className="text-[9px] font-extrabold text-rose-300 truncate">
-                            Cấp 4 · Đơn MT (+40%/cấp)
-                          </div>
-                          <div className="text-[8.5px] text-slate-200 font-mono-num truncate">{focusedStatTxt}</div>
-                        </button>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-1 text-[11px] font-extrabold text-amber-300">
+                          <span className="truncate">{br.name}</span>
+                          <span className="font-mono-num shrink-0 text-[#FACC15]">{brCost}g</span>
+                        </div>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span
+                            className={`text-[8.5px] font-extrabold px-1 rounded shrink-0 ${
+                              isFocused
+                                ? 'bg-rose-950 text-rose-300 border border-rose-500/50'
+                                : 'bg-sky-950 text-sky-300 border border-sky-500/50'
+                            }`}
+                          >
+                            {isFocused ? 'Đơn Mục Tiêu' : 'Đa Mục Tiêu'}
+                          </span>
+                          <span className="text-[9px] text-slate-200 font-mono-num truncate">
+                            {statTxt}
+                          </span>
+                        </div>
+                        <div className="text-[9px] text-slate-400 truncate mt-0.5">{br.shortDesc}</div>
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
 

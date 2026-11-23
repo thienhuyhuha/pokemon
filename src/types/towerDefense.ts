@@ -235,6 +235,7 @@ export interface TdSaveData {
 
 export interface TdTowerBranchConfig {
   id: TdBranchId;
+  focusBranch: TdCombatFocus;
   name: string;
   shortDesc: string;
   cost: number;
