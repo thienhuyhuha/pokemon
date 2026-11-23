@@ -512,9 +512,28 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
     cooldown *= 0.92;
   }
 
+  // Reduce all towers' attack & aura influence range and AoE radii by 30% (and cap late-game runaway)
+  const maxRangeCap = tower.type === 'ARCHER' || tower.type === 'MECHANIST' ? 350 : 320;
+  range = Math.min(maxRangeCap, Math.round(range * 0.7));
+  // Buff towers (BARRACKS & VALKYRIE): Lv 1 reduced by 20%, grows strictly +100% from Lv 1 -> Lv 20, no growth Lv 20 -> Lv 30
+  if (tower.type === 'BARRACKS' || tower.type === 'VALKYRIE') {
+    const baseLv1BuffRange = Math.round(cfg.tiers[0].range * 0.7 * 0.8);
+    const buffProgress = (Math.min(20, Math.max(1, tower.level)) - 1) / 19;
+    range = Math.round(baseLv1BuffRange * (1 + buffProgress));
+  }
+  if (splashRadius > 0) {
+    splashRadius = Math.max(28, Math.round(splashRadius * 0.7));
+  }
+  if (slowSplashRadius > 0 && !(tower.type === 'MAGE' && tower.level >= 4 && resolvedFocus === 'FOCUSED')) {
+    slowSplashRadius = Math.max(38, Math.round(slowSplashRadius * 0.7));
+  }
+  if (cleaveRadius > 0) {
+    cleaveRadius = Math.max(20, Math.round(cleaveRadius * 0.7));
+  }
+
   // Strict class caps & special rules
   let effectivePoisonDps = poisonDps;
-  let effectivePoisonSpread = poisonSpreadRadius;
+  let effectivePoisonSpread = poisonSpreadRadius > 0 ? Math.max(25, Math.round(poisonSpreadRadius * 0.7)) : 0;
 
   if (tower.type === 'ARCHER') {
     // Archer focuses purely on Attack Speed & Crit (NO poison, NO slow)
@@ -572,7 +591,7 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
         soldierCount = Math.max(2, Math.floor(soldierCount * 0.65));
       }
       if (splashRadius > 0) {
-        splashRadius = Math.max(40, Math.round(splashRadius * 0.72));
+        splashRadius = Math.max(28, Math.round(splashRadius * 0.72));
       }
       cooldown = Math.max(0.05, cooldown * 0.7);
       damage = Math.round(damage * 1.45);
@@ -1863,7 +1882,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
               const dLen = Math.max(1, Math.hypot(dx, dy));
               const ux = dx / dLen;
               const uy = dy / dLen;
-              const beamLen = Math.max(dragonStats.range, 220);
+              const beamLen = Math.max(dragonStats.range, 154);
               const originX = tw.x;
               const originY = tw.y - 8;
               const endX = originX + ux * beamLen;
@@ -3973,12 +3992,12 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
 
           statCells.push(
             { label: 'Sát thương', value: recvDmgBonus > 0 ? `${displayDmg} (+${recvDmgBonus.toFixed(1)}x)` : `${displayDmg}`, tone: 'text-amber-300' },
-            { label: 'Tốc đánh', value: recvHaste > 0 ? `${effectiveSpd}/s (+${Math.round(recvHaste * 100)}%)` : `${atkSpd}/s` },
+            { label: 'Tốc đánh', value: recvHaste > 0 ? `${effectiveSpd}/s` : `${atkSpd}/s` },
             { label: 'Tầm', value: `${eff.range}px` },
             { label: 'Mục tiêu', value: eff.splashRadius > 0 ? `Vùng ${eff.splashRadius}px` : `${totalTargets}` }
           );
           if (totalCritPct > 0) {
-            statCells.push({ label: 'Chí mạng', value: `${totalCritPct}% (x${totalCritMult})`, tone: 'text-yellow-300' });
+            statCells.push({ label: 'Chí mạng', value: `${totalCritPct}% x${totalCritMult}`, tone: 'text-yellow-300' });
           }
           if (eff.slowPct > 0) {
             statCells.push({
@@ -3992,8 +4011,8 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
           }
           if (selectedTower.type === 'KNIGHT_GUARD') {
             statCells.push(
-              { label: 'Kỵ sĩ', value: `${eff.soldierCount} (${eff.soldierHp} HP)` },
-              { label: 'Phun lửa', value: `${eff.breathCooldown.toFixed(1)}s · 8 bước`, tone: 'text-orange-300' }
+              { label: 'Kỵ sĩ', value: `${eff.soldierCount} (${eff.soldierHp}HP)` },
+              { label: 'Phun lửa', value: `${eff.breathCooldown.toFixed(1)}s · 8b`, tone: 'text-orange-300' }
             );
           }
           if (eff.stunChance > 0) {
@@ -4020,7 +4039,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             });
           }
           if (eff.detonateChance > 0) {
-            statCells.push({ label: 'Kích nổ', value: `${Math.round(eff.detonateChance * 100)}% · x${eff.detonateMult} (${eff.detonateRadius}px)`, tone: 'text-amber-300' });
+            statCells.push({ label: 'Kích nổ', value: `${Math.round(eff.detonateChance * 100)}% x${eff.detonateMult}`, tone: 'text-amber-300' });
           }
           if (eff.auraHastePct > 0) {
             statCells.push({ label: 'Buff Tốc', value: `+${Math.round(eff.auraHastePct * 100)}%`, tone: 'text-purple-300' });
@@ -4040,45 +4059,45 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
         return (
           <div
             onClick={(e) => e.stopPropagation()}
-            className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 w-[95%] max-w-xl max-h-[68vh] overflow-y-auto rounded-xl bg-[#0F172A]/95 backdrop-blur-md border border-sky-400/80 p-2.5 shadow-2xl flex flex-col gap-2"
+            className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 w-[88%] max-w-[300px] sm:max-w-[320px] max-h-[58vh] overflow-y-auto rounded-xl bg-[#0F172A]/95 backdrop-blur-md border border-sky-400/75 p-2 shadow-2xl flex flex-col gap-1.5"
           >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-9 h-9 rounded-lg bg-[#1E293B] border border-slate-700 flex items-center justify-center shrink-0">
+            <div className="flex items-center justify-between gap-1.5">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <div className="w-7 h-7 rounded-md bg-[#1E293B] border border-slate-700 flex items-center justify-center shrink-0">
                   <TdTowerPreview
                     type={selectedTower.type}
                     level={selectedTower.level}
                     branch={selectedTower.branch}
                     mythicPath={selectedTower.mythicPath}
-                    className="w-9 h-9"
+                    className="w-7 h-7"
                   />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-extrabold text-white truncate flex items-center gap-1.5">
-                    <span className="truncate">
-                      {mythicCfg
-                        ? mythicCfg.name
-                        : branchCfg
-                          ? branchCfg.name
-                          : cfg.name}
-                    </span>
-                    <span className="text-sky-300 font-mono-num shrink-0">
+                  <div className="text-[11px] font-extrabold text-white truncate leading-tight">
+                    {mythicCfg
+                      ? mythicCfg.name
+                      : branchCfg
+                        ? branchCfg.name
+                        : cfg.name}
+                  </div>
+                  <div className="flex items-center gap-1 text-[9.5px] leading-tight">
+                    <span className="text-sky-300 font-bold font-mono-num shrink-0">
                       Cấp {selectedTower.level}/{maxLv}
                     </span>
                     {selectedTower.level >= 4 && !cfg.singleBranch && selectedTower.focusBranch && (
                       <span
-                        className={`text-[9px] font-bold px-1 rounded shrink-0 ${
+                        className={`text-[8.5px] font-bold px-1 rounded shrink-0 ${
                           selectedTower.focusBranch === 'FOCUSED'
-                            ? 'bg-rose-950/90 text-rose-300 border border-rose-500/50'
-                            : 'bg-sky-950/90 text-sky-300 border border-sky-500/50'
+                            ? 'bg-rose-950/90 text-rose-300 border border-rose-500/40'
+                            : 'bg-sky-950/90 text-sky-300 border border-sky-500/40'
                         }`}
                       >
                         {selectedTower.focusBranch === 'FOCUSED' ? 'Đơn MT' : 'Đa MT'}
                       </span>
                     )}
                     {slotBonusPct > 0 && (
-                      <span className="text-[9px] font-bold px-1 rounded bg-amber-950/90 text-amber-300 border border-amber-500/50 shrink-0 font-mono-num">
-                        CT#{slotNumber} (+{slotBonusPct}%)
+                      <span className="text-[8.5px] font-bold px-1 rounded bg-amber-950/90 text-amber-300 border border-amber-500/40 shrink-0 font-mono-num">
+                        #{slotNumber} (+{slotBonusPct}%)
                       </span>
                     )}
                   </div>
@@ -4088,24 +4107,24 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                 type="button"
                 onClick={() => setSelectedTowerId(null)}
                 aria-label="Đóng chi tiết tháp"
-                className="p-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white cursor-pointer shrink-0"
+                className="p-1 rounded-md bg-slate-800 text-slate-300 hover:text-white cursor-pointer shrink-0"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            {/* Compact Rectangular Stat Grid (Numerical only, no prose explanations) */}
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-1">
+            {/* Compact ~1/3 Stat Grid */}
+            <div className="grid grid-cols-3 gap-1">
               {statCells.map((cell) => (
                 <div
                   key={cell.label}
-                  className="rounded-md bg-[#131C31] border border-slate-700/70 px-2 py-1 flex flex-col"
+                  className="rounded bg-[#131C31] border border-slate-700/70 px-1.5 py-0.5 flex flex-col min-w-0"
                 >
-                  <span className="text-[9px] font-semibold text-slate-400 leading-none truncate">
+                  <span className="text-[8.5px] font-semibold text-slate-400 leading-none truncate">
                     {cell.label}
                   </span>
                   <span
-                    className={`text-[11px] font-extrabold font-mono-num leading-tight mt-0.5 truncate ${
+                    className={`text-[10px] font-extrabold font-mono-num leading-tight mt-0.5 truncate ${
                       cell.tone ?? 'text-white'
                     }`}
                   >
@@ -4115,7 +4134,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
               ))}
             </div>
 
-            {/* Level 10 -> 11: 4-Card Mythic Awakening ONLY for Dual-Branch Heroes (no prose) */}
+            {/* Level 10 -> 11: Compact 4-Card Mythic Awakening with ultra-short description */}
             {selectedTower.level === 10 && !cfg.singleBranch && (
               <div className="flex flex-col gap-1">
                 <div className="flex items-center justify-between text-[10px] font-extrabold text-amber-300 px-0.5">
@@ -4125,46 +4144,46 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                   </span>
                   <span className="font-mono-num text-slate-300">{snap.gold}g</span>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-2 gap-1">
                   {TD_MYTHIC_PATHS[selectedTower.type].map((mp) => {
                     const mpCost = scaleSlotCost(
                       getMythicUpgradeCost(mp.cost, selectedTower.focusBranch)
                     );
                     const canAfford = snap.gold >= mpCost;
-                    const mpStats = getEffectiveTowerStats(
-                      { ...selectedTower, level: 11, mythicPath: mp.id },
-                      upgrades
-                    );
                     return (
                       <button
                         key={mp.id}
                         type="button"
                         disabled={!canAfford}
                         onClick={() => handleUpgradeTower(selectedTower.id, undefined, mp.id)}
-                        className={`p-1.5 rounded-lg border text-center flex flex-col items-center gap-0.5 transition-all ${
+                        className={`p-1.5 rounded-lg border text-left flex flex-col gap-0.5 transition-all ${
                           canAfford
                             ? 'bg-[#1E293B] hover:bg-slate-700 border-amber-400/75 cursor-pointer'
                             : 'bg-slate-900/80 border-slate-800 opacity-45 cursor-not-allowed'
                         }`}
                       >
-                        <div className="w-9 h-9 rounded-md bg-[#0F172A] flex items-center justify-center shrink-0">
-                          <TdTowerPreview
-                            type={selectedTower.type}
-                            level={11}
-                            branch={selectedTower.branch}
-                            mythicPath={mp.id}
-                            className="w-9 h-9"
-                          />
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="w-6 h-6 rounded bg-[#0F172A] flex items-center justify-center shrink-0">
+                            <TdTowerPreview
+                              type={selectedTower.type}
+                              level={11}
+                              branch={selectedTower.branch}
+                              mythicPath={mp.id}
+                              className="w-6 h-6"
+                            />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[9.5px] font-extrabold leading-tight truncate" style={{ color: mp.accentColor }}>
+                              {mp.name}
+                            </div>
+                            <div className="font-mono-num text-[9.5px] font-extrabold text-[#FACC15] leading-tight">
+                              {mpCost}g
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-[10px] font-extrabold leading-tight truncate max-w-full" style={{ color: mp.accentColor }}>
-                          {mp.name}
+                        <div className="text-[8.5px] text-slate-300 leading-tight line-clamp-2">
+                          {mp.shortDesc}
                         </div>
-                        <div className="text-[9px] text-slate-300 font-mono-num leading-tight truncate max-w-full">
-                          ST {mpStats.damage} · {(1 / mpStats.cooldown).toFixed(1)}/s · {mpStats.chainCount > 0 ? mpStats.chainCount : mpStats.targetCount} MT
-                        </div>
-                        <span className="font-mono-num text-[10px] font-extrabold text-[#FACC15]">
-                          {mpCost}g
-                        </span>
                       </button>
                     );
                   })}
@@ -4172,7 +4191,62 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
               </div>
             )}
 
-            <div className="flex flex-wrap items-center gap-1.5">
+            {/* Lv 3 -> Lv 4: Dual-branch heroes show 2 compact cards with concise explanation */}
+            {selectedTower.level === 3 && !cfg.singleBranch && (
+              <div className="flex flex-col gap-1">
+                {cfg.branches.map((br) => {
+                  const brCost = scaleSlotCost(br.cost);
+                  const canAfford = snap.gold >= brCost;
+                  const isFocused = br.focusBranch === 'FOCUSED';
+                  return (
+                    <button
+                      key={br.id}
+                      type="button"
+                      disabled={!canAfford}
+                      onClick={() => handleUpgradeTower(selectedTower.id, br.id, undefined, br.focusBranch)}
+                      className={`w-full px-2 py-1.5 rounded-lg border text-left flex items-center gap-2 transition-all ${
+                        canAfford
+                          ? isFocused
+                            ? 'bg-[#1E293B] hover:bg-slate-700 border-rose-400/80 cursor-pointer'
+                            : 'bg-[#1E293B] hover:bg-slate-700 border-sky-400/80 cursor-pointer'
+                          : 'bg-slate-900 border-slate-800 opacity-45 cursor-not-allowed'
+                      }`}
+                    >
+                      <div className="w-7 h-7 rounded-md bg-[#0F172A] flex items-center justify-center shrink-0">
+                        <TdTowerPreview
+                          type={selectedTower.type}
+                          level={4}
+                          branch={br.id}
+                          className="w-7 h-7"
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-1 text-[10.5px] font-extrabold text-amber-300">
+                          <span className="truncate flex items-center gap-1">
+                            <span
+                              className={`text-[8px] font-extrabold px-1 rounded shrink-0 ${
+                                isFocused
+                                  ? 'bg-rose-950 text-rose-300 border border-rose-500/50'
+                                  : 'bg-sky-950 text-sky-300 border border-sky-500/50'
+                              }`}
+                            >
+                              {isFocused ? 'Đơn MT' : 'Đa MT'}
+                            </span>
+                            <span className="truncate">{br.name}</span>
+                          </span>
+                          <span className="font-mono-num shrink-0 text-[#FACC15]">{brCost}g</span>
+                        </div>
+                        <div className="text-[9px] text-slate-300 leading-snug mt-0.5 line-clamp-2">
+                          {br.shortDesc}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-1">
               {(selectedTower.level === 1 || selectedTower.level === 2) && (() => {
                 const nextLv = (selectedTower.level + 1) as 2 | 3;
                 const upCost = scaleSlotCost(cfg.tiers[selectedTower.level].cost);
@@ -4182,15 +4256,14 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                     type="button"
                     disabled={!canUp}
                     onClick={() => handleUpgradeTower(selectedTower.id)}
-                    className={`flex-1 min-h-[40px] px-2.5 py-1 rounded-lg font-extrabold text-xs flex items-center justify-center gap-1.5 ${
+                    className={`flex-1 min-h-[36px] px-2 py-1 rounded-lg font-extrabold text-[11px] flex items-center justify-center gap-1 ${
                       canUp
                         ? 'bg-[#FACC15] hover:bg-yellow-300 text-slate-950 cursor-pointer'
                         : 'bg-slate-800 text-slate-500 cursor-not-allowed'
                     }`}
                   >
-                    <TdTowerPreview type={selectedTower.type} level={nextLv} className="w-7 h-7 shrink-0" />
                     <TrendingUp className="w-3.5 h-3.5 shrink-0" />
-                    <span className="font-mono-num">
+                    <span className="font-mono-num truncate">
                       Cấp {nextLv}/{maxLv} · {upCost}g
                     </span>
                   </button>
@@ -4207,80 +4280,19 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                     type="button"
                     disabled={!canAfford}
                     onClick={() => handleUpgradeTower(selectedTower.id, br.id, undefined, 'MULTI')}
-                    className={`flex-1 min-h-[40px] px-2.5 py-1 rounded-lg font-extrabold text-xs flex items-center justify-center gap-1.5 ${
+                    className={`flex-1 min-h-[36px] px-2 py-1 rounded-lg font-extrabold text-[11px] flex items-center justify-center gap-1 ${
                       canAfford
                         ? 'bg-[#FACC15] hover:bg-yellow-300 text-slate-950 cursor-pointer'
                         : 'bg-slate-800 text-slate-500 cursor-not-allowed'
                     }`}
                   >
-                    <TdTowerPreview type={selectedTower.type} level={4} branch={br.id} className="w-7 h-7 shrink-0" />
                     <TrendingUp className="w-3.5 h-3.5 shrink-0" />
-                    <span className="font-mono-num">
+                    <span className="font-mono-num truncate">
                       Cấp 4/{maxLv} · {brCost}g
                     </span>
                   </button>
                 );
               })()}
-
-              {/* Lv 3 -> Lv 4: Dual-branch heroes show 2 compact numerical choice cards (no prose) */}
-              {selectedTower.level === 3 && !cfg.singleBranch &&
-                cfg.branches.map((br) => {
-                  const brCost = scaleSlotCost(br.cost);
-                  const canAfford = snap.gold >= brCost;
-                  const isFocused = br.focusBranch === 'FOCUSED';
-                  const previewStats = getEffectiveTowerStats(
-                    { ...selectedTower, level: 4, branch: br.id, focusBranch: br.focusBranch },
-                    upgrades
-                  );
-                  const statTxt =
-                    selectedTower.type === 'MAGE'
-                      ? `${previewStats.targetCount} MT · Chậm ${Math.round(previewStats.slowPct * 100)}% (${previewStats.slowSplashRadius}px)`
-                      : `${previewStats.chainCount > 0 ? previewStats.chainCount : previewStats.targetCount} MT · ST ${previewStats.damage} · ${(1 / previewStats.cooldown).toFixed(1)}/s`;
-                  return (
-                    <button
-                      key={br.id}
-                      type="button"
-                      disabled={!canAfford}
-                      onClick={() => handleUpgradeTower(selectedTower.id, br.id, undefined, br.focusBranch)}
-                      className={`flex-1 min-w-[175px] px-2 py-1.5 rounded-lg border text-left flex items-center gap-2 transition-all ${
-                        canAfford
-                          ? isFocused
-                            ? 'bg-[#1E293B] hover:bg-slate-700 border-rose-400/80 cursor-pointer'
-                            : 'bg-[#1E293B] hover:bg-slate-700 border-sky-400/80 cursor-pointer'
-                          : 'bg-slate-900 border-slate-800 opacity-45 cursor-not-allowed'
-                      }`}
-                    >
-                      <div className="w-8 h-8 rounded-md bg-[#0F172A] flex items-center justify-center shrink-0">
-                        <TdTowerPreview
-                          type={selectedTower.type}
-                          level={4}
-                          branch={br.id}
-                          className="w-8 h-8"
-                        />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-1 text-[11px] font-extrabold text-amber-300">
-                          <span className="truncate">{br.name}</span>
-                          <span className="font-mono-num shrink-0 text-[#FACC15]">{brCost}g</span>
-                        </div>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <span
-                            className={`text-[8.5px] font-extrabold px-1 rounded shrink-0 ${
-                              isFocused
-                                ? 'bg-rose-950 text-rose-300 border border-rose-500/50'
-                                : 'bg-sky-950 text-sky-300 border border-sky-500/50'
-                            }`}
-                          >
-                            {isFocused ? 'Đơn MT' : 'Đa MT'}
-                          </span>
-                          <span className="text-[9px] text-slate-200 font-mono-num truncate">
-                            {statTxt}
-                          </span>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
 
               {selectedTower.level === 10 && cfg.singleBranch && (() => {
                 const mp = TD_MYTHIC_PATHS[selectedTower.type][0];
@@ -4291,19 +4303,12 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                     type="button"
                     disabled={!canAfford}
                     onClick={() => handleUpgradeTower(selectedTower.id, undefined, mp.id)}
-                    className={`flex-1 min-h-[40px] px-2.5 py-1 rounded-lg border font-extrabold text-xs flex items-center justify-center gap-1.5 ${
+                    className={`flex-1 min-h-[36px] px-2 py-1 rounded-lg border font-extrabold text-[11px] flex items-center justify-center gap-1 ${
                       canAfford
                         ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 border-amber-300 text-white cursor-pointer'
                         : 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
                     }`}
                   >
-                    <TdTowerPreview
-                      type={selectedTower.type}
-                      level={11}
-                      branch={selectedTower.branch}
-                      mythicPath={mp.id}
-                      className="w-7 h-7 shrink-0"
-                    />
                     <TrendingUp className="w-3.5 h-3.5 shrink-0" />
                     <span className="font-mono-num truncate">
                       Cấp 11/{maxLv} · {mpCost}g
@@ -4329,18 +4334,12 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                     type="button"
                     disabled={!canUp}
                     onClick={() => handleUpgradeTower(selectedTower.id)}
-                    className={`flex-1 min-h-[40px] px-2.5 py-1 rounded-lg border font-extrabold text-xs flex items-center justify-center gap-1.5 ${
+                    className={`flex-1 min-h-[36px] px-2 py-1 rounded-lg border font-extrabold text-[11px] flex items-center justify-center gap-1 ${
                       canUp
                         ? 'bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 border-sky-300 text-white cursor-pointer'
                         : 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
                     }`}
                   >
-                    <TdTowerPreview
-                      type={selectedTower.type}
-                      level={nextLv}
-                      branch={selectedTower.branch}
-                      className="w-7 h-7 shrink-0"
-                    />
                     <TrendingUp className="w-3.5 h-3.5 shrink-0" />
                     <span className="font-mono-num truncate">
                       Cấp {nextLv}/{maxLv} · {upCost}g
@@ -4367,7 +4366,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                     type="button"
                     disabled={!canUp}
                     onClick={() => handleUpgradeTower(selectedTower.id)}
-                    className={`flex-1 min-h-[40px] px-2.5 py-1 rounded-lg border font-extrabold text-xs flex items-center justify-center gap-1.5 ${
+                    className={`flex-1 min-h-[36px] px-2 py-1 rounded-lg border font-extrabold text-[11px] flex items-center justify-center gap-1 ${
                       canUp
                         ? isPost20
                           ? 'bg-gradient-to-r from-rose-600 to-amber-500 hover:from-rose-500 hover:to-amber-400 border-amber-300 text-white cursor-pointer'
@@ -4375,13 +4374,6 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                         : 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
                     }`}
                   >
-                    <TdTowerPreview
-                      type={selectedTower.type}
-                      level={nextLv}
-                      branch={selectedTower.branch}
-                      mythicPath={selectedTower.mythicPath}
-                      className="w-7 h-7 shrink-0"
-                    />
                     <Sparkles className="w-3.5 h-3.5 shrink-0" />
                     <span className="font-mono-num truncate">
                       Cấp {nextLv}/{maxLv} · {upCost}g
@@ -4391,7 +4383,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
               })()}
 
               {selectedTower.level >= maxLv && (
-                <div className="flex-1 min-h-[40px] px-2.5 rounded-lg bg-amber-950/60 border border-amber-400/60 text-amber-300 font-extrabold text-xs flex items-center justify-center gap-1.5 font-mono-num">
+                <div className="flex-1 min-h-[36px] px-2 rounded-lg bg-amber-950/60 border border-amber-400/60 text-amber-300 font-extrabold text-[11px] flex items-center justify-center gap-1 font-mono-num">
                   <Sparkles className="w-3.5 h-3.5 text-[#FACC15]" />
                   <span>Cấp {maxLv}/{maxLv}</span>
                 </div>
@@ -4403,19 +4395,19 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                   onClick={() => {
                     setTargeting({ kind: 'RALLY', towerId: selectedTower.id });
                   }}
-                  className="min-h-[40px] px-2.5 rounded-lg bg-sky-900/70 hover:bg-sky-800 border border-sky-500/70 text-sky-100 font-bold text-xs flex items-center gap-1 cursor-pointer"
+                  className="min-h-[36px] px-2 rounded-lg bg-sky-900/70 hover:bg-sky-800 border border-sky-500/70 text-sky-100 font-bold text-[11px] flex items-center gap-1 cursor-pointer"
                 >
-                  <Flag className="w-3.5 h-3.5 text-[#FACC15]" />
-                  <span>Dời cờ</span>
+                  <Flag className="w-3 h-3 text-[#FACC15]" />
+                  <span>Cờ</span>
                 </button>
               )}
 
               <button
                 type="button"
                 onClick={() => handleSellTower(selectedTower.id)}
-                className="min-h-[40px] px-2.5 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-700/80 text-rose-100 font-bold text-xs flex items-center gap-1 cursor-pointer"
+                className="min-h-[36px] px-2 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-700/80 text-rose-100 font-bold text-[11px] flex items-center gap-1 cursor-pointer"
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <Trash2 className="w-3 h-3" />
                 <span className="font-mono-num">+{refundGold}g</span>
               </button>
             </div>

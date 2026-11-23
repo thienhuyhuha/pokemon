@@ -86,8 +86,8 @@ const HERO_HANDBOOK_DETAILS: Record<
   },
   BARRACKS: {
     summary: 'Công trình hỗ trợ thuần túy (không tấn công trực tiếp), tạo hào quang tăng Tỷ lệ Bạo kích và Sát thương Bạo kích cho mọi tướng trong tầm.',
-    scalingNote: '1 hướng duy nhất (không hiện bảng chọn nhánh). Bắt đầu Cấp 1: +1% Tỷ lệ BK & +10% ST Bạo kích; mỗi cấp tăng +1% / +10% cho đến Cấp 30 đạt 30% / 300%, đồng thời Cấp 30 thưởng thêm +10% BK & +200% ST Bạo kích (tổng 40% BK / +500% STBK). Từ Cấp 20→30 giá vàng +100%/cấp.',
-    multiNote: 'Hướng mặc định (Thánh Đàn Chí Mạng): Tự động nâng thẳng từ Cấp 1 đến Cấp 30 và mở rộng tầm hào quang.',
+    scalingNote: '1 hướng duy nhất (không hiện bảng chọn nhánh). Bắt đầu Cấp 1: +1% Tỷ lệ BK & +10% ST Bạo kích; đạt Cấp 30 đạt 30% / 300% + thưởng thêm +10% BK & +200% STBK (tổng 40% / +500%). Từ Cấp 20→30 giá vàng +100%/cấp. Vùng tác dụng tăng +100% từ Cấp 1 đến Cấp 20, Cấp 20→30 giữ nguyên.',
+    multiNote: 'Hướng mặc định (Thánh Đàn Chí Mạng): Tự động nâng thẳng từ Cấp 1 đến Cấp 30.',
   },
   MAGE: {
     summary: 'Pháp sư khống chế chuyên làm chậm và trói chân quái vật (đánh được quái bay).',
@@ -108,7 +108,7 @@ const HERO_HANDBOOK_DETAILS: Record<
   },
   VALKYRIE: {
     summary: 'Công trình hỗ trợ thuần túy, tăng Tốc độ đánh và Sát thương chưa bạo kích cho các tướng chiến đấu trong tầm (không tăng tốc hồi chiêu tuyệt chiêu).',
-    scalingNote: '1 hướng duy nhất đến Cấp 20. Cấp 1 buff +100% tốc đánh và +1.0x sát thương chưa bạo kích; mỗi cấp tăng +10% tốc đánh (tối đa +200% trước Cấp 20) và +0.1x sát thương. Đạt Cấp 20 đạt +3.0x sát thương và được thưởng thêm +50% tốc đánh (tổng +250% tốc đánh).',
+    scalingNote: '1 hướng duy nhất đến Cấp 20. Cấp 1 buff +100% tốc đánh và +1.0x sát thương chưa bạo kích; đạt Cấp 20 đạt +3.0x sát thương và thưởng thêm +50% tốc đánh (tổng +250%). Vùng tác dụng tăng +100% từ Cấp 1 lên Cấp 20.',
     multiNote: 'Hướng mặc định (Thiên Sứ Thánh Ca): Tự động nâng thẳng từ Cấp 1 lên Cấp 20.',
   },
   KNIGHT_GUARD: {
@@ -131,7 +131,7 @@ const HERO_HANDBOOK_DETAILS: Record<
   CHRONOMANCER: {
     summary: 'Mở khóa sau Ải 25. Thần sứ gây Sát thương Chuẩn bỏ qua giáp/kháng, kèm làm chậm nhẹ và hào quang tăng tốc độ đánh.',
     scalingNote: 'Tối đa Cấp 20. Khắc tinh của quái vật kháng phép và giáp cao ở các ải cuối.',
-    multiNote: 'Đa mục tiêu (Chấp Pháp Thời Gian): 70% Sát thương Chuẩn, làm chậm lan 112px và buff tốc độ đánh cho đồng minh.',
+    multiNote: 'Đa mục tiêu (Chấp Pháp Thời Gian): 70% Sát thương Chuẩn, làm chậm lan 78px và buff tốc độ đánh cho đồng minh.',
     focusedNote: 'Đơn mục tiêu (Thần Vương Hư Không): 100% Sát thương Chuẩn xuyên mọi loại giáp và kháng phép, +40% sức mạnh mỗi cấp.',
   },
 };
