@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   ArrowLeft,
   BookOpen,
-  Castle,
   CheckCircle2,
   Coins,
   Crosshair,
@@ -16,6 +15,7 @@ import {
   Shield,
   Sparkles,
   Star,
+  Swords,
   Volume2,
   VolumeX,
   X,
@@ -27,7 +27,8 @@ import {
   TD_MAP_ICE_URL,
   TD_MAP_SKY_URL,
   TD_MAP_VOLCANO_URL,
-} from '../data/pokemonSprites';
+} from '../data/tdAssets';
+import { getHeroMaxUltimateInfo } from '../data/tdEquipment';
 import {
   DEFAULT_TD_UPGRADES,
   formatArtifactBonusSummary,
@@ -62,6 +63,7 @@ import {
 } from '../types/towerDefense';
 import { RememberedAccount } from '../utils/localAccountCache';
 import { AccountBar } from './AccountBar';
+import { CastleShieldLogo } from './CastleShieldLogo';
 import { TdEnemyPreview, TdTowerPreview } from './TdArtwork';
 
 interface TdLevelSelectViewProps {
@@ -78,6 +80,7 @@ interface TdLevelSelectViewProps {
   onSignOut: () => void;
   onSelectLevel: (level: number) => void;
   onUpdateUpgrades: (nextUpgrades: TdUpgrades) => void;
+  onOpenInventory?: () => void;
   onTogglePreviewMode: () => void;
   onToggleSound: () => void;
   onToggleBgm: () => void;
@@ -216,6 +219,7 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
   onSignOut,
   onSelectLevel,
   onUpdateUpgrades,
+  onOpenInventory,
   onTogglePreviewMode,
   onToggleSound,
   onToggleBgm,
@@ -228,6 +232,8 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
 
   const levels = getAllTdLevels();
   const bonusStarsEarned = saveData.bonusStars ?? 0;
+  const gemsCount = saveData.enhancementGems ?? 0;
+  const equipCount = saveData.equipmentInventory?.length ?? 0;
   const totalStarsEarned = getTotalStarsEarnedInTd(saveData.levels, bonusStarsEarned);
   const spentStars = getSpentUpgradeStars(saveData.upgrades);
   const availableStars = Math.max(0, totalStarsEarned - spentStars);
@@ -287,9 +293,7 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
               <ArrowLeft className="w-4 h-4" />
             </button>
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/60 flex items-center justify-center">
-                <Castle className="w-5 h-5 text-[#FACC15]" />
-              </div>
+              <CastleShieldLogo className="w-7 h-7 shrink-0" />
               <div>
                 <h1 className="font-display text-lg sm:text-xl font-extrabold text-white leading-tight">
                   Vệ Thành Quái Thú
@@ -303,6 +307,20 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {onOpenInventory && (
+              <button
+                type="button"
+                onClick={onOpenInventory}
+                className="min-h-[40px] px-3 py-2 rounded-xl bg-[#1E293B] hover:bg-slate-700 border border-cyan-500/60 text-cyan-200 font-extrabold text-xs sm:text-sm flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              >
+                <Swords className="w-4 h-4 text-cyan-300" />
+                <span>Kho Đồ</span>
+                <span className="ml-0.5 px-1.5 py-0.5 rounded bg-cyan-950 font-mono-num text-[11px] text-cyan-300">
+                  {equipCount} · {gemsCount}💎
+                </span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => setHandbookOpen(true)}
@@ -1089,6 +1107,37 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
                     </div>
                   </div>
                 )}
+                {/* Tuyệt Chiêu Cấp Tối Đa */}
+                {(() => {
+                  const multiUlt = getHeroMaxUltimateInfo(handbookHero, 'MULTI');
+                  const focusedUlt = !cfg.singleBranch ? getHeroMaxUltimateInfo(handbookHero, 'FOCUSED') : null;
+                  const showFocusedSeparate = Boolean(focusedUlt && focusedUlt.name !== multiUlt.name);
+                  return (
+                    <div className="flex flex-col gap-2">
+                      <div className="text-xs font-extrabold text-amber-300 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-[#FACC15]" />
+                        <span>Tuyệt Chiêu Khi Đạt Cấp Tối Đa (Lv{maxLv})</span>
+                      </div>
+                      <div className={`grid grid-cols-1 ${showFocusedSeparate ? 'md:grid-cols-2' : ''} gap-2`}>
+                        <div className="rounded-lg bg-[#0B1120] border border-amber-500/45 p-2.5">
+                          <div className="text-xs font-extrabold text-[#FACC15]">
+                            ⚡ {multiUlt.name}{showFocusedSeparate ? ' (Đa Mục Tiêu)' : ''}
+                          </div>
+                          <p className="text-xs text-slate-200 leading-relaxed mt-0.5">{multiUlt.desc}</p>
+                        </div>
+                        {showFocusedSeparate && focusedUlt && (
+                          <div className="rounded-lg bg-[#0B1120] border border-rose-500/45 p-2.5">
+                            <div className="text-xs font-extrabold text-rose-300">
+                              ⚡ {focusedUlt.name} (Đơn Mục Tiêu)
+                            </div>
+                            <p className="text-xs text-slate-200 leading-relaxed mt-0.5">{focusedUlt.desc}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Thần Khí Hero Artifact Preview */}
                 {(() => {
                   const artTpl = TD_HERO_ARTIFACT_TEMPLATES[handbookHero];
@@ -1139,9 +1188,9 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
               {/* Global Battlefield Rules */}
               <div className="rounded-xl bg-[#131C31] border border-slate-800 p-3.5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs text-slate-300">
                 <div>
-                  <div className="font-extrabold text-amber-300 mb-1">Chi phí theo số lượng công trình</div>
+                  <div className="font-extrabold text-amber-300 mb-1">Chi phí & Thưởng vàng diệt quái</div>
                   <p className="leading-relaxed">
-                    Xây từ công trình thứ 3 giá xây và nâng cấp tăng +50%; từ công trình thứ 5 tăng +80% so với công trình đầu tiên.
+                    Từ công trình #3 tăng +50% giá, từ #5 tăng +80%. Diệt mỗi quái được thưởng thêm +1 vàng theo cấp ải (+1g Ải 1 → +30g Ải 30).
                   </p>
                 </div>
                 <div>
@@ -1151,9 +1200,9 @@ export const TdLevelSelectView: React.FC<TdLevelSelectViewProps> = ({
                   </p>
                 </div>
                 <div>
-                  <div className="font-extrabold text-emerald-300 mb-1">Kháng hiệu ứng & Giải trừ</div>
+                  <div className="font-extrabold text-cyan-300 mb-1">Trang bị 9 món & Ngọc Cường Hóa</div>
                   <p className="leading-relaxed">
-                    Quái tinh nhuệ có thể kháng Bỏng Thường, Giáp, Kháng Phép và giải Độc thường/Trói chân/Làm chậm/Bỏng thường. Bỏng Sâu và Độc Nặng không thể bị giải trừ.
+                    Quái rơi trang bị (0.1%, không nhặt trùng) và Ngọc Cường Hóa (2%) để đeo & cường hóa tối đa +12 (+2%/cấp) trong Kho Đồ ngoài trận.
                   </p>
                 </div>
                 <div>

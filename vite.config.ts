@@ -21,11 +21,11 @@ export default defineConfig(() => {
         ],
         manifest: {
           id: '/',
-          name: 'ChibiMon & Kim Cương — Puzzle 2 trong 1',
-          short_name: 'ChibiMon',
+          name: 'Vệ Thành Quái Thú — Thủ Thành Chiến Thuật',
+          short_name: 'Vệ Thành',
           description:
-            'Game Ghép Cặp Thú Cưng 200 màn & Ghép Kim Cương 100 màn, chơi mượt cả khi ngoại tuyến.',
-          theme_color: '#DC2626',
+            'Game Thủ Thành Chiến Thuật 30 ải với 10 anh hùng, kho trang bị cường hóa +12 và Thần Khí.',
+          theme_color: '#0F172A',
           background_color: '#0F172A',
           display: 'standalone',
           start_url: '/',

@@ -29,7 +29,7 @@ interface MobileBottomNavProps {
 
 export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   activeTab,
-  levelsLabel = '200 Cấp',
+  levelsLabel = '30 Ải',
   onGoHome,
   onGoLevels,
   onOpenAccountSheet,
@@ -111,7 +111,7 @@ export const MobileAccountSheet: React.FC<MobileAccountSheetProps> = ({
   soundEnabled,
   bgmEnabled,
   highestUnlockedLevel,
-  maxLevel = 200,
+  maxLevel = 30,
   totalScore,
   onSignIn,
   onSignOut,

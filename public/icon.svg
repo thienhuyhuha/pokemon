@@ -1,8 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
-  <rect width="512" height="512" rx="112" fill="#0F172A" />
-  <circle cx="256" cy="256" r="184" fill="#FFFFFF" stroke="#1E293B" stroke-width="24" />
-  <path d="M 72 256 A 184 184 0 0 1 440 256 Z" fill="#DC2626" />
-  <rect x="64" y="232" width="384" height="48" fill="#0F172A" />
-  <polygon points="256,192 311,224 311,288 256,320 201,288 201,224" fill="#FACC15" stroke="#0F172A" stroke-width="18" />
-  <circle cx="256" cy="256" r="24" fill="#FFFFFF" />
+  <rect width="512" height="512" rx="112" fill="#0B1120" />
+  <path d="M256 48 L432 112 V248 C432 362 354 442 256 476 C158 442 80 362 80 248 V112 L256 48 Z" fill="#131C31" stroke="#FACC15" stroke-width="24" stroke-linejoin="round" />
+  <path d="M256 84 L400 136 V244 C400 340 336 408 256 438 C176 408 112 340 112 244 V136 L256 84 Z" fill="none" stroke="#38BDF8" stroke-width="8" stroke-opacity="0.45" />
+  <rect x="144" y="192" width="52" height="172" rx="8" fill="#475569" stroke="#0F172A" stroke-width="8" />
+  <rect x="316" y="192" width="52" height="172" rx="8" fill="#475569" stroke="#0F172A" stroke-width="8" />
+  <polygon points="136,192 170,138 204,192" fill="#DC2626" stroke="#FACC15" stroke-width="8" stroke-linejoin="round" />
+  <polygon points="308,192 342,138 376,192" fill="#DC2626" stroke="#FACC15" stroke-width="8" stroke-linejoin="round" />
+  <rect x="188" y="168" width="136" height="202" rx="10" fill="#94A3B8" stroke="#0F172A" stroke-width="10" />
+  <rect x="188" y="140" width="36" height="36" fill="#E2E8F0" stroke="#0F172A" stroke-width="8" />
+  <rect x="238" y="140" width="36" height="36" fill="#E2E8F0" stroke="#0F172A" stroke-width="8" />
+  <rect x="288" y="140" width="36" height="36" fill="#E2E8F0" stroke="#0F172A" stroke-width="8" />
+  <path d="M214 370 V278 C214 242 298 242 298 278 V370 Z" fill="#0F172A" stroke="#FACC15" stroke-width="14" />
+  <line x1="238" y1="262" x2="238" y2="366" stroke="#94A3B8" stroke-width="8" />
+  <line x1="274" y1="262" x2="274" y2="366" stroke="#94A3B8" stroke-width="8" />
+  <line x1="218" y1="304" x2="294" y2="304" stroke="#94A3B8" stroke-width="8" />
+  <line x1="218" y1="336" x2="294" y2="336" stroke="#94A3B8" stroke-width="8" />
+  <polygon points="256,92 272,116 256,140 240,116" fill="#FACC15" />
 </svg>

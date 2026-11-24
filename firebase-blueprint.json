@@ -139,6 +139,22 @@
           "type": "integer",
           "description": "Cumulative bonus stars earned from clearing stages (first-clear and repeat-clear stage rewards)."
         },
+        "enhancementGems": {
+          "type": "integer",
+          "description": "Number of Enhancement Gems (Ngọc Cường Hóa) owned by the player for upgrading equipment up to +12."
+        },
+        "equipmentInventory": {
+          "type": "array",
+          "description": "List of non-duplicate hero-bound equipment items dropped in battle with enhancement level (0..12)."
+        },
+        "heroEquipment": {
+          "type": "object",
+          "description": "Map of TdTowerType to equipped 9-slot item IDs for each hero."
+        },
+        "soundEnabled": {
+          "type": "boolean",
+          "description": "Whether Web Audio sound effects are enabled."
+        },
         "levels": {
           "type": "object",
           "description": "Map of stage numbers ('1'..'30') to TdLevelProgress objects containing completed, stars, bestScore, and bestLivesLeft."

@@ -6,6 +6,7 @@ import {
   FastForward,
   Flag,
   Flame,
+  Gem,
   Heart,
   Maximize2,
   Minimize2,
@@ -29,7 +30,17 @@ import {
   TD_MAP_ICE_URL,
   TD_MAP_SKY_URL,
   TD_MAP_VOLCANO_URL,
-} from '../data/pokemonSprites';
+} from '../data/tdAssets';
+import {
+  aggregateHeroEquipmentBonuses,
+  getEquipmentDisplayName,
+  getEquipmentUniqueKey,
+  getHeroMaxUltimateInfo,
+  rollNonDuplicateEquipment,
+  TD_EQUIP_DROP_CHANCE,
+  TD_EQUIPMENT_RARITY_META,
+  TD_GEM_DROP_CHANCE,
+} from '../data/tdEquipment';
 import {
   formatArtifactBonusSummary,
   getExtraTowerUpgradeCost,
@@ -56,11 +67,15 @@ import {
   TdEffectBurst,
   TdEnemyEntity,
   TdEnemyType,
+  TdEquipmentBonuses,
+  TdEquipmentItem,
   TdHeroArtifact,
+  TdHeroEquipmentMap,
   TdLevelConfig,
   TdMythicPathId,
   TdPoint,
   TdProjectile,
+  TdRunLootSummary,
   TdSoldierEntity,
   TdTowerLevel,
   TdTowerType,
@@ -82,6 +97,8 @@ interface TowerDefenseArenaStageProps {
   runNonce: number;
   upgrades: TdUpgrades;
   unlockedTowers?: TdTowerType[];
+  heroEquipment?: TdHeroEquipmentMap;
+  equipmentInventory?: TdEquipmentItem[];
   isPaused: boolean;
   isCompactLandscape: boolean;
   isFullscreen: boolean;
@@ -95,14 +112,20 @@ interface TowerDefenseArenaStageProps {
   onToggleSound: () => void;
   onToggleBgm: () => void;
   onReplay: () => void;
+  onAcquireTdLoot?: (gems: number, items: TdEquipmentItem[]) => void;
   onWinLevel: (
     level: number,
     score: number,
     stars: number,
     livesLeft: number,
-    enemiesSlain: number
+    enemiesSlain: number,
+    lootSummary: TdRunLootSummary
   ) => void;
-  onLoseLevel: (enemiesSlain: number, score: number) => void;
+  onLoseLevel: (
+    enemiesSlain: number,
+    score: number,
+    lootSummary: TdRunLootSummary
+  ) => void;
 }
 
 interface PendingSpawn {
@@ -135,6 +158,8 @@ interface WorldState {
   reinforceCd: number;
   idCounter: number;
   finished: boolean;
+  lootGems: number;
+  lootItems: TdEquipmentItem[];
 }
 
 interface SnapshotView {
@@ -148,6 +173,8 @@ interface SnapshotView {
   prepTimer: number;
   meteorCd: number;
   reinforceCd: number;
+  lootGems: number;
+  lootItemCount: number;
   towers: TdBuiltTower[];
   enemies: TdEnemyEntity[];
   soldiers: TdSoldierEntity[];
@@ -201,7 +228,11 @@ function getEnemyHealMultiplier(enemy: TdEnemyEntity): number {
   return mult;
 }
 
-function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
+function getEffectiveTowerStats(
+  tower: TdBuiltTower,
+  upgrades: TdUpgrades,
+  heroEquipMap?: Map<TdTowerType, TdEquipmentBonuses>
+) {
   const cfg = TD_TOWERS[tower.type];
   const branchCfg = tower.branch
     ? cfg.branches.find((b) => b.id === tower.branch) ?? null
@@ -751,6 +782,140 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
         : 0.01
       : 0;
 
+  // 12. Out-of-game 9-Slot Hero Equipment Bonuses + Max-Level Active Ultimate Modifiers
+  const eq = heroEquipMap?.get(tower.type);
+  let effChanceBonusPct = 0;
+  let effPotencyPct = 0;
+  let skillCdrPct = 0;
+  let wingsSplashSharePct = 0;
+  let effectiveHeavyPoisonChance = heavyPoisonChance;
+  let effectiveDetonateChance = detonateChance;
+  let effectiveStunChance = stunChance;
+  let effectivePoisonPct = poisonPctPerTick;
+  let effectiveBurnPct = burnPctPerSec;
+
+  if (eq) {
+    if (eq.damagePct && tower.type !== 'BARRACKS' && tower.type !== 'VALKYRIE') {
+      const dMult = 1 + eq.damagePct;
+      if (damage > 0) damage = Math.round(damage * dMult);
+      if (soldierDamage > 0) soldierDamage = Math.round(soldierDamage * dMult);
+      if (burnDps > 0) burnDps = Math.round(burnDps * dMult);
+      if (effectivePoisonDps > 0) effectivePoisonDps = Math.round(effectivePoisonDps * dMult);
+    }
+    if (eq.attackSpeedPct && tower.type !== 'BARRACKS' && tower.type !== 'VALKYRIE') {
+      cooldown = Math.max(0.035, cooldown / (1 + eq.attackSpeedPct));
+    }
+    if (eq.critChanceBonus && tower.type !== 'BARRACKS' && tower.type !== 'VALKYRIE') {
+      critChance = Math.min(1, critChance + eq.critChanceBonus);
+    }
+    if (eq.critDamageBonus && tower.type !== 'BARRACKS' && tower.type !== 'VALKYRIE') {
+      critMult += eq.critDamageBonus;
+    }
+    if (eq.armorPiercePct) {
+      armorPiercePct = Math.min(1, armorPiercePct + eq.armorPiercePct);
+    }
+    if (eq.magicPiercePct) {
+      magicPiercePct = Math.min(1, magicPiercePct + eq.magicPiercePct);
+    }
+    if (eq.effectChancePct) {
+      effChanceBonusPct = eq.effectChancePct;
+      if (effectiveStunChance > 0) {
+        effectiveStunChance = Math.min(0.65, effectiveStunChance * (1 + eq.effectChancePct));
+      }
+      if (effectiveHeavyPoisonChance > 0) {
+        effectiveHeavyPoisonChance = Math.min(0.5, effectiveHeavyPoisonChance * (1 + eq.effectChancePct));
+      }
+      if (effectiveDetonateChance > 0) {
+        effectiveDetonateChance = Math.min(0.5, effectiveDetonateChance * (1 + eq.effectChancePct));
+      }
+    }
+    if (eq.effectPotencyPct) {
+      effPotencyPct = eq.effectPotencyPct;
+      const potMult = 1 + eq.effectPotencyPct;
+      if (slowPct > 0) {
+        const slowCap = tower.type === 'MAGE' ? 0.92 : 0.48;
+        slowPct = Math.min(slowCap, slowPct * potMult);
+      }
+      if (effectivePoisonPct > 0) {
+        effectivePoisonPct = Number((effectivePoisonPct * potMult).toFixed(4));
+      }
+      if (effectiveBurnPct > 0) {
+        effectiveBurnPct = Number((effectiveBurnPct * potMult).toFixed(4));
+      }
+      if (auraHastePct > 0) {
+        auraHastePct = Number((auraHastePct * potMult).toFixed(4));
+      }
+      if (auraDamageBonusPct > 0) {
+        auraDamageBonusPct = Number((auraDamageBonusPct * potMult).toFixed(4));
+      }
+      if (auraCritChancePct > 0) {
+        auraCritChancePct = Math.min(0.75, Number((auraCritChancePct * potMult).toFixed(4)));
+      }
+      if (auraCritDamageBonus > 0) {
+        auraCritDamageBonus = Number((auraCritDamageBonus * potMult).toFixed(3));
+      }
+    }
+    if (eq.skillCdrPct) {
+      skillCdrPct = Math.min(0.6, eq.skillCdrPct);
+    }
+    if (eq.splashSharePct) {
+      wingsSplashSharePct = Math.min(1.0, eq.splashSharePct);
+    }
+  }
+
+  const adjustedBreathCooldown =
+    breathCooldown > 0
+      ? Number((breathCooldown * Math.max(0.4, 1 - skillCdrPct)).toFixed(2))
+      : 0;
+
+  // Active Max-Level Ultimate Buffs
+  const ultActive = (tower.ultimateActiveTimer ?? 0) > 0;
+  let ultimateStunDuration = 1.2;
+  let ultimateValKyrieDouble = false;
+  if (ultActive) {
+    if (tower.type === 'ARCHER') {
+      if (resolvedFocus === 'FOCUSED') {
+        damage = Math.round(damage * 3);
+        effectiveStunChance = 1;
+        ultimateStunDuration = 3.0;
+      } else {
+        damage = Math.round(damage * 5);
+      }
+    } else if (tower.type === 'BARRACKS') {
+      auraCritChancePct += 0.2;
+      auraCritDamageBonus += 5.0;
+    } else if (tower.type === 'ARTILLERY') {
+      effectiveStunChance = Math.max(effectiveStunChance, 0.05);
+    } else if (tower.type === 'VALKYRIE') {
+      ultimateValKyrieDouble = true;
+    } else if (tower.type === 'MAGE' && resolvedFocus === 'FOCUSED') {
+      damage = Math.round(damage * 2.5);
+    } else if (tower.type === 'ASSASSIN') {
+      if (resolvedFocus === 'FOCUSED') {
+        damage = Math.round(damage * 2.5);
+        critChance = 1;
+      } else {
+        effectiveHeavyPoisonChance = Math.max(0.03, effectiveHeavyPoisonChance * 3);
+        cooldown = Math.max(0.035, cooldown / 1.5);
+      }
+    } else if (tower.type === 'KNIGHT_GUARD') {
+      damage = Math.round(damage * 2);
+      soldierDamage = Math.round(soldierDamage * 2);
+    } else if (tower.type === 'PYROMANCER') {
+      if (resolvedFocus === 'FOCUSED') {
+        effectiveDetonateChance = Math.max(effectiveDetonateChance, 0.15);
+      } else {
+        damage = Math.round(damage * 2);
+      }
+    } else if (tower.type === 'MECHANIST') {
+      cooldown = Math.max(0.035, cooldown / 2);
+      armorPiercePct = Math.min(1, armorPiercePct + 0.3);
+    } else if (tower.type === 'CHRONOMANCER') {
+      cooldown = Math.max(0.035, cooldown / 2);
+      slowPct = Math.min(0.65, slowPct + 0.2);
+    }
+  }
+
   return {
     damage,
     range,
@@ -760,16 +925,17 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
     slowPct,
     slowSplashRadius,
     poisonDps: effectivePoisonDps,
-    poisonPctPerTick,
+    poisonPctPerTick: effectivePoisonPct,
     poisonSpreadRadius: effectivePoisonSpread,
-    heavyPoisonChance,
+    heavyPoisonChance: effectiveHeavyPoisonChance,
     burnDps,
     burnKind,
-    burnPctPerSec,
-    detonateChance,
+    burnPctPerSec: effectiveBurnPct,
+    detonateChance: effectiveDetonateChance,
     detonateMult,
     detonateRadius,
-    stunChance,
+    stunChance: effectiveStunChance,
+    stunDuration: ultimateStunDuration,
     critChance,
     critMult,
     chainCount,
@@ -777,8 +943,9 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
     auraDamageBonusPct,
     auraCritChancePct,
     auraCritDamageBonus,
+    ultimateValKyrieDouble,
     executeBelowPct,
-    breathCooldown,
+    breathCooldown: adjustedBreathCooldown,
     canHitAir,
     armorPiercePct,
     magicPiercePct,
@@ -789,6 +956,10 @@ function getEffectiveTowerStats(tower: TdBuiltTower, upgrades: TdUpgrades) {
     soldierDamage,
     cleaveRadius,
     soldierRespawn,
+    effChanceBonusPct,
+    effPotencyPct,
+    skillCdrPct,
+    wingsSplashSharePct,
   };
 }
 
@@ -813,14 +984,20 @@ function finalizeEnemyDeath(
   upg: TdUpgrades,
   lvl: TdLevelConfig,
   enemy: TdEnemyEntity,
-  sourceTowerId?: string
+  sourceTowerId?: string,
+  lootCtx?: {
+    ownedKeys: Set<string>;
+    unlockedHeroes: TdTowerType[];
+    onLoot?: (gems: number, items: TdEquipmentItem[]) => void;
+  }
 ) {
   if (enemy.isDeadProcessed) return;
   enemy.isDeadProcessed = true;
 
   const baseBountyMult = upg.economy >= 5 ? 1.25 : upg.economy >= 2 ? 1.12 : 1;
   const bountyMult = baseBountyMult + Math.max(0, upg.clearGold ?? 0) * 0.04;
-  const earnedGold = Math.round(enemy.bounty * bountyMult);
+  // +1 gold per slain monster per stage (#9)
+  const earnedGold = Math.round(enemy.bounty * bountyMult) + lvl.level;
   w.gold += earnedGold;
   w.score += enemy.bounty * 12;
   w.enemiesSlain += 1;
@@ -849,6 +1026,59 @@ function finalizeEnemyDeath(
     ttl: 0.75,
     maxTtl: 0.75,
   });
+
+  // Monster Loot Drops: 2% Enhancement Gem & 0.1% Non-Duplicate Hero Equipment
+  if (lootCtx) {
+    let gemDrop = 0;
+    const itemDrops: TdEquipmentItem[] = [];
+    if (Math.random() < TD_GEM_DROP_CHANCE) {
+      gemDrop = 1;
+      w.lootGems += 1;
+      w.effects.push({
+        id: `fx-${w.idCounter++}`,
+        kind: 'HIT',
+        x: enemy.x,
+        y: enemy.y - 24,
+        radius: 16,
+        label: '+1 Ngọc Cường Hóa!',
+        color: '#22D3EE',
+        ttl: 1.1,
+        maxTtl: 1.1,
+      });
+    }
+    if (Math.random() < TD_EQUIP_DROP_CHANCE) {
+      const rolledItem = rollNonDuplicateEquipment(
+        lootCtx.ownedKeys,
+        lootCtx.unlockedHeroes
+      );
+      if (rolledItem) {
+        const key = getEquipmentUniqueKey(
+          rolledItem.towerType,
+          rolledItem.slot,
+          rolledItem.rarity
+        );
+        lootCtx.ownedKeys.add(key);
+        w.lootItems.push(rolledItem);
+        itemDrops.push(rolledItem);
+        const rMeta = TD_EQUIPMENT_RARITY_META[rolledItem.rarity];
+        w.effects.push({
+          id: `fx-${w.idCounter++}`,
+          kind: 'HIT',
+          x: enemy.x,
+          y: Math.max(36, enemy.y - 36),
+          radius: 26,
+          label: `RƠI: ${getEquipmentDisplayName(rolledItem.towerType, rolledItem.slot)} (${rMeta.shortLabel})!`,
+          color: rMeta.color,
+          ttl: 1.8,
+          maxTtl: 1.8,
+        });
+        sound.playTdUpgrade();
+      }
+    }
+    if (gemDrop > 0 || itemDrops.length > 0) {
+      lootCtx.onLoot?.(gemDrop, itemDrops);
+    }
+  }
 
   // Multi-tier Split on Death (e.g. Brood Mother -> 3 Broodlings -> 2 Mites each!)
   if (!enemy.hasSplit && enemy.splitIntoType && enemy.splitCount > 0) {
@@ -959,6 +1189,8 @@ function createInitialWorld(levelConfig: TdLevelConfig, upgrades: TdUpgrades): W
     reinforceCd: 0,
     idCounter: 1,
     finished: false,
+    lootGems: 0,
+    lootItems: [],
   };
 }
 
@@ -974,6 +1206,8 @@ function buildSnapshot(w: WorldState, levelConfig: TdLevelConfig): SnapshotView 
     prepTimer: w.prepTimer,
     meteorCd: w.meteorCd,
     reinforceCd: w.reinforceCd,
+    lootGems: w.lootGems,
+    lootItemCount: w.lootItems.length,
     towers: [...w.towers],
     enemies: [...w.enemies],
     soldiers: [...w.soldiers],
@@ -987,6 +1221,8 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
   runNonce,
   upgrades,
   unlockedTowers,
+  heroEquipment,
+  equipmentInventory,
   isPaused,
   isCompactLandscape,
   isFullscreen,
@@ -1000,6 +1236,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
   onToggleSound,
   onToggleBgm,
   onReplay,
+  onAcquireTdLoot,
   onWinLevel,
   onLoseLevel,
 }) => {
@@ -1019,11 +1256,27 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
     rolled: TdHeroArtifact;
   } | null>(null);
 
+  const heroEquipBonusMap = useMemo(() => {
+    const invById = new Map<string, TdEquipmentItem>();
+    for (const item of equipmentInventory ?? []) {
+      invById.set(item.id, item);
+    }
+    const map = new Map<TdTowerType, TdEquipmentBonuses>();
+    for (const tType of TD_TOWER_BUILD_ORDER) {
+      map.set(tType, aggregateHeroEquipmentBonuses(tType, heroEquipment, invById));
+    }
+    return map;
+  }, [equipmentInventory, heroEquipment]);
+
   const speedRef = useRef<1 | 2 | 3 | 4>(speedMult);
   const autoWaveRef = useRef<boolean>(autoWave);
   const pausedRef = useRef<boolean>(isPaused);
   const upgradesRef = useRef<TdUpgrades>(upgrades);
   const levelRef = useRef<TdLevelConfig>(levelConfig);
+  const heroEquipMapRef = useRef<Map<TdTowerType, TdEquipmentBonuses>>(heroEquipBonusMap);
+  const ownedEquipKeysRef = useRef<Set<string>>(new Set());
+  const unlockedTowersRef = useRef<TdTowerType[]>(unlockedTowers ?? DEFAULT_UNLOCKED_TOWERS);
+  const onAcquireLootRef = useRef(onAcquireTdLoot);
   const onWinRef = useRef(onWinLevel);
   const onLoseRef = useRef(onLoseLevel);
 
@@ -1048,9 +1301,26 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
   }, [levelConfig]);
 
   useEffect(() => {
+    heroEquipMapRef.current = heroEquipBonusMap;
+  }, [heroEquipBonusMap]);
+
+  useEffect(() => {
+    const nextKeys = new Set<string>();
+    for (const item of equipmentInventory ?? []) {
+      nextKeys.add(getEquipmentUniqueKey(item.towerType, item.slot, item.rarity));
+    }
+    ownedEquipKeysRef.current = nextKeys;
+  }, [equipmentInventory]);
+
+  useEffect(() => {
+    unlockedTowersRef.current = unlockedTowers ?? DEFAULT_UNLOCKED_TOWERS;
+  }, [unlockedTowers]);
+
+  useEffect(() => {
+    onAcquireLootRef.current = onAcquireTdLoot;
     onWinRef.current = onWinLevel;
     onLoseRef.current = onLoseLevel;
-  }, [onWinLevel, onLoseLevel]);
+  }, [onAcquireTdLoot, onWinLevel, onLoseLevel]);
 
   const unlockedSet = useMemo(
     () => new Set<TdTowerType>(unlockedTowers ?? DEFAULT_UNLOCKED_TOWERS),
@@ -1186,7 +1456,11 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
       enemy.hitFlashTimer = 0.12;
 
       if (enemy.hp <= 0) {
-        finalizeEnemyDeath(w, upg, lvl, enemy, sourceTowerId);
+        finalizeEnemyDeath(w, upg, lvl, enemy, sourceTowerId, {
+          ownedKeys: ownedEquipKeysRef.current,
+          unlockedHeroes: unlockedTowersRef.current,
+          onLoot: onAcquireLootRef.current,
+        });
       }
     };
 
@@ -1284,7 +1558,10 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             const finalScore = w.score + w.gold * 4 + w.lives * 120;
             w.score = finalScore;
             sound.playWin();
-            onWinRef.current(lvl.level, finalScore, stars, w.lives, w.enemiesSlain);
+            onWinRef.current(lvl.level, finalScore, stars, w.lives, w.enemiesSlain, {
+              gems: w.lootGems,
+              items: [...w.lootItems],
+            });
             return;
           } else {
             w.waveIndex += 1;
@@ -1298,6 +1575,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
       const hasteAurasForSoldiers = w.towers.filter(
         (t) => t.type === 'VALKYRIE' || t.type === 'CHRONOMANCER'
       );
+      const eqMap = heroEquipMapRef.current;
       for (let i = w.soldiers.length - 1; i >= 0; i--) {
         const s = w.soldiers[i];
         if (s.isReinforcement) {
@@ -1322,10 +1600,15 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
 
         // Apply Valkyrie & Chronomancer haste aura to nearby guards as well
         let solHasteMult = 1;
+        let solValkyrieDoubleDmg = 1;
         for (const auraTw of hasteAurasForSoldiers) {
-          const auraStats = getEffectiveTowerStats(auraTw, upg);
+          const auraStats = getEffectiveTowerStats(auraTw, upg, eqMap);
           if (dist(s.x, s.y, auraTw.x, auraTw.y) <= auraStats.range + 30) {
-            solHasteMult = Math.max(solHasteMult, 1 + auraStats.auraHastePct);
+            const valkMult = auraStats.ultimateValKyrieDouble ? 2 : 1;
+            solHasteMult = Math.max(solHasteMult, (1 + auraStats.auraHastePct) * valkMult);
+            if (auraStats.ultimateValKyrieDouble) {
+              solValkyrieDoubleDmg = 2;
+            }
           }
         }
         if (s.attackTimer > 0) s.attackTimer -= dt * solHasteMult;
@@ -1335,7 +1618,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
         const parentTower = s.towerId ? w.towers.find((t) => t.id === s.towerId) : undefined;
         const zoneCenterX = parentTower ? parentTower.x : s.homeX;
         const zoneCenterY = parentTower ? parentTower.y : s.homeY;
-        const zoneRadius = parentTower ? getEffectiveTowerStats(parentTower, upg).range : 125;
+        const zoneRadius = parentTower ? getEffectiveTowerStats(parentTower, upg, eqMap).range : 125;
 
         let targetEnemy: TdEnemyEntity | undefined;
         let bestDist = Infinity;
@@ -1402,10 +1685,17 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
               ttl: 0.24,
               maxTtl: 0.24,
             });
-            applyDamageToEnemy(w, targetEnemy, s.damage, 'PHYSICAL', s.towerId ?? undefined, {
-              armorPiercePct: s.armorPiercePct,
-              trueDamagePct: s.trueDamagePct,
-            });
+            applyDamageToEnemy(
+              w,
+              targetEnemy,
+              Math.round(s.damage * solValkyrieDoubleDmg),
+              'PHYSICAL',
+              s.towerId ?? undefined,
+              {
+                armorPiercePct: s.armorPiercePct,
+                trueDamagePct: s.trueDamagePct,
+              }
+            );
             if (s.slowPct && s.slowPct > 0) {
               targetEnemy.slowPct = Math.max(targetEnemy.slowPct, s.slowPct);
               targetEnemy.slowTimer = Math.max(targetEnemy.slowTimer, 2.2);
@@ -1415,10 +1705,17 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
               for (const nearby of w.enemies) {
                 if (nearby.id === targetEnemy.id || nearby.hp <= 0 || nearby.flying) continue;
                 if (dist(targetEnemy.x, targetEnemy.y, nearby.x, nearby.y) <= cleaveR) {
-                  applyDamageToEnemy(w, nearby, Math.round(s.damage * 0.65), 'PHYSICAL', s.towerId ?? undefined, {
-                    armorPiercePct: s.armorPiercePct,
-                    trueDamagePct: s.trueDamagePct,
-                  });
+                  applyDamageToEnemy(
+                    w,
+                    nearby,
+                    Math.round(s.damage * solValkyrieDoubleDmg * 0.65),
+                    'PHYSICAL',
+                    s.towerId ?? undefined,
+                    {
+                      armorPiercePct: s.armorPiercePct,
+                      trueDamagePct: s.trueDamagePct,
+                    }
+                  );
                   if (s.slowPct && s.slowPct > 0) {
                     nearby.slowPct = Math.max(nearby.slowPct, s.slowPct);
                     nearby.slowTimer = Math.max(nearby.slowTimer, 2.0);
@@ -1828,7 +2125,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                   ? w.towers.find((t) => t.id === gHit.towerId)
                   : undefined;
                 gHit.respawnTimer = parentBarracks
-                  ? getEffectiveTowerStats(parentBarracks, upg).soldierRespawn
+                  ? getEffectiveTowerStats(parentBarracks, upg, eqMap).soldierRespawn
                   : 5.0;
               }
             }
@@ -1846,7 +2143,10 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
           if (w.lives <= 0 && !w.finished) {
             w.finished = true;
             sound.playGameOver();
-            onLoseRef.current(w.enemiesSlain, w.score);
+            onLoseRef.current(w.enemiesSlain, w.score, {
+              gems: w.lootGems,
+              items: [...w.lootItems],
+            });
             return;
           }
           continue;
@@ -1915,6 +2215,183 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
         }
       }
 
+      // Max-Level Ultimate Cooldowns & Automatic Triggers (all heroes including BARRACKS & VALKYRIE)
+      const livingEnemies = w.enemies.filter((e) => e.hp > 0);
+      const totalEnemiesOnMap = livingEnemies.length;
+      for (const tw of w.towers) {
+        if (tw.ultimateActiveTimer && tw.ultimateActiveTimer > 0) {
+          tw.ultimateActiveTimer = Math.max(0, tw.ultimateActiveTimer - dt);
+        }
+        if (tw.ultimateCdTimer && tw.ultimateCdTimer > 0) {
+          tw.ultimateCdTimer = Math.max(0, tw.ultimateCdTimer - dt);
+        }
+        const maxLv = getTowerMaxLevel(tw.type);
+        if (tw.level < maxLv || totalEnemiesOnMap === 0) continue;
+        if ((tw.ultimateCdTimer ?? 0) > 0 || (tw.ultimateActiveTimer ?? 0) > 0) continue;
+
+        const baseStats = getEffectiveTowerStats(tw, upg, eqMap);
+        const cdrMult = Math.max(0.4, 1 - baseStats.skillCdrPct);
+        const hasEnemyInRange = livingEnemies.some(
+          (e) =>
+            (!e.flying || baseStats.canHitAir) &&
+            dist(tw.x, tw.y, e.x, e.y) <= baseStats.range
+        );
+
+        let triggered = false;
+        let baseCd = 0;
+        let activeDur = 0;
+        let ultBanner = '';
+        let ultColor = '#FACC15';
+
+        if (tw.type === 'ARCHER') {
+          if (tw.focusBranch === 'FOCUSED') {
+            if (totalEnemiesOnMap <= 2) {
+              triggered = true;
+              baseCd = 60;
+              activeDur = 3;
+              ultBanner = 'THẦN TIỄN x3!';
+              ultColor = '#FDE047';
+            }
+          } else if (totalEnemiesOnMap < 8) {
+            triggered = true;
+            baseCd = 100;
+            activeDur = 3;
+            ultBanner = 'BẠO PHONG x5!';
+            ultColor = '#38BDF8';
+          }
+        } else if (tw.type === 'BARRACKS') {
+          triggered = true;
+          baseCd = 100;
+          activeDur = 5;
+          ultBanner = 'CHÍ MẠNG +500%!';
+          ultColor = '#FB7185';
+        } else if (tw.type === 'ARTILLERY' && hasEnemyInRange) {
+          triggered = true;
+          baseCd = 100;
+          activeDur = 5;
+          ultBanner = 'CHẤN ĐỊA CHOÁNG 5%!';
+          ultColor = '#FB923C';
+        } else if (tw.type === 'VALKYRIE') {
+          triggered = true;
+          baseCd = 200;
+          activeDur = 5;
+          ultBanner = 'THÁNH QUANG x2!';
+          ultColor = '#FEF08A';
+        } else if (tw.type === 'MAGE') {
+          if (tw.focusBranch === 'FOCUSED') {
+            if (totalEnemiesOnMap <= 3) {
+              const target = [...livingEnemies].sort((a, b) => b.hp - a.hp)[0];
+              if (target) {
+                target.stunTimer = Math.max(target.stunTimer ?? 0, 3.0);
+                w.effects.push({
+                  id: `fx-${w.idCounter++}`,
+                  kind: 'FROST_NOVA',
+                  x: target.x,
+                  y: target.y,
+                  radius: 38,
+                  ttl: 0.65,
+                  maxTtl: 0.65,
+                });
+              }
+              triggered = true;
+              baseCd = 80;
+              activeDur = 3;
+              ultBanner = 'HÀN NGỤC 3s!';
+              ultColor = '#38BDF8';
+            }
+          } else if (totalEnemiesOnMap < 5) {
+            const freezeTargets = [...livingEnemies]
+              .sort((a, b) => b.hp - a.hp)
+              .slice(0, 4);
+            for (const ft of freezeTargets) {
+              ft.stunTimer = Math.max(ft.stunTimer ?? 0, 3.0);
+              w.effects.push({
+                id: `fx-${w.idCounter++}`,
+                kind: 'FROST_NOVA',
+                x: ft.x,
+                y: ft.y,
+                radius: 34,
+                ttl: 0.65,
+                maxTtl: 0.65,
+              });
+            }
+            triggered = true;
+            baseCd = 100;
+            activeDur = 0.8;
+            ultBanner = 'ĐẠI BĂNG PHONG 3s!';
+            ultColor = '#7DD3FC';
+          }
+        } else if (tw.type === 'ASSASSIN') {
+          if (tw.focusBranch === 'FOCUSED') {
+            if (totalEnemiesOnMap <= 3) {
+              triggered = true;
+              baseCd = 80;
+              activeDur = 3;
+              ultBanner = 'ẢNH SÁT 100% BK!';
+              ultColor = '#FB7185';
+            }
+          } else if (hasEnemyInRange) {
+            triggered = true;
+            baseCd = 90;
+            activeDur = 4;
+            ultBanner = 'BÃO ĐỘC x3!';
+            ultColor = '#4ADE80';
+          }
+        } else if (tw.type === 'KNIGHT_GUARD' && hasEnemyInRange) {
+          for (const sol of w.soldiers) {
+            if (sol.towerId === tw.id && !sol.isDead) {
+              sol.hp = sol.maxHp;
+            }
+          }
+          triggered = true;
+          baseCd = 90;
+          activeDur = 5;
+          ultBanner = 'LONG HỒN x2!';
+          ultColor = '#F97316';
+        } else if (tw.type === 'PYROMANCER' && hasEnemyInRange) {
+          triggered = true;
+          baseCd = 90;
+          activeDur = 4;
+          ultBanner = tw.focusBranch === 'FOCUSED' ? 'KÍCH NỔ 15%!' : 'BIỂN LỬA x2!';
+          ultColor = '#F97316';
+        } else if (tw.type === 'MECHANIST' && hasEnemyInRange) {
+          triggered = true;
+          baseCd = 85;
+          activeDur = 5;
+          ultBanner = 'QUÁ TẢI +100% TỐC!';
+          ultColor = '#38BDF8';
+        } else if (tw.type === 'CHRONOMANCER' && hasEnemyInRange) {
+          for (const en of livingEnemies) {
+            if (dist(tw.x, tw.y, en.x, en.y) <= baseStats.range) {
+              en.slowPct = Math.max(en.slowPct, 0.65);
+              en.slowTimer = Math.max(en.slowTimer, 3.0);
+            }
+          }
+          triggered = true;
+          baseCd = 95;
+          activeDur = 4;
+          ultBanner = 'NGƯNG ĐỌNG!';
+          ultColor = '#C084FC';
+        }
+
+        if (triggered) {
+          tw.ultimateActiveTimer = activeDur;
+          tw.ultimateCdTimer = Number((baseCd * cdrMult).toFixed(1));
+          w.effects.push({
+            id: `fx-${w.idCounter++}`,
+            kind: 'HIT',
+            x: tw.x,
+            y: tw.y - 26,
+            radius: 26,
+            label: ultBanner,
+            color: ultColor,
+            ttl: 1.1,
+            maxTtl: 1.1,
+          });
+          sound.playTdMagic();
+        }
+      }
+
       // Compute Valkyrie/Chronomancer Attack Speed Haste Auras & Barracks Crit Buff Auras once per tick
       const hasteAuras = w.towers.filter(
         (t) => t.type === 'VALKYRIE' || t.type === 'CHRONOMANCER'
@@ -1931,7 +2408,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
         if (tw.type === 'MAGE' && tw.level >= 4 && tw.focusBranch === 'FOCUSED') {
           tw.specialSkillTimer = Math.max(0, (tw.specialSkillTimer ?? 2.0) - dt);
           if (tw.specialSkillTimer <= 0) {
-            const mageStats = getEffectiveTowerStats(tw, upg);
+            const mageStats = getEffectiveTowerStats(tw, upg, eqMap);
             const rootTargets = w.enemies
               .filter((e) => e.hp > 0 && dist(tw.x, tw.y, e.x, e.y) <= mageStats.range)
               .sort((a, b) => b.hp - a.hp)
@@ -1962,7 +2439,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
         if (tw.type === 'KNIGHT_GUARD') {
           tw.specialSkillTimer = Math.max(0, (tw.specialSkillTimer ?? 1.2) - dt);
           if (tw.specialSkillTimer <= 0) {
-            const dragonStats = getEffectiveTowerStats(tw, upg);
+            const dragonStats = getEffectiveTowerStats(tw, upg, eqMap);
             let leadTarget: TdEnemyEntity | null = null;
             for (const e of w.enemies) {
               if (e.hp <= 0) continue;
@@ -2046,13 +2523,18 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
         // Check nearby Valkyrie / Chronomancer inspiring haste & pre-crit damage aura (normal attacks only)
         let hasteMult = 1;
         let bonusDmgMult = 0;
+        let valkyrieUltDmgMult = 1;
         for (const auraTw of hasteAuras) {
           if (auraTw.id === tw.id) continue;
-          const auraStats = getEffectiveTowerStats(auraTw, upg);
+          const auraStats = getEffectiveTowerStats(auraTw, upg, eqMap);
           if (dist(tw.x, tw.y, auraTw.x, auraTw.y) <= auraStats.range) {
-            hasteMult = Math.max(hasteMult, 1 + auraStats.auraHastePct);
+            const vUltMult = auraStats.ultimateValKyrieDouble ? 2 : 1;
+            hasteMult = Math.max(hasteMult, (1 + auraStats.auraHastePct) * vUltMult);
             if (auraTw.type === 'VALKYRIE' && auraStats.auraDamageBonusPct > 0) {
               bonusDmgMult = Math.max(bonusDmgMult, auraStats.auraDamageBonusPct);
+            }
+            if (auraStats.ultimateValKyrieDouble) {
+              valkyrieUltDmgMult = 2;
             }
           }
         }
@@ -2062,7 +2544,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
           continue;
         }
 
-        const stats = getEffectiveTowerStats(tw, upg);
+        const stats = getEffectiveTowerStats(tw, upg, eqMap);
         const inRange: TdEnemyEntity[] = [];
         for (const e of w.enemies) {
           if (e.hp <= 0) continue;
@@ -2120,7 +2602,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
         // Tesla Coil & Artillery EMP handle multi-target instant lightning bursts
         if (tw.branch === 'TESLA_COIL' || tw.mythicPath === 'ARTILLERY_EMP') {
           const chainKind = tw.type === 'ARTILLERY' ? 'SPLASH' : 'MAGIC';
-          const chainBaseDmg = Math.round(stats.damage * (1 + bonusDmgMult));
+          const chainBaseDmg = Math.round(stats.damage * (1 + bonusDmgMult) * valkyrieUltDmgMult);
           const pierceOpts = {
             armorPiercePct: stats.armorPiercePct,
             magicPiercePct: stats.magicPiercePct,
@@ -2185,18 +2667,18 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
           continue;
         }
 
-        // Compute Vệ Binh (BARRACKS) Crit Chance (+40% max at Lv30) & Crit Damage (+500% max at Lv30) Aura
+        // Compute Vệ Binh (BARRACKS) Crit Chance (+40% max at Lv30, +20% w/ Ult) & Crit Damage (+500% at Lv30, +500% w/ Ult) Aura
         let bonusCritChance = 0;
         let bonusCritDamage = 0;
         for (const critTw of critAuras) {
-          const cStats = getEffectiveTowerStats(critTw, upg);
+          const cStats = getEffectiveTowerStats(critTw, upg, eqMap);
           if (dist(tw.x, tw.y, critTw.x, critTw.y) <= cStats.range) {
             bonusCritChance = Math.max(bonusCritChance, cStats.auraCritChancePct);
             bonusCritDamage = Math.max(bonusCritDamage, cStats.auraCritDamageBonus);
           }
         }
-        bonusCritChance = Math.min(0.85, bonusCritChance);
-        bonusCritDamage = Math.min(9.0, bonusCritDamage);
+        bonusCritChance = Math.min(0.95, bonusCritChance);
+        bonusCritDamage = Math.min(15.0, bonusCritDamage);
         const effCritChance = Math.min(1, stats.critChance + bonusCritChance);
         const effCritMult = stats.critMult + bonusCritDamage;
 
@@ -2236,7 +2718,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
           tw.type === 'PYROMANCER' ||
           tw.type === 'CHRONOMANCER';
 
-        const normalDmgWithAura = Math.round(stats.damage * (1 + bonusDmgMult));
+        const normalDmgWithAura = Math.round(stats.damage * (1 + bonusDmgMult) * valkyrieUltDmgMult);
         targets.forEach((tgt, idx) => {
           let finalDmg = normalDmgWithAura;
           let isCrit = false;
@@ -2294,7 +2776,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             detonateMult: stats.detonateMult,
             detonateRadius: stats.detonateRadius,
             stunChance: stats.stunChance,
-            stunDuration: 1.2,
+            stunDuration: stats.stunDuration ?? 1.2,
             chainCount: stats.chainCount,
             armorPierce: isMagicType || tw.type === 'KNIGHT_GUARD' || tw.type === 'MECHANIST',
             armorPiercePct: stats.armorPiercePct,
@@ -2302,6 +2784,8 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             trueDamagePct: stats.trueDamagePct,
             isCrit,
             canExecuteBelowPct: stats.executeBelowPct,
+            wingsSplashSharePct: stats.wingsSplashSharePct,
+            wingsSplashRadius: stats.wingsSplashSharePct > 0 ? 72 : 0,
             sourceTowerId: tw.id,
           });
         });
@@ -2405,6 +2889,36 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
           } else {
             if (liveTarget) {
               applyDamageToEnemy(w, liveTarget, p.damage, p.damageKind, p.sourceTowerId, pierceOpts);
+              if (
+                liveTarget.hp > 0 &&
+                p.stunChance &&
+                p.stunChance > 0 &&
+                Math.random() < p.stunChance
+              ) {
+                const stDur = p.stunDuration ?? 1.2;
+                liveTarget.stunTimer = Math.max(liveTarget.stunTimer ?? 0, stDur);
+                w.effects.push({
+                  id: `fx-${w.idCounter++}`,
+                  kind: 'STUN',
+                  x: liveTarget.x,
+                  y: liveTarget.y - 10,
+                  radius: Math.max(16, liveTarget.radius + 6),
+                  label: stDur >= 2.5 ? `CHOÁNG ${stDur.toFixed(0)}s!` : 'CHOÁNG!',
+                  ttl: 0.65,
+                  maxTtl: 0.65,
+                });
+              }
+              // Wings Equipment Splash Damage to nearby enemies
+              if (p.wingsSplashSharePct && p.wingsSplashSharePct > 0) {
+                const wRadius = p.wingsSplashRadius ?? 72;
+                const wSplashDmg = Math.max(1, Math.round(p.damage * p.wingsSplashSharePct));
+                for (const nearby of [...w.enemies]) {
+                  if (nearby.id === liveTarget.id || nearby.hp <= 0) continue;
+                  if (dist(liveTarget.x, liveTarget.y, nearby.x, nearby.y) <= wRadius) {
+                    applyDamageToEnemy(w, nearby, wSplashDmg, p.damageKind, p.sourceTowerId, pierceOpts);
+                  }
+                }
+              }
               // Sát Thủ (FOCUSED): Execute enemy immediately if HP < 10%
               if (
                 p.canExecuteBelowPct &&
@@ -2413,7 +2927,11 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                 liveTarget.hp < liveTarget.maxHp * p.canExecuteBelowPct
               ) {
                 liveTarget.hp = 0;
-                finalizeEnemyDeath(w, upg, lvl, liveTarget, p.sourceTowerId);
+                finalizeEnemyDeath(w, upg, lvl, liveTarget, p.sourceTowerId, {
+                  ownedKeys: ownedEquipKeysRef.current,
+                  unlockedHeroes: unlockedTowersRef.current,
+                  onLoot: onAcquireLootRef.current,
+                });
                 w.effects.push({
                   id: `fx-${w.idCounter++}`,
                   kind: 'HIT',
@@ -2669,7 +3187,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
       w.towers.push(newTower);
 
       if (isGarrisonTower(type)) {
-        const stats = getEffectiveTowerStats(newTower, upgradesRef.current);
+        const stats = getEffectiveTowerStats(newTower, upgradesRef.current, heroEquipMapRef.current);
         for (let slot = 0; slot < stats.soldierCount; slot++) {
           const pos = getSoldierFormationPos(pad.rallyX, pad.rallyY, slot);
           w.soldiers.push({
@@ -2777,7 +3295,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
 
       // Refresh garrison soldier stats, visual tier/branch/mythic path & staggered training for new slots
       if (isGarrisonTower(tw.type)) {
-        const stats = getEffectiveTowerStats(tw, upgradesRef.current);
+        const stats = getEffectiveTowerStats(tw, upgradesRef.current, heroEquipMapRef.current);
         const existing = w.soldiers.filter((s) => s.towerId === tw.id);
         if (existing.length > stats.soldierCount) {
           const toRemove = new Set(existing.slice(stats.soldierCount).map((s) => s.id));
@@ -2886,7 +3404,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
 
   const syncGarrisonWithTowerStats = (w: WorldState, tw: TdBuiltTower, upg: TdUpgrades) => {
     if (!isGarrisonTower(tw.type)) return;
-    const stats = getEffectiveTowerStats(tw, upg);
+    const stats = getEffectiveTowerStats(tw, upg, heroEquipMapRef.current);
     const activeExisting = w.soldiers.filter((s) => s.towerId === tw.id);
     for (const s of activeExisting) {
       const hpRatio = s.maxHp > 0 ? s.hp / s.maxHp : 1;
@@ -3000,7 +3518,11 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             en.hp -= dmg;
             en.hitFlashTimer = 0.25;
             if (en.hp <= 0) {
-              finalizeEnemyDeath(w, upg, levelConfig, en);
+              finalizeEnemyDeath(w, upg, levelConfig, en, undefined, {
+                ownedKeys: ownedEquipKeysRef.current,
+                unlockedHeroes: unlockedTowersRef.current,
+                onLoot: onAcquireLootRef.current,
+              });
             }
           }
         }
@@ -3063,7 +3585,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
       if (targeting.kind === 'RALLY') {
         const tw = w.towers.find((t) => t.id === targeting.towerId);
         if (tw) {
-          const stats = getEffectiveTowerStats(tw, upg);
+          const stats = getEffectiveTowerStats(tw, upg, heroEquipMapRef.current);
           const d = dist(tw.x, tw.y, pt.x, pt.y);
           let rx = pt.x;
           let ry = pt.y;
@@ -3234,7 +3756,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             <circle
               cx={selectedTower.x}
               cy={selectedTower.y}
-              r={getEffectiveTowerStats(selectedTower, upgrades).range}
+              r={getEffectiveTowerStats(selectedTower, upgrades, heroEquipBonusMap).range}
               fill={
                 targeting.kind === 'RALLY'
                   ? 'rgba(34,197,94,0.13)'
@@ -3265,7 +3787,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
         {/* Ambient Support Aura Rings (Vệ Binh Crit Aura & Thánh Nữ Haste Aura) */}
         {snap.towers.map((tw) => {
           if (tw.type !== 'BARRACKS' && tw.type !== 'VALKYRIE') return null;
-          const auraR = getEffectiveTowerStats(tw, upgrades).range;
+          const auraR = getEffectiveTowerStats(tw, upgrades, heroEquipBonusMap).range;
           const isCritAura = tw.type === 'BARRACKS';
           return (
             <circle
@@ -3288,6 +3810,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
           const built = snap.towers.find((t) => t.padId === pad.id);
           if (built) {
             const isSel = selectedTowerId === built.id;
+            const hasUltActive = (built.ultimateActiveTimer ?? 0) > 0;
             return (
               <g
                 key={pad.id}
@@ -3300,6 +3823,18 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                 }}
                 className="cursor-pointer"
               >
+                {hasUltActive && (
+                  <ellipse
+                    cx="0"
+                    cy="12"
+                    rx="30"
+                    ry="14"
+                    fill="rgba(250,204,21,0.18)"
+                    stroke="#FACC15"
+                    strokeWidth="2.4"
+                    className="pointer-events-none"
+                  />
+                )}
                 {isSel && (
                   <ellipse cx="0" cy="14" rx="27" ry="12" fill="none" stroke="#FACC15" strokeWidth="2.5" />
                 )}
@@ -4147,7 +4682,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
           ? cfg.branches.find((b) => b.id === selectedTower.branch)
           : undefined;
         const mythicCfg = getMythicPathConfig(selectedTower.type, selectedTower.mythicPath);
-        const eff = getEffectiveTowerStats(selectedTower, upgrades);
+        const eff = getEffectiveTowerStats(selectedTower, upgrades, heroEquipBonusMap);
         const atkSpd = (1 / eff.cooldown).toFixed(1);
         const refundGold = Math.round(selectedTower.totalSpent * getRefundRate(upgrades));
 
@@ -4156,10 +4691,11 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
         let recvCritDmg = 0;
         let recvHaste = 0;
         let recvDmgBonus = 0;
+        let recvValkyrieDouble = false;
         if (selectedTower.type !== 'BARRACKS' && selectedTower.type !== 'VALKYRIE') {
           for (const ally of snap.towers) {
             if (ally.id === selectedTower.id) continue;
-            const allyStats = getEffectiveTowerStats(ally, upgrades);
+            const allyStats = getEffectiveTowerStats(ally, upgrades, heroEquipBonusMap);
             if (dist(selectedTower.x, selectedTower.y, ally.x, ally.y) <= allyStats.range) {
               if (ally.type === 'BARRACKS') {
                 recvCritChance = Math.max(recvCritChance, allyStats.auraCritChancePct);
@@ -4171,10 +4707,13 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
               if (ally.type === 'VALKYRIE' && allyStats.auraDamageBonusPct > 0) {
                 recvDmgBonus = Math.max(recvDmgBonus, allyStats.auraDamageBonusPct);
               }
+              if (allyStats.ultimateValKyrieDouble) {
+                recvValkyrieDouble = true;
+              }
             }
           }
-          recvCritChance = Math.min(0.85, recvCritChance);
-          recvCritDmg = Math.min(9.0, recvCritDmg);
+          recvCritChance = Math.min(0.95, recvCritChance);
+          recvCritDmg = Math.min(15.0, recvCritDmg);
         }
 
         const scaleSlotCost = (base: number) =>
@@ -4188,21 +4727,28 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             { label: 'Tầm', value: `${eff.range}px` }
           );
         } else if (selectedTower.type === 'VALKYRIE') {
+          const valkHasteDisplay = eff.ultimateValKyrieDouble
+            ? `${Math.round(eff.auraHastePct * 100)}% (x2)`
+            : `+${Math.round(eff.auraHastePct * 100)}%`;
+          const valkDmgDisplay = eff.ultimateValKyrieDouble
+            ? `+${eff.auraDamageBonusPct.toFixed(1)}x (x2)`
+            : `+${eff.auraDamageBonusPct.toFixed(1)}x`;
           statCells.push(
-            { label: 'Buff Tốc', value: `+${Math.round(eff.auraHastePct * 100)}%`, tone: 'text-amber-300' },
-            { label: 'Buff ST', value: `+${eff.auraDamageBonusPct.toFixed(1)}x`, tone: 'text-rose-300' },
+            { label: 'Buff Tốc', value: valkHasteDisplay, tone: 'text-amber-300' },
+            { label: 'Buff ST', value: valkDmgDisplay, tone: 'text-rose-300' },
             { label: 'Tầm', value: `${eff.range}px` }
           );
         } else {
           const totalTargets = eff.chainCount > 0 ? eff.chainCount : eff.targetCount;
           const totalCritPct = Math.min(100, Math.round((eff.critChance + recvCritChance) * 100));
           const totalCritMult = (eff.critMult + recvCritDmg).toFixed(1);
-          const effectiveSpd = (Number(atkSpd) * (1 + recvHaste)).toFixed(1);
-          const displayDmg = recvDmgBonus > 0 ? Math.round(eff.damage * (1 + recvDmgBonus)) : eff.damage;
+          const doubleMult = recvValkyrieDouble ? 2 : 1;
+          const effectiveSpd = (Number(atkSpd) * (1 + recvHaste) * doubleMult).toFixed(1);
+          const displayDmg = Math.round(eff.damage * (1 + recvDmgBonus) * doubleMult);
 
           statCells.push(
-            { label: 'Sát thương', value: recvDmgBonus > 0 ? `${displayDmg} (+${recvDmgBonus.toFixed(1)}x)` : `${displayDmg}`, tone: 'text-amber-300' },
-            { label: 'Tốc đánh', value: recvHaste > 0 ? `${effectiveSpd}/s` : `${atkSpd}/s` },
+            { label: 'Sát thương', value: recvDmgBonus > 0 || recvValkyrieDouble ? `${displayDmg}${recvValkyrieDouble ? ' (x2)' : ''}` : `${displayDmg}`, tone: 'text-amber-300' },
+            { label: 'Tốc đánh', value: recvHaste > 0 || recvValkyrieDouble ? `${effectiveSpd}/s` : `${atkSpd}/s` },
             { label: 'Tầm', value: `${eff.range}px` },
             { label: 'Mục tiêu', value: eff.splashRadius > 0 ? `Vùng ${eff.splashRadius}px` : `${totalTargets}` }
           );
@@ -4263,8 +4809,13 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
           if (eff.trueDamagePct > 0) {
             statCells.push({ label: 'ST Chuẩn', value: `${Math.round(eff.trueDamagePct * 100)}%` });
           }
+          if (eff.wingsSplashSharePct > 0) {
+            statCells.push({ label: 'Lan Cánh', value: `${Math.round(eff.wingsSplashSharePct * 100)}%`, tone: 'text-pink-300' });
+          }
           statCells.push({ label: 'Hạ gục', value: `${selectedTower.kills}` });
         }
+
+        const ultMeta = getHeroMaxUltimateInfo(selectedTower.type, selectedTower.focusBranch);
 
         return (
           <div
@@ -4342,6 +4893,28 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                   </span>
                 </div>
               ))}
+            </div>
+
+            {/* Max-Level Ultimate Status */}
+            <div
+              className={`rounded-lg border px-2 py-1 flex items-center justify-between gap-1.5 text-[9.5px] ${
+                selectedTower.level >= maxLv
+                  ? 'bg-amber-950/50 border-amber-400/60 text-amber-200'
+                  : 'bg-[#131C31] border-slate-800 text-slate-400'
+              }`}
+            >
+              <span className="font-extrabold truncate">
+                ⚡ {ultMeta.name}
+              </span>
+              <span className="font-mono-num font-bold shrink-0">
+                {selectedTower.level < maxLv
+                  ? `Mở Lv${maxLv}`
+                  : (selectedTower.ultimateActiveTimer ?? 0) > 0
+                    ? `Đang bật (${(selectedTower.ultimateActiveTimer ?? 0).toFixed(1)}s)`
+                    : (selectedTower.ultimateCdTimer ?? 0) > 0
+                      ? `CD ${Math.ceil(selectedTower.ultimateCdTimer ?? 0)}s`
+                      : 'Sẵn sàng'}
+              </span>
             </div>
 
             {/* Hero Thần Khí (Unlocks at Lv 20, costs 10,000g per roll) */}
@@ -4792,6 +5365,15 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
               {snap.waveNumber}/{snap.totalWaves}
             </div>
           </div>
+
+          {(snap.lootGems > 0 || snap.lootItemCount > 0) && (
+            <div className="rounded-md bg-cyan-950/70 border border-cyan-500/40 px-0.5 py-0.5 text-center leading-tight">
+              <Gem className="w-2.5 h-2.5 text-cyan-300 mx-auto" />
+              <div className="font-mono-num text-[8.5px] font-extrabold text-cyan-200">
+                {snap.lootGems}/{snap.lootItemCount}
+              </div>
+            </div>
+          )}
         </aside>
 
         {/* Center Battlefield */}
@@ -4962,6 +5544,15 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
               <Coins className="w-4 h-4" />
               <span>{snap.gold}</span>
             </div>
+
+            {(snap.lootGems > 0 || snap.lootItemCount > 0) && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-cyan-950/60 border border-cyan-500/50 font-mono-num text-xs font-extrabold text-cyan-200">
+                <Gem className="w-3.5 h-3.5 text-cyan-300" />
+                <span>
+                  {snap.lootGems} Ngọc · {snap.lootItemCount} Đồ
+                </span>
+              </div>
+            )}
 
             <button
               type="button"

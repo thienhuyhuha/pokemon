@@ -1,42 +1,30 @@
 import React, { useState } from 'react';
 import {
-  Castle,
+  Backpack,
   Cloud,
   Gem,
   Grid3X3,
   Music,
   Play,
+  Shield,
+  Sparkles,
   Star,
   UserCircle2,
   Volume2,
   VolumeX,
 } from 'lucide-react';
-import { DIAMOND_MAX_LEVEL } from '../data/diamondLevels';
-import { MAX_LEVEL } from '../data/levels';
-import {
-  CHIBIMON_COVER_URL,
-  DIAMOND_COVER_URL,
-  PokemonArtwork,
-  TD_COVER_URL,
-} from '../data/pokemonSprites';
+import { TD_COVER_URL } from '../data/tdAssets';
 import { getTotalStarsEarnedInTd, TD_MAX_LEVEL } from '../data/tdLevels';
 import { CloudSyncStatus } from '../firebase';
-import { DiamondSaveData, GameId } from '../types/diamond';
-import { SaveData } from '../types/game';
 import { TdSaveData } from '../types/towerDefense';
 import { RememberedAccount } from '../utils/localAccountCache';
 import { AccountBar } from './AccountBar';
-import { DiamondArtwork } from './DiamondArtwork';
+import { CastleShieldLogo } from './CastleShieldLogo';
 import { MobileAccountSheet, MobileBottomNav } from './MobileBottomNav';
-import { PokeballIcon } from './PokeballIcon';
 import { PWAInstallButton } from './PWAInstallButton';
 import { TdEnemyPreview, TdTowerPreview } from './TdArtwork';
 
 interface TitleScreenProps {
-  activeGame: GameId;
-  onSelectGame: (game: GameId) => void;
-  saveData: SaveData;
-  diamondSaveData: DiamondSaveData;
   tdSaveData: TdSaveData;
   activeAccount: RememberedAccount | null;
   hasLiveCloudAuth: boolean;
@@ -45,25 +33,19 @@ interface TitleScreenProps {
   syncStatus: CloudSyncStatus;
   authError: string | null;
   showRedirectFallback: boolean;
+  soundEnabled: boolean;
+  bgmEnabled: boolean;
   onSignIn: (forceSelectAccount?: boolean) => void;
   onSignInRedirect: () => void;
   onSignOut: () => void;
-  onStartCurrentLevel: () => void;
-  onOpenLevelSelect: () => void;
-  onStartDiamondCurrentLevel: () => void;
-  onOpenDiamondLevelSelect: () => void;
   onStartTdCurrentLevel: () => void;
   onOpenTdLevelSelect: () => void;
+  onOpenInventory: () => void;
   onToggleSound: () => void;
-  bgmEnabled: boolean;
   onToggleBgm: () => void;
 }
 
 export const TitleScreen: React.FC<TitleScreenProps> = ({
-  activeGame,
-  onSelectGame,
-  saveData,
-  diamondSaveData,
   tdSaveData,
   activeAccount,
   hasLiveCloudAuth,
@@ -72,47 +54,39 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
   syncStatus,
   authError,
   showRedirectFallback,
+  soundEnabled,
+  bgmEnabled,
   onSignIn,
   onSignInRedirect,
   onSignOut,
-  onStartCurrentLevel,
-  onOpenLevelSelect,
-  onStartDiamondCurrentLevel,
-  onOpenDiamondLevelSelect,
   onStartTdCurrentLevel,
   onOpenTdLevelSelect,
+  onOpenInventory,
   onToggleSound,
-  bgmEnabled,
   onToggleBgm,
 }) => {
-  const [chibiImgErr, setChibiImgErr] = useState(false);
-  const [diamondImgErr, setDiamondImgErr] = useState(false);
   const [tdImgErr, setTdImgErr] = useState(false);
   const [accountSheetOpen, setAccountSheetOpen] = useState(false);
 
-  const isDiamond = activeGame === 'DIAMOND';
-  const isTd = activeGame === 'TOWER_DEFENSE';
-
-  const currentLevel = Math.min(MAX_LEVEL, saveData.highestUnlockedLevel);
-  const totalStars = Object.values(saveData.levels).reduce((acc, l) => acc + l.stars, 0);
-
-  const diamondLevel = Math.min(DIAMOND_MAX_LEVEL, diamondSaveData.highestUnlockedLevel);
-  const diamondStars = Object.values(diamondSaveData.levels).reduce((acc, l) => acc + l.stars, 0);
-
   const tdLevel = Math.min(TD_MAX_LEVEL, tdSaveData.highestUnlockedLevel);
-  const tdStars = getTotalStarsEarnedInTd(tdSaveData.levels);
+  const tdStars = getTotalStarsEarnedInTd(tdSaveData.levels, tdSaveData.bonusStars);
+  const gems = tdSaveData.enhancementGems ?? 0;
+  const equipCount = tdSaveData.equipmentInventory?.length ?? 0;
 
   return (
     <div className="min-h-screen bg-[#0B1120] text-slate-100 flex flex-col">
       {/* Mobile Compact Header */}
-      <header className="md:hidden sticky top-0 z-30 w-full bg-[#111827]/95 backdrop-blur-sm border-b border-slate-800 px-4 h-13 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 shrink-0">
-          <PokeballIcon variant="poke" className="w-5 h-5 shrink-0" />
-          <Gem className="w-4 h-4 text-cyan-300 shrink-0" />
-          <Castle className="w-4 h-4 text-[#FACC15] shrink-0" />
-          <span className="font-display text-base font-extrabold tracking-tight text-white whitespace-nowrap">
-            Đấu Trường Game
-          </span>
+      <header className="md:hidden sticky top-0 z-30 w-full bg-[#111827]/95 backdrop-blur-sm border-b border-slate-800 px-4 h-14 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 shrink-0">
+          <CastleShieldLogo className="w-8 h-8 shrink-0" />
+          <div className="flex flex-col leading-tight">
+            <span className="font-display text-base font-extrabold tracking-tight text-white whitespace-nowrap">
+              Vệ Thành Quái Thú
+            </span>
+            <span className="text-[10px] font-semibold text-amber-300/90">
+              Thủ Thành Chiến Thuật {TD_MAX_LEVEL} Ải
+            </span>
+          </div>
         </div>
 
         <button
@@ -139,14 +113,17 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 
       {/* Desktop Header */}
       <header className="hidden md:block w-full bg-[#111827]/95 border-b border-slate-800">
-        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between gap-6">
-          <div className="flex items-center gap-2.5 shrink-0">
-            <PokeballIcon variant="poke" className="w-6 h-6 shrink-0" />
-            <Gem className="w-5 h-5 text-cyan-300 shrink-0" />
-            <Castle className="w-5 h-5 text-[#FACC15] shrink-0" />
-            <span className="font-display text-xl font-extrabold tracking-tight text-white whitespace-nowrap">
-              Đấu Trường Game
-            </span>
+        <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between gap-6">
+          <div className="flex items-center gap-3 shrink-0">
+            <CastleShieldLogo className="w-9 h-9 shrink-0" />
+            <div className="flex flex-col leading-tight">
+              <span className="font-display text-xl font-extrabold tracking-tight text-white whitespace-nowrap">
+                Vệ Thành Quái Thú
+              </span>
+              <span className="text-[11px] font-semibold text-amber-300/85">
+                Phòng Thủ Thành Quách & Trang Bị Anh Hùng
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
@@ -166,7 +143,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
               title={bgmEnabled ? 'Tắt nhạc nền' : 'Bật nhạc nền'}
               aria-label={bgmEnabled ? 'Tắt nhạc nền' : 'Bật nhạc nền'}
               className={`p-2 rounded-lg border border-slate-700 transition-colors cursor-pointer shrink-0 ${
-                bgmEnabled && saveData.soundEnabled
+                bgmEnabled && soundEnabled
                   ? 'bg-[#1E293B] text-[#FACC15] hover:bg-slate-700'
                   : 'bg-[#1E293B] text-slate-500 hover:text-white'
               }`}
@@ -176,10 +153,10 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             <button
               type="button"
               onClick={onToggleSound}
-              aria-label={saveData.soundEnabled ? 'Tắt âm thanh' : 'Bật âm thanh'}
+              aria-label={soundEnabled ? 'Tắt âm thanh' : 'Bật âm thanh'}
               className="p-2 rounded-lg border border-slate-700 bg-[#1E293B] text-white hover:bg-slate-700 transition-colors cursor-pointer shrink-0"
             >
-              {saveData.soundEnabled ? (
+              {soundEnabled ? (
                 <Volume2 className="w-4 h-4" />
               ) : (
                 <VolumeX className="w-4 h-4" />
@@ -189,8 +166,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
         </div>
       </header>
 
-      {/* Center Iconic 3-Game Selector Board */}
-      <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 pt-5 pb-24 md:py-10 flex flex-col justify-center gap-6">
+      {/* Main Tower Defense Showcase */}
+      <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 pt-5 pb-24 md:py-8 flex flex-col justify-center gap-5">
         {authError && (
           <div className="rounded-xl bg-rose-950/70 border border-rose-700/70 px-4 py-3 text-xs sm:text-sm text-rose-100 flex flex-wrap items-center justify-between gap-3">
             <span>{authError}</span>
@@ -207,287 +184,163 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
           </div>
         )}
 
-        {/* Triple Iconic Game Cards */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch">
-          {/* Game 1: ChibiMon 200 */}
-          <div
-            onClick={() => onSelectGame('CHIBIMON')}
-            className={`group rounded-2xl overflow-hidden bg-[#131C31] border-2 transition-all flex flex-col shadow-2xl ${
-              activeGame === 'CHIBIMON'
-                ? 'border-[#FACC15] shadow-[0_14px_40px_rgba(234,179,8,0.18)]'
-                : 'border-slate-800 hover:border-slate-600'
-            }`}
+        <section className="rounded-3xl overflow-hidden bg-[#131C31] border-2 border-amber-500/60 shadow-[0_20px_60px_rgba(245,158,11,0.16)] grid grid-cols-1 lg:grid-cols-12">
+          {/* Artwork Side */}
+          <button
+            type="button"
+            onClick={onStartTdCurrentLevel}
+            aria-label={`Chơi Vệ Thành Quái Thú ải ${tdLevel}`}
+            className="lg:col-span-7 relative min-h-[240px] sm:min-h-[310px] overflow-hidden bg-[#431407] cursor-pointer text-left group focus:outline-none"
           >
-            <button
-              type="button"
-              onClick={() => {
-                onSelectGame('CHIBIMON');
-                onStartCurrentLevel();
-              }}
-              aria-label={`Chơi ChibiMon 200 cấp ${currentLevel}`}
-              className="relative w-full aspect-[4/3] overflow-hidden bg-[#14532D] cursor-pointer text-left focus:outline-none"
-            >
-              {!chibiImgErr ? (
-                <img
-                  src={CHIBIMON_COVER_URL}
-                  alt="ChibiMon 200"
-                  referrerPolicy="no-referrer"
-                  onError={() => setChibiImgErr(true)}
-                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                />
-              ) : (
-                <div className="w-full h-full bg-gradient-to-br from-[#DC2626] via-[#14532D] to-[#0F172A]" />
-              )}
-              <div className="absolute inset-0 bg-gradient-to-t from-[#131C31] via-[#131C31]/25 to-transparent" />
+            {!tdImgErr ? (
+              <img
+                src={TD_COVER_URL}
+                alt="Vệ Thành Quái Thú"
+                referrerPolicy="no-referrer"
+                onError={() => setTdImgErr(true)}
+                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-[#EA580C] via-[#7C2D12] to-[#0F172A]" />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#131C31] via-[#131C31]/35 to-transparent" />
 
-              <div className="absolute bottom-3 left-3.5 right-3.5 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-10 h-10 rounded-xl bg-[#DC2626] border-2 border-[#FACC15] flex items-center justify-center shadow-lg">
-                    <PokeballIcon variant="poke" className="w-6 h-6" />
-                  </div>
-                  <div className="flex items-center -space-x-1.5">
-                    {[1, 2, 3].map((id) => (
-                      <div
-                        key={id}
-                        className="w-8 h-8 rounded-lg bg-white border-2 border-slate-900 p-0.5 shadow-md"
-                      >
-                        <PokemonArtwork speciesId={id} className="w-full h-full" />
-                      </div>
-                    ))}
+            {/* Top Left Emblem */}
+            <div className="absolute top-3.5 left-3.5 flex items-center gap-2 rounded-xl bg-[#0F172A]/85 backdrop-blur-sm border border-amber-400/50 px-3 py-1.5 shadow-lg">
+              <CastleShieldLogo className="w-6 h-6 shrink-0" />
+              <span className="text-xs font-extrabold text-amber-300">
+                Ải {tdLevel}/{TD_MAX_LEVEL}
+              </span>
+            </div>
+
+            {/* Bottom Hero Lineup */}
+            <div className="absolute bottom-3.5 left-3.5 right-3.5 flex items-center justify-between gap-2">
+              <div className="flex items-center -space-x-1.5">
+                <div className="w-10 h-10 rounded-xl bg-[#0F172A]/95 border-2 border-slate-700 flex items-center justify-center shadow-md p-0.5">
+                  <TdTowerPreview type="ARCHER" level={4} branch="SNIPER_CRIT" className="w-8 h-8" />
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-[#0F172A]/95 border-2 border-slate-700 flex items-center justify-center shadow-md p-0.5">
+                  <TdTowerPreview type="MAGE" level={4} branch="STORM_CHAIN" className="w-8 h-8" />
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-[#0F172A]/95 border-2 border-slate-700 flex items-center justify-center shadow-md p-0.5">
+                  <TdTowerPreview type="ASSASSIN" level={4} branch="SHADOW_BLADE" className="w-8 h-8" />
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-[#0F172A]/95 border-2 border-slate-700 flex items-center justify-center shadow-md p-0.5">
+                  <TdTowerPreview type="VALKYRIE" level={4} branch="SOLAR_SERAPH" className="w-8 h-8" />
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-[#0F172A]/95 border-2 border-rose-700/80 flex items-center justify-center shadow-md p-0.5">
+                  <TdEnemyPreview type="BOSS" className="w-8 h-8" />
+                </div>
+              </div>
+
+              <span className="inline-flex items-center gap-1 rounded-lg bg-[#0F172A]/90 border border-amber-400/50 px-2.5 py-1 font-mono-num text-xs font-extrabold text-[#FACC15]">
+                <Star className="w-3.5 h-3.5 fill-[#FACC15]" />
+                {tdStars}
+              </span>
+            </div>
+          </button>
+
+          {/* Controls & Stats Side */}
+          <div className="lg:col-span-5 p-5 sm:p-6 flex flex-col justify-between gap-5">
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-2.5">
+                <CastleShieldLogo className="w-10 h-10 shrink-0" />
+                <div>
+                  <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                    Vệ Thành Quái Thú
+                  </h1>
+                  <p className="text-xs text-slate-400">
+                    Triệu hồi 10 tướng thủ thành, săn trang bị hiếm & kích hoạt tuyệt chiêu tối thượng
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 pt-1">
+                <div className="rounded-xl bg-[#0F172A] border border-slate-800 px-3 py-2">
+                  <div className="text-[11px] text-slate-400">Sao Tích Lũy</div>
+                  <div className="font-mono-num text-base font-extrabold text-[#FACC15] flex items-center gap-1">
+                    <Star className="w-3.5 h-3.5 fill-[#FACC15]" />
+                    {tdStars}
                   </div>
                 </div>
-
-                <span className="inline-flex items-center gap-1 font-mono-num text-xs font-extrabold text-[#FACC15]">
-                  <Star className="w-3.5 h-3.5 fill-[#FACC15]" />
-                  {totalStars}
-                </span>
+                <div className="rounded-xl bg-[#0F172A] border border-slate-800 px-3 py-2">
+                  <div className="text-[11px] text-slate-400">Ngọc C.Hóa</div>
+                  <div className="font-mono-num text-base font-extrabold text-cyan-300 flex items-center gap-1">
+                    <Gem className="w-3.5 h-3.5 text-cyan-300" />
+                    {gems}
+                  </div>
+                </div>
+                <div className="rounded-xl bg-[#0F172A] border border-slate-800 px-3 py-2">
+                  <div className="text-[11px] text-slate-400">Trang Bị</div>
+                  <div className="font-mono-num text-base font-extrabold text-emerald-300 flex items-center gap-1">
+                    <Shield className="w-3.5 h-3.5 text-emerald-400" />
+                    {equipCount}
+                  </div>
+                </div>
               </div>
-            </button>
+            </div>
 
-            <div className="p-4 flex flex-col gap-3">
-              <div className="flex items-baseline justify-between gap-2">
-                <h2 className="font-display text-xl font-extrabold text-white tracking-tight">
-                  ChibiMon 200
-                </h2>
-                <span className="font-mono-num text-xs font-bold text-yellow-300 whitespace-nowrap">
-                  Cấp {currentLevel}/200
-                </span>
-              </div>
+            <div className="flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={onStartTdCurrentLevel}
+                className="w-full min-h-[48px] rounded-xl bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-400 hover:to-amber-300 text-slate-950 font-extrabold text-sm sm:text-base flex items-center justify-center gap-2 transition-all cursor-pointer shadow-[0_4px_0_#9A3412] active:translate-y-[1px]"
+              >
+                <Play className="w-5 h-5 fill-current" />
+                Chơi Ngay — Ải {tdLevel}
+              </button>
 
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2.5">
                 <button
                   type="button"
-                  onClick={() => {
-                    onSelectGame('CHIBIMON');
-                    onStartCurrentLevel();
-                  }}
-                  className="col-span-2 min-h-[44px] rounded-xl bg-[#FACC15] hover:bg-yellow-300 text-slate-950 font-extrabold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-[0_3px_0_#A16207] active:translate-y-[1px]"
+                  onClick={onOpenTdLevelSelect}
+                  className="min-h-[44px] px-3 rounded-xl bg-[#1E293B] hover:bg-slate-700 border border-slate-600 text-slate-100 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                 >
-                  <Play className="w-4 h-4 fill-current" />
-                  Chơi ngay
+                  <Grid3X3 className="w-4 h-4 text-orange-300 shrink-0" />
+                  <span>Bản Đồ {TD_MAX_LEVEL} Ải</span>
                 </button>
+
                 <button
                   type="button"
-                  onClick={() => {
-                    onSelectGame('CHIBIMON');
-                    onOpenLevelSelect();
-                  }}
-                  className="min-h-[44px] rounded-xl bg-[#1E293B] hover:bg-slate-700 border border-slate-700 text-slate-100 font-bold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                  onClick={onOpenInventory}
+                  className="min-h-[44px] px-3 rounded-xl bg-cyan-950/70 hover:bg-cyan-900/70 border border-cyan-500/60 text-cyan-200 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                 >
-                  <Grid3X3 className="w-3.5 h-3.5 text-[#FACC15]" />
-                  <span>200</span>
+                  <Backpack className="w-4 h-4 text-cyan-300 shrink-0" />
+                  <span>Kho Đồ ({equipCount})</span>
                 </button>
               </div>
             </div>
           </div>
+        </section>
 
-          {/* Game 2: Kim Cương 100 */}
-          <div
-            onClick={() => onSelectGame('DIAMOND')}
-            className={`group rounded-2xl overflow-hidden bg-[#131C31] border-2 transition-all flex flex-col shadow-2xl ${
-              activeGame === 'DIAMOND'
-                ? 'border-cyan-400 shadow-[0_14px_40px_rgba(34,211,238,0.18)]'
-                : 'border-slate-800 hover:border-slate-600'
-            }`}
-          >
-            <button
-              type="button"
-              onClick={() => {
-                onSelectGame('DIAMOND');
-                onStartDiamondCurrentLevel();
-              }}
-              aria-label={`Chơi Kim Cương 100 màn ${diamondLevel}`}
-              className="relative w-full aspect-[4/3] overflow-hidden bg-[#083344] cursor-pointer text-left focus:outline-none"
-            >
-              {!diamondImgErr ? (
-                <img
-                  src={DIAMOND_COVER_URL}
-                  alt="Kim Cương 100"
-                  referrerPolicy="no-referrer"
-                  onError={() => setDiamondImgErr(true)}
-                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                />
-              ) : (
-                <div className="w-full h-full bg-gradient-to-br from-[#0891B2] via-[#1E3A8A] to-[#0F172A]" />
-              )}
-              <div className="absolute inset-0 bg-gradient-to-t from-[#131C31] via-[#131C31]/25 to-transparent" />
-
-              <div className="absolute bottom-3 left-3.5 right-3.5 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-10 h-10 rounded-xl bg-[#0E7490] border-2 border-cyan-300 flex items-center justify-center shadow-lg p-1.5">
-                    <DiamondArtwork color={1} special="PRISM" className="w-full h-full" />
-                  </div>
-                  <div className="flex items-center -space-x-1.5">
-                    {([0, 2, 3] as const).map((colorId) => (
-                      <div
-                        key={colorId}
-                        className="w-8 h-8 rounded-lg bg-[#0F172A]/95 border-2 border-slate-700 p-1 shadow-md"
-                      >
-                        <DiamondArtwork color={colorId} className="w-full h-full" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <span className="inline-flex items-center gap-1 font-mono-num text-xs font-extrabold text-cyan-300">
-                  <Star className="w-3.5 h-3.5 fill-cyan-300" />
-                  {diamondStars}
-                </span>
-              </div>
-            </button>
-
-            <div className="p-4 flex flex-col gap-3">
-              <div className="flex items-baseline justify-between gap-2">
-                <h2 className="font-display text-xl font-extrabold text-white tracking-tight">
-                  Kim Cương 100
-                </h2>
-                <span className="font-mono-num text-xs font-bold text-cyan-300 whitespace-nowrap">
-                  Màn {diamondLevel}/100
-                </span>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    onSelectGame('DIAMOND');
-                    onStartDiamondCurrentLevel();
-                  }}
-                  className="col-span-2 min-h-[44px] rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-extrabold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-[0_3px_0_#0E7490] active:translate-y-[1px]"
-                >
-                  <Play className="w-4 h-4 fill-current" />
-                  Chơi ngay
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onSelectGame('DIAMOND');
-                    onOpenDiamondLevelSelect();
-                  }}
-                  className="min-h-[44px] rounded-xl bg-[#1E293B] hover:bg-slate-700 border border-slate-700 text-slate-100 font-bold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer"
-                >
-                  <Grid3X3 className="w-3.5 h-3.5 text-cyan-300" />
-                  <span>100</span>
-                </button>
+        {/* Quick System Overview */}
+        <section className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+          <div className="rounded-2xl bg-[#131C31]/90 border border-slate-800 px-4 py-3 flex items-start gap-3">
+            <Shield className="w-5 h-5 text-amber-300 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-bold text-white">9 Món Trang Bị Theo Tướng</div>
+              <div className="text-slate-400 mt-0.5">
+                Rơi 0.1% từ quái (Common → Mythic), không rơi trùng đồ đã sở hữu.
               </div>
             </div>
           </div>
 
-          {/* Game 3: Vệ Thành Quái Thú (Tower Defense) */}
-          <div
-            onClick={() => onSelectGame('TOWER_DEFENSE')}
-            className={`group rounded-2xl overflow-hidden bg-[#131C31] border-2 transition-all flex flex-col shadow-2xl ${
-              activeGame === 'TOWER_DEFENSE'
-                ? 'border-orange-400 shadow-[0_14px_40px_rgba(251,146,60,0.2)]'
-                : 'border-slate-800 hover:border-slate-600'
-            }`}
-          >
-            <button
-              type="button"
-              onClick={() => {
-                onSelectGame('TOWER_DEFENSE');
-                onStartTdCurrentLevel();
-              }}
-              aria-label={`Chơi Vệ Thành Quái Thú ải ${tdLevel}`}
-              className="relative w-full aspect-[4/3] overflow-hidden bg-[#431407] cursor-pointer text-left focus:outline-none"
-            >
-              {!tdImgErr ? (
-                <img
-                  src={TD_COVER_URL}
-                  alt="Vệ Thành Quái Thú"
-                  referrerPolicy="no-referrer"
-                  onError={() => setTdImgErr(true)}
-                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                />
-              ) : (
-                <div className="w-full h-full bg-gradient-to-br from-[#EA580C] via-[#7C2D12] to-[#0F172A]" />
-              )}
-              <div className="absolute inset-0 bg-gradient-to-t from-[#131C31] via-[#131C31]/25 to-transparent" />
-
-              <div className="absolute bottom-3 left-3.5 right-3.5 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-10 h-10 rounded-xl bg-orange-600 border-2 border-[#FACC15] flex items-center justify-center shadow-lg">
-                    <Castle className="w-5 h-5 text-white" />
-                  </div>
-                  <div className="flex items-center -space-x-1.5">
-                    <div className="w-9 h-9 rounded-lg bg-[#0F172A]/95 border-2 border-slate-700 flex items-center justify-center shadow-md p-0.5">
-                      <TdTowerPreview type="ARCHER" level={4} branch="SNIPER_CRIT" className="w-8 h-8" />
-                    </div>
-                    <div className="w-9 h-9 rounded-lg bg-[#0F172A]/95 border-2 border-slate-700 flex items-center justify-center shadow-md p-0.5">
-                      <TdTowerPreview type="MAGE" level={4} branch="STORM_CHAIN" className="w-8 h-8" />
-                    </div>
-                    <div className="w-9 h-9 rounded-lg bg-[#0F172A]/95 border-2 border-slate-700 flex items-center justify-center shadow-md p-0.5">
-                      <TdTowerPreview type="ASSASSIN" level={4} branch="SHADOW_BLADE" className="w-8 h-8" />
-                    </div>
-                    <div className="w-9 h-9 rounded-lg bg-[#0F172A]/95 border-2 border-slate-700 flex items-center justify-center shadow-md p-0.5">
-                      <TdTowerPreview type="VALKYRIE" level={4} branch="SOLAR_SERAPH" className="w-8 h-8" />
-                    </div>
-                    <div className="w-9 h-9 rounded-lg bg-[#0F172A]/95 border-2 border-rose-700/80 flex items-center justify-center shadow-md p-0.5">
-                      <TdEnemyPreview type="BOSS" className="w-8 h-8" />
-                    </div>
-                  </div>
-                </div>
-
-                <span className="inline-flex items-center gap-1 font-mono-num text-xs font-extrabold text-orange-300">
-                  <Star className="w-3.5 h-3.5 fill-orange-300" />
-                  {tdStars}
-                </span>
+          <div className="rounded-2xl bg-[#131C31]/90 border border-slate-800 px-4 py-3 flex items-start gap-3">
+            <Gem className="w-5 h-5 text-cyan-300 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-bold text-white">Ngọc Cường Hóa (+12)</div>
+              <div className="text-slate-400 mt-0.5">
+                Tỷ lệ rơi 2%/quái. Mỗi cấp +2% chỉ số, tỷ lệ thành công giảm 8% mỗi bậc.
               </div>
-            </button>
+            </div>
+          </div>
 
-            <div className="p-4 flex flex-col gap-3">
-              <div className="flex items-baseline justify-between gap-2">
-                <h2 className="font-display text-xl font-extrabold text-white tracking-tight">
-                  Thủ Cửa {TD_MAX_LEVEL}
-                </h2>
-                <span className="font-mono-num text-xs font-bold text-orange-300 whitespace-nowrap">
-                  Ải {tdLevel}/{TD_MAX_LEVEL}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    onSelectGame('TOWER_DEFENSE');
-                    onStartTdCurrentLevel();
-                  }}
-                  className="col-span-2 min-h-[44px] rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 font-extrabold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-[0_3px_0_#9A3412] active:translate-y-[1px]"
-                >
-                  <Play className="w-4 h-4 fill-current" />
-                  Chơi ngay
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onSelectGame('TOWER_DEFENSE');
-                    onOpenTdLevelSelect();
-                  }}
-                  className="min-h-[44px] rounded-xl bg-[#1E293B] hover:bg-slate-700 border border-slate-700 text-slate-100 font-bold text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer"
-                >
-                  <Grid3X3 className="w-3.5 h-3.5 text-orange-300" />
-                  <span>{TD_MAX_LEVEL} Ải</span>
-                </button>
+          <div className="rounded-2xl bg-[#131C31]/90 border border-slate-800 px-4 py-3 flex items-start gap-3">
+            <Sparkles className="w-5 h-5 text-rose-300 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-bold text-white">Tuyệt Chiêu Max Cấp</div>
+              <div className="text-slate-400 mt-0.5">
+                Tướng đạt cấp tối đa (Lv20 / Lv30) tự kích hoạt tuyệt chiêu tối thượng trong trận.
               </div>
             </div>
           </div>
@@ -503,7 +356,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
               className="min-h-[44px] inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-emerald-700/70 bg-emerald-950/50 hover:bg-emerald-900/60 text-emerald-200 font-semibold text-sm transition-colors cursor-pointer"
             >
               <Cloud className="w-4 h-4 text-emerald-300" />
-              <span>Đăng nhập Google lưu tiến trình</span>
+              <span>Đăng nhập Google lưu tiến trình & Kho Đồ</span>
             </button>
           </div>
         )}
@@ -511,13 +364,11 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 
       <MobileBottomNav
         activeTab={accountSheetOpen ? 'ACCOUNT' : 'HOME'}
-        levelsLabel={isTd ? `${TD_MAX_LEVEL} Ải` : isDiamond ? '100 Màn' : '200 Cấp'}
+        levelsLabel={`${TD_MAX_LEVEL} Ải`}
         onGoHome={() => setAccountSheetOpen(false)}
         onGoLevels={() => {
           setAccountSheetOpen(false);
-          if (isTd) onOpenTdLevelSelect();
-          else if (isDiamond) onOpenDiamondLevelSelect();
-          else onOpenLevelSelect();
+          onOpenTdLevelSelect();
         }}
         onOpenAccountSheet={() => setAccountSheetOpen(true)}
       />
@@ -529,23 +380,11 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
         hasLiveCloudAuth={hasLiveCloudAuth}
         authLoading={authLoading}
         syncStatus={syncStatus}
-        soundEnabled={saveData.soundEnabled}
+        soundEnabled={soundEnabled}
         bgmEnabled={bgmEnabled}
-        highestUnlockedLevel={
-          isTd
-            ? tdSaveData.highestUnlockedLevel
-            : isDiamond
-              ? diamondSaveData.highestUnlockedLevel
-              : saveData.highestUnlockedLevel
-        }
-        maxLevel={isTd ? TD_MAX_LEVEL : isDiamond ? DIAMOND_MAX_LEVEL : MAX_LEVEL}
-        totalScore={
-          isTd
-            ? tdSaveData.totalScore
-            : isDiamond
-              ? diamondSaveData.totalScore
-              : saveData.totalScore
-        }
+        highestUnlockedLevel={tdSaveData.highestUnlockedLevel}
+        maxLevel={TD_MAX_LEVEL}
+        totalScore={tdSaveData.totalScore}
         onSignIn={onSignIn}
         onSignOut={onSignOut}
         onToggleSound={onToggleSound}

@@ -161,6 +161,63 @@ export type TdUpgradeTrackId =
 
 export type TdUpgrades = Record<TdUpgradeTrackId, number>;
 
+export type GameScreenState =
+  | 'TITLE_MENU'
+  | 'LEVEL_SELECT'
+  | 'PLAYING'
+  | 'PAUSED'
+  | 'ROUND_SUMMARY'
+  | 'GAME_OVER';
+
+export type TdEquipmentSlot =
+  | 'WEAPON'
+  | 'GLOVES'
+  | 'RING'
+  | 'NECKLACE'
+  | 'HELM'
+  | 'ARMOR'
+  | 'PANTS'
+  | 'BOOTS'
+  | 'WINGS';
+
+export type TdEquipmentRarity =
+  | 'COMMON'
+  | 'UNCOMMON'
+  | 'RARE'
+  | 'EPIC'
+  | 'LEGEND'
+  | 'MYTHIC';
+
+export interface TdEquipmentBonuses {
+  damagePct?: number;
+  attackSpeedPct?: number;
+  critChanceBonus?: number;
+  critDamageBonus?: number;
+  effectChancePct?: number;
+  armorPiercePct?: number;
+  magicPiercePct?: number;
+  effectPotencyPct?: number;
+  skillCdrPct?: number;
+  splashSharePct?: number;
+}
+
+export interface TdEquipmentItem {
+  id: string;
+  towerType: TdTowerType;
+  slot: TdEquipmentSlot;
+  rarity: TdEquipmentRarity;
+  level: number; // 0..12
+}
+
+export type TdHeroEquipmentMap = Partial<
+  Record<TdTowerType, Partial<Record<TdEquipmentSlot, string>>>
+>;
+
+export interface TdRunLootSummary {
+  gems: number;
+  items: TdEquipmentItem[];
+}
+
 export type TdArtifactRarity = 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC' | 'LEGEND';
 
 export interface TdArtifactBonuses {
@@ -279,6 +336,10 @@ export interface TdSaveData {
   highestUnlockedLevel: number;
   totalScore: number;
   bonusStars?: number;
+  enhancementGems?: number;
+  equipmentInventory?: TdEquipmentItem[];
+  heroEquipment?: TdHeroEquipmentMap;
+  soundEnabled?: boolean;
   levels: Record<number, TdLevelProgress>;
   upgrades: TdUpgrades;
 }
@@ -432,6 +493,8 @@ export interface TdBuiltTower {
   castWindupMax: number;
   castTargetId: string | null;
   specialSkillTimer?: number;
+  ultimateCdTimer?: number;
+  ultimateActiveTimer?: number;
   artifact?: TdHeroArtifact | null;
 }
 
@@ -575,6 +638,8 @@ export interface TdProjectile {
   isCrit?: boolean;
   critMult?: number;
   canExecuteBelowPct?: number;
+  wingsSplashSharePct?: number;
+  wingsSplashRadius?: number;
   sourceTowerId: string;
 }
 

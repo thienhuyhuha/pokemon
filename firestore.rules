@@ -224,6 +224,10 @@ service cloud.firestore {
           'highestUnlockedLevel',
           'totalScore',
           'bonusStars',
+          'enhancementGems',
+          'equipmentInventory',
+          'heroEquipment',
+          'soundEnabled',
           'levels',
           'upgrades',
           'createdAt',
@@ -239,6 +243,10 @@ service cloud.firestore {
         && data.totalScore >= 0
         && data.totalScore <= 500000000
         && (!('bonusStars' in data) || (data.bonusStars is int && data.bonusStars >= 0 && data.bonusStars <= 100000))
+        && (!('enhancementGems' in data) || (data.enhancementGems is int && data.enhancementGems >= 0 && data.enhancementGems <= 1000000))
+        && (!('equipmentInventory' in data) || (data.equipmentInventory is list && data.equipmentInventory.size() <= 600 && (data.equipmentInventory.size() == 0 || data.equipmentInventory[0] is map)))
+        && (!('heroEquipment' in data) || (data.heroEquipment is map && data.heroEquipment.size() <= 10 && data.heroEquipment.keys().hasOnly(['ARCHER','BARRACKS','MAGE','ARTILLERY','ASSASSIN','VALKYRIE','KNIGHT_GUARD','PYROMANCER','MECHANIST','CHRONOMANCER'])))
+        && (!('soundEnabled' in data) || data.soundEnabled is bool)
         && data.levels is map
         && data.levels.size() <= 30
         && isValidTdUpgrades(data.upgrades)
@@ -256,6 +264,10 @@ service cloud.firestore {
           'highestUnlockedLevel',
           'totalScore',
           'bonusStars',
+          'enhancementGems',
+          'equipmentInventory',
+          'heroEquipment',
+          'soundEnabled',
           'levels',
           'upgrades',
           'updatedAt'

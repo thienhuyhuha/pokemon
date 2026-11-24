@@ -1,6 +1,8 @@
 import React from 'react';
-import { ArrowRight, Grid3X3, Heart, RotateCcw, ShieldAlert, Star, Trophy } from 'lucide-react';
+import { ArrowRight, Gem, Grid3X3, Heart, RotateCcw, ShieldAlert, Sparkles, Star, Trophy } from 'lucide-react';
+import { getEquipmentDisplayName, TD_EQUIPMENT_RARITY_META, TD_HERO_SHORT_NAMES } from '../data/tdEquipment';
 import { TD_MAX_LEVEL } from '../data/tdLevels';
+import { TdRunLootSummary } from '../types/towerDefense';
 
 interface TdEndModalProps {
   type: 'WIN' | 'LOSE';
@@ -11,6 +13,7 @@ interface TdEndModalProps {
   clearBonusStars?: number;
   newAchievementStars?: number;
   isFirstClear?: boolean;
+  lootSummary?: TdRunLootSummary;
   livesLeft: number;
   startingLives: number;
   enemiesSlain: number;
@@ -29,6 +32,7 @@ export const TdEndModal: React.FC<TdEndModalProps> = ({
   clearBonusStars = 0,
   newAchievementStars = 0,
   isFirstClear = false,
+  lootSummary,
   livesLeft,
   startingLives,
   enemiesSlain,
@@ -39,10 +43,13 @@ export const TdEndModal: React.FC<TdEndModalProps> = ({
 }) => {
   const isWin = type === 'WIN';
   const hasNext = level < TD_MAX_LEVEL;
+  const hasLoot = Boolean(
+    lootSummary && (lootSummary.gems > 0 || lootSummary.items.length > 0)
+  );
 
   return (
     <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-md rounded-2xl bg-[#131C31] border-2 border-amber-500/70 p-6 shadow-2xl text-slate-100 flex flex-col gap-5">
+      <div className="w-full max-w-md rounded-2xl bg-[#131C31] border-2 border-amber-500/70 p-6 shadow-2xl text-slate-100 flex flex-col gap-5 max-h-[92vh] overflow-y-auto">
         <div className="flex flex-col items-center text-center gap-2">
           <div
             className={`w-14 h-14 rounded-2xl flex items-center justify-center border-2 shadow-lg ${
@@ -113,6 +120,37 @@ export const TdEndModal: React.FC<TdEndModalProps> = ({
             </div>
           </div>
         </div>
+
+        {hasLoot && lootSummary && (
+          <div className="rounded-xl bg-[#0F172A] border border-cyan-500/50 p-3 flex flex-col gap-2">
+            <div className="text-xs font-extrabold text-cyan-300 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-[#FACC15]" />
+              <span>Chiến Lợi Phẩm Thu Được</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {lootSummary.gems > 0 && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-950/80 border border-cyan-400/60 text-xs font-extrabold text-cyan-200 font-mono-num">
+                  <Gem className="w-3.5 h-3.5 text-cyan-300" />
+                  +{lootSummary.gems} Ngọc Cường Hóa
+                </span>
+              )}
+              {lootSummary.items.map((item) => {
+                const rMeta = TD_EQUIPMENT_RARITY_META[item.rarity];
+                return (
+                  <span
+                    key={item.id}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-extrabold ${rMeta.bgClass} ${rMeta.borderClass}`}
+                    style={{ color: rMeta.color }}
+                  >
+                    <span>
+                      {getEquipmentDisplayName(item.towerType, item.slot)} ({TD_HERO_SHORT_NAMES[item.towerType]} · {rMeta.shortLabel})
+                    </span>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {isPreviewMode && (
           <div className="rounded-lg bg-amber-950/60 border border-amber-700/70 px-3 py-2 text-xs text-amber-200 text-center">

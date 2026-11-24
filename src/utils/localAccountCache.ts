@@ -1,5 +1,10 @@
-import { DIAMOND_MAX_LEVEL } from '../data/diamondLevels';
-import { MAX_LEVEL } from '../data/levels';
+import {
+  getEquipmentUniqueKey,
+  TD_ALL_HERO_TYPES,
+  TD_ENHANCE_MAX_LEVEL,
+  TD_EQUIPMENT_RARITY_META,
+  TD_EQUIPMENT_SLOT_ORDER,
+} from '../data/tdEquipment';
 import {
   DEFAULT_TD_UPGRADES,
   getSpentUpgradeStars,
@@ -8,9 +13,16 @@ import {
   TD_MAX_LEVEL,
   TD_UPGRADE_MAX_TIER,
 } from '../data/tdLevels';
-import { DiamondLevelProgress, DiamondSaveData } from '../types/diamond';
-import { LevelProgress, SaveData } from '../types/game';
-import { TdLevelProgress, TdSaveData, TdUpgrades } from '../types/towerDefense';
+import {
+  TdEquipmentItem,
+  TdEquipmentRarity,
+  TdEquipmentSlot,
+  TdHeroEquipmentMap,
+  TdLevelProgress,
+  TdSaveData,
+  TdTowerType,
+  TdUpgrades,
+} from '../types/towerDefense';
 
 export interface RememberedAccount {
   uid: string;
@@ -19,103 +31,25 @@ export interface RememberedAccount {
   photoURL: string;
 }
 
-const GUEST_STORAGE_KEY = 'chibimon_200_guest_save_v1';
-const LEGACY_STORAGE_KEY = 'pokeconnect_200_save_v2';
 const REMEMBERED_ACCOUNT_KEY = 'chibimon_200_remembered_account_v1';
-const PLAYER_SAVE_PREFIX = 'chibimon_200_player_save_v1_';
-
-const DIAMOND_GUEST_KEY = 'chibimon_diamond_100_guest_v1';
-const DIAMOND_PLAYER_PREFIX = 'chibimon_diamond_100_player_v1_';
-
 const TD_GUEST_KEY = 'chibimon_td_15_guest_v1';
 const TD_PLAYER_PREFIX = 'chibimon_td_15_player_v1_';
 
-export const DEFAULT_SAVE: SaveData = {
-  highestUnlockedLevel: 1,
-  totalScore: 0,
-  soundEnabled: true,
-  levels: {},
-};
-
-export const DEFAULT_DIAMOND_SAVE: DiamondSaveData = {
-  highestUnlockedLevel: 1,
-  totalScore: 0,
-  levels: {},
-};
+const VALID_HERO_SET = new Set<string>(TD_ALL_HERO_TYPES);
+const VALID_SLOT_SET = new Set<string>(TD_EQUIPMENT_SLOT_ORDER);
+const VALID_RARITY_SET = new Set<string>(Object.keys(TD_EQUIPMENT_RARITY_META));
 
 export const DEFAULT_TD_SAVE: TdSaveData = {
   highestUnlockedLevel: 1,
   totalScore: 0,
   bonusStars: 0,
+  enhancementGems: 0,
+  equipmentInventory: [],
+  heroEquipment: {},
+  soundEnabled: true,
   levels: {},
   upgrades: { ...DEFAULT_TD_UPGRADES },
 };
-
-function sanitizeLevelsRecord(raw: unknown): Record<number, LevelProgress> {
-  const result: Record<number, LevelProgress> = {};
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return result;
-
-  for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
-    const levelNum = Number(key);
-    if (!Number.isInteger(levelNum) || levelNum < 1 || levelNum > MAX_LEVEL) continue;
-    if (!val || typeof val !== 'object') continue;
-    const item = val as Record<string, unknown>;
-    result[levelNum] = {
-      completed: Boolean(item.completed),
-      stars: Math.max(0, Math.min(3, Math.floor(Number(item.stars ?? 0) || 0))),
-      bestScore: Math.max(0, Math.floor(Number(item.bestScore ?? 0) || 0)),
-      bestTimeRemaining: Math.max(0, Math.floor(Number(item.bestTimeRemaining ?? 0) || 0)),
-    };
-  }
-  return result;
-}
-
-function parseSaveString(raw: string | null): SaveData | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as Partial<SaveData>;
-    return {
-      highestUnlockedLevel: Math.max(
-        1,
-        Math.min(MAX_LEVEL, Math.floor(parsed.highestUnlockedLevel ?? 1))
-      ),
-      totalScore: Math.max(0, Math.floor(parsed.totalScore ?? 0)),
-      soundEnabled: typeof parsed.soundEnabled === 'boolean' ? parsed.soundEnabled : true,
-      levels: sanitizeLevelsRecord(parsed.levels),
-    };
-  } catch {
-    return null;
-  }
-}
-
-export function loadGuestSaveData(): SaveData {
-  try {
-    const current = parseSaveString(localStorage.getItem(GUEST_STORAGE_KEY));
-    if (current) return current;
-    const legacy = parseSaveString(localStorage.getItem(LEGACY_STORAGE_KEY));
-    if (legacy) return legacy;
-    return DEFAULT_SAVE;
-  } catch {
-    return DEFAULT_SAVE;
-  }
-}
-
-export function saveGuestSaveData(data: SaveData): void {
-  try {
-    localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(data));
-  } catch {
-    // Ignore storage quota errors
-  }
-}
-
-export function clearGuestSaveData(): void {
-  try {
-    localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(DEFAULT_SAVE));
-    localStorage.removeItem(LEGACY_STORAGE_KEY);
-  } catch {
-    // Ignore storage errors
-  }
-}
 
 export function getRememberedAccount(): RememberedAccount | null {
   try {
@@ -149,248 +83,6 @@ export function clearRememberedAccount(): void {
     // Ignore storage errors
   }
 }
-
-export function loadPlayerLocalSave(uid: string): SaveData | null {
-  try {
-    return parseSaveString(localStorage.getItem(`${PLAYER_SAVE_PREFIX}${uid}`));
-  } catch {
-    return null;
-  }
-}
-
-export function savePlayerLocalSave(uid: string, data: SaveData): void {
-  try {
-    localStorage.setItem(`${PLAYER_SAVE_PREFIX}${uid}`, JSON.stringify(data));
-  } catch {
-    // Ignore storage quota errors
-  }
-}
-
-export function mergeSaveData(
-  cloudSave: SaveData,
-  localSave: SaveData | null
-): { merged: SaveData; cloudNeedsUpdate: boolean } {
-  if (!localSave) {
-    return { merged: cloudSave, cloudNeedsUpdate: false };
-  }
-
-  let cloudNeedsUpdate = false;
-  const mergedLevels: Record<number, LevelProgress> = { ...cloudSave.levels };
-
-  for (const [key, localLv] of Object.entries(localSave.levels)) {
-    const levelNum = Number(key);
-    const cloudLv = mergedLevels[levelNum];
-    if (!cloudLv) {
-      mergedLevels[levelNum] = localLv;
-      cloudNeedsUpdate = true;
-      continue;
-    }
-
-    const completed = cloudLv.completed || localLv.completed;
-    const stars = Math.max(cloudLv.stars, localLv.stars);
-    const bestScore = Math.max(cloudLv.bestScore, localLv.bestScore);
-    const bestTimeRemaining = Math.max(
-      cloudLv.bestTimeRemaining,
-      localLv.bestTimeRemaining
-    );
-
-    if (
-      completed !== cloudLv.completed ||
-      stars !== cloudLv.stars ||
-      bestScore !== cloudLv.bestScore ||
-      bestTimeRemaining !== cloudLv.bestTimeRemaining
-    ) {
-      mergedLevels[levelNum] = {
-        completed,
-        stars,
-        bestScore,
-        bestTimeRemaining,
-      };
-      cloudNeedsUpdate = true;
-    }
-  }
-
-  const maxAllowedUnlocked = Math.min(MAX_LEVEL, Object.keys(mergedLevels).length + 1);
-  const highestUnlockedLevel = Math.min(
-    maxAllowedUnlocked,
-    Math.max(cloudSave.highestUnlockedLevel, localSave.highestUnlockedLevel)
-  );
-  if (highestUnlockedLevel > cloudSave.highestUnlockedLevel) {
-    cloudNeedsUpdate = true;
-  }
-
-  const summedBestScores = Object.values(mergedLevels).reduce(
-    (sum, lv) => sum + (lv.bestScore || 0),
-    0
-  );
-  const totalScore = Math.max(
-    cloudSave.totalScore,
-    localSave.totalScore,
-    summedBestScores
-  );
-  if (totalScore > cloudSave.totalScore) {
-    cloudNeedsUpdate = true;
-  }
-
-  return {
-    merged: {
-      highestUnlockedLevel,
-      totalScore,
-      soundEnabled: cloudSave.soundEnabled,
-      levels: mergedLevels,
-    },
-    cloudNeedsUpdate,
-  };
-}
-
-// ---------- Diamond Match-3 (100 Levels) Local Cache & Merge ----------
-
-function sanitizeDiamondLevelsRecord(raw: unknown): Record<number, DiamondLevelProgress> {
-  const result: Record<number, DiamondLevelProgress> = {};
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return result;
-
-  for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
-    const levelNum = Number(key);
-    if (!Number.isInteger(levelNum) || levelNum < 1 || levelNum > DIAMOND_MAX_LEVEL) continue;
-    if (!val || typeof val !== 'object') continue;
-    const item = val as Record<string, unknown>;
-    result[levelNum] = {
-      completed: Boolean(item.completed),
-      stars: Math.max(0, Math.min(3, Math.floor(Number(item.stars ?? 0) || 0))),
-      bestScore: Math.max(0, Math.floor(Number(item.bestScore ?? 0) || 0)),
-      bestMovesLeft: Math.max(0, Math.floor(Number(item.bestMovesLeft ?? 0) || 0)),
-    };
-  }
-  return result;
-}
-
-function parseDiamondSaveString(raw: string | null): DiamondSaveData | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as Partial<DiamondSaveData>;
-    return {
-      highestUnlockedLevel: Math.max(
-        1,
-        Math.min(DIAMOND_MAX_LEVEL, Math.floor(parsed.highestUnlockedLevel ?? 1))
-      ),
-      totalScore: Math.max(0, Math.floor(parsed.totalScore ?? 0)),
-      levels: sanitizeDiamondLevelsRecord(parsed.levels),
-    };
-  } catch {
-    return null;
-  }
-}
-
-export function loadGuestDiamondSave(): DiamondSaveData {
-  try {
-    return parseDiamondSaveString(localStorage.getItem(DIAMOND_GUEST_KEY)) ?? DEFAULT_DIAMOND_SAVE;
-  } catch {
-    return DEFAULT_DIAMOND_SAVE;
-  }
-}
-
-export function saveGuestDiamondSave(data: DiamondSaveData): void {
-  try {
-    localStorage.setItem(DIAMOND_GUEST_KEY, JSON.stringify(data));
-  } catch {
-    // Ignore storage quota errors
-  }
-}
-
-export function clearGuestDiamondSave(): void {
-  try {
-    localStorage.setItem(DIAMOND_GUEST_KEY, JSON.stringify(DEFAULT_DIAMOND_SAVE));
-  } catch {
-    // Ignore storage errors
-  }
-}
-
-export function loadPlayerDiamondSave(uid: string): DiamondSaveData | null {
-  try {
-    return parseDiamondSaveString(localStorage.getItem(`${DIAMOND_PLAYER_PREFIX}${uid}`));
-  } catch {
-    return null;
-  }
-}
-
-export function savePlayerDiamondSave(uid: string, data: DiamondSaveData): void {
-  try {
-    localStorage.setItem(`${DIAMOND_PLAYER_PREFIX}${uid}`, JSON.stringify(data));
-  } catch {
-    // Ignore storage quota errors
-  }
-}
-
-export function mergeDiamondSaveData(
-  cloudSave: DiamondSaveData,
-  localSave: DiamondSaveData | null
-): { merged: DiamondSaveData; cloudNeedsUpdate: boolean } {
-  if (!localSave) {
-    return { merged: cloudSave, cloudNeedsUpdate: false };
-  }
-
-  let cloudNeedsUpdate = false;
-  const mergedLevels: Record<number, DiamondLevelProgress> = { ...cloudSave.levels };
-
-  for (const [key, localLv] of Object.entries(localSave.levels)) {
-    const levelNum = Number(key);
-    const cloudLv = mergedLevels[levelNum];
-    if (!cloudLv) {
-      mergedLevels[levelNum] = localLv;
-      cloudNeedsUpdate = true;
-      continue;
-    }
-
-    const completed = cloudLv.completed || localLv.completed;
-    const stars = Math.max(cloudLv.stars, localLv.stars);
-    const bestScore = Math.max(cloudLv.bestScore, localLv.bestScore);
-    const bestMovesLeft = Math.max(cloudLv.bestMovesLeft, localLv.bestMovesLeft);
-
-    if (
-      completed !== cloudLv.completed ||
-      stars !== cloudLv.stars ||
-      bestScore !== cloudLv.bestScore ||
-      bestMovesLeft !== cloudLv.bestMovesLeft
-    ) {
-      mergedLevels[levelNum] = {
-        completed,
-        stars,
-        bestScore,
-        bestMovesLeft,
-      };
-      cloudNeedsUpdate = true;
-    }
-  }
-
-  const maxAllowedUnlocked = Math.min(DIAMOND_MAX_LEVEL, Object.keys(mergedLevels).length + 1);
-  const highestUnlockedLevel = Math.min(
-    maxAllowedUnlocked,
-    Math.max(cloudSave.highestUnlockedLevel, localSave.highestUnlockedLevel)
-  );
-  if (highestUnlockedLevel > cloudSave.highestUnlockedLevel) {
-    cloudNeedsUpdate = true;
-  }
-
-  const summedBestScores = Object.values(mergedLevels).reduce(
-    (sum, lv) => sum + (lv.bestScore || 0),
-    0
-  );
-  const totalScore = Math.max(cloudSave.totalScore, localSave.totalScore, summedBestScores);
-  if (totalScore > cloudSave.totalScore) {
-    cloudNeedsUpdate = true;
-  }
-
-  return {
-    merged: {
-      highestUnlockedLevel,
-      totalScore,
-      levels: mergedLevels,
-    },
-    cloudNeedsUpdate,
-  };
-}
-
-// ---------- Tower Defense (Vệ Thành Quái Thú - 15 Stages) Local Cache & Merge ----------
 
 function sanitizeTdUpgradesLocal(raw: unknown): TdUpgrades {
   const src = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
@@ -433,10 +125,62 @@ function sanitizeTdLevelsRecord(raw: unknown): Record<number, TdLevelProgress> {
   return result;
 }
 
+function sanitizeEquipmentLocal(raw: unknown): TdEquipmentItem[] {
+  if (!Array.isArray(raw)) return [];
+  const byKey = new Map<string, TdEquipmentItem>();
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const rec = entry as Record<string, unknown>;
+    const towerType = String(rec.towerType ?? '');
+    const slot = String(rec.slot ?? '');
+    const rarity = String(rec.rarity ?? '');
+    if (!VALID_HERO_SET.has(towerType) || !VALID_SLOT_SET.has(slot) || !VALID_RARITY_SET.has(rarity)) {
+      continue;
+    }
+    const tType = towerType as TdTowerType;
+    const sType = slot as TdEquipmentSlot;
+    const rType = rarity as TdEquipmentRarity;
+    const key = getEquipmentUniqueKey(tType, sType, rType);
+    const level = Math.max(0, Math.min(TD_ENHANCE_MAX_LEVEL, Math.floor(Number(rec.level ?? 0) || 0)));
+    const id =
+      typeof rec.id === 'string' && rec.id.trim().length > 0
+        ? rec.id.trim().slice(0, 80)
+        : `eq-${tType.toLowerCase()}-${sType.toLowerCase()}-${rType.toLowerCase()}`;
+    const prev = byKey.get(key);
+    if (!prev || level > prev.level) {
+      byKey.set(key, { id, towerType: tType, slot: sType, rarity: rType, level });
+    }
+    if (byKey.size >= 540) break;
+  }
+  return Array.from(byKey.values());
+}
+
+function sanitizeHeroEquipLocal(raw: unknown, inv: TdEquipmentItem[]): TdHeroEquipmentMap {
+  const out: TdHeroEquipmentMap = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  const invById = new Map(inv.map((it) => [it.id, it]));
+  for (const [heroKey, slotsRaw] of Object.entries(raw as Record<string, unknown>)) {
+    if (!VALID_HERO_SET.has(heroKey)) continue;
+    if (!slotsRaw || typeof slotsRaw !== 'object' || Array.isArray(slotsRaw)) continue;
+    const cleanSlots: Partial<Record<TdEquipmentSlot, string>> = {};
+    for (const [slotKey, itemId] of Object.entries(slotsRaw as Record<string, unknown>)) {
+      if (!VALID_SLOT_SET.has(slotKey) || typeof itemId !== 'string') continue;
+      const item = invById.get(itemId);
+      if (!item || item.towerType !== heroKey || item.slot !== slotKey) continue;
+      cleanSlots[slotKey as TdEquipmentSlot] = item.id;
+    }
+    if (Object.keys(cleanSlots).length > 0) {
+      out[heroKey as TdTowerType] = cleanSlots;
+    }
+  }
+  return out;
+}
+
 function parseTdSaveString(raw: string | null): TdSaveData | null {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as Partial<TdSaveData>;
+    const inventory = sanitizeEquipmentLocal(parsed.equipmentInventory);
     return {
       highestUnlockedLevel: Math.max(
         1,
@@ -444,6 +188,10 @@ function parseTdSaveString(raw: string | null): TdSaveData | null {
       ),
       totalScore: Math.max(0, Math.floor(parsed.totalScore ?? 0)),
       bonusStars: Math.max(0, Math.min(100000, Math.floor(parsed.bonusStars ?? 0))),
+      enhancementGems: Math.max(0, Math.min(1000000, Math.floor(parsed.enhancementGems ?? 0))),
+      equipmentInventory: inventory,
+      heroEquipment: sanitizeHeroEquipLocal(parsed.heroEquipment, inventory),
+      soundEnabled: typeof parsed.soundEnabled === 'boolean' ? parsed.soundEnabled : true,
       levels: sanitizeTdLevelsRecord(parsed.levels),
       upgrades: sanitizeTdUpgradesLocal(parsed.upgrades),
     };
@@ -556,6 +304,47 @@ export function mergeTdSaveData(
     cloudNeedsUpdate = true;
   }
 
+  const enhancementGems = Math.max(
+    cloudSave.enhancementGems ?? 0,
+    localSave.enhancementGems ?? 0
+  );
+  if (enhancementGems > (cloudSave.enhancementGems ?? 0)) {
+    cloudNeedsUpdate = true;
+  }
+
+  const mergedInvMap = new Map<string, TdEquipmentItem>();
+  for (const it of cloudSave.equipmentInventory ?? []) {
+    mergedInvMap.set(getEquipmentUniqueKey(it.towerType, it.slot, it.rarity), { ...it });
+  }
+  for (const it of localSave.equipmentInventory ?? []) {
+    const key = getEquipmentUniqueKey(it.towerType, it.slot, it.rarity);
+    const prev = mergedInvMap.get(key);
+    if (!prev || it.level > prev.level) {
+      mergedInvMap.set(key, { ...it });
+      cloudNeedsUpdate = true;
+    }
+  }
+  const mergedInventory = Array.from(mergedInvMap.values());
+  const invById = new Map(mergedInventory.map((it) => [it.id, it]));
+
+  const mergedEquipped: TdHeroEquipmentMap = { ...(cloudSave.heroEquipment ?? {}) };
+  for (const [heroKey, slotsRaw] of Object.entries(localSave.heroEquipment ?? {})) {
+    const hType = heroKey as TdTowerType;
+    const curSlots = { ...(mergedEquipped[hType] ?? {}) };
+    let changed = false;
+    for (const [slotKey, itemId] of Object.entries(slotsRaw ?? {})) {
+      const sType = slotKey as TdEquipmentSlot;
+      if (!curSlots[sType] && itemId && invById.has(itemId)) {
+        curSlots[sType] = itemId;
+        changed = true;
+      }
+    }
+    if (changed) {
+      mergedEquipped[hType] = curSlots;
+      cloudNeedsUpdate = true;
+    }
+  }
+
   const totalStars = getTotalStarsEarnedInTd(mergedLevels, bonusStars);
   const cloudSpent = getSpentUpgradeStars(cloudSave.upgrades);
   const localSpent = getSpentUpgradeStars(localSave.upgrades);
@@ -570,10 +359,13 @@ export function mergeTdSaveData(
       highestUnlockedLevel,
       totalScore,
       bonusStars,
+      enhancementGems,
+      equipmentInventory: mergedInventory,
+      heroEquipment: sanitizeHeroEquipLocal(mergedEquipped, mergedInventory),
+      soundEnabled: cloudSave.soundEnabled ?? localSave.soundEnabled ?? true,
       levels: mergedLevels,
       upgrades: mergedUpgrades,
     },
     cloudNeedsUpdate,
   };
 }
-
