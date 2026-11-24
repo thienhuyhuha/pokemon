@@ -468,31 +468,19 @@ export function getHeroMaxUltimateInfo(
         desc: 'Cấp 20: Khi toàn bản đồ còn < 5 quái, đóng băng 4 quái máu cao nhất trong 3s (CD 100s).',
       };
     case 'ASSASSIN':
-      if (focusBranch === 'FOCUSED') {
-        return {
-          name: 'Ảnh Sát Kết Liễu',
-          desc: 'Cấp 20: Khi bản đồ còn ≤ 3 quái, x2.5 sát thương & 100% chí mạng trong 3s (CD 80s).',
-        };
-      }
       return {
-        name: 'Bão Phi Tiêu Độc',
-        desc: 'Cấp 20: Phóng bão độc tăng 3x tỷ lệ Độc Nặng & +50% tốc đánh trong 4s (CD 90s).',
+        name: 'Cuồng Sát',
+        desc: 'Cấp 20: Trong 5s tấn công thêm +3 mục tiêu và tăng +100% tốc độ đánh (CD 100s).',
       };
     case 'KNIGHT_GUARD':
       return {
-        name: 'Long Hồn Giáng Thế',
-        desc: 'Cấp 20: Hồi đầy máu toàn bộ Kỵ Sĩ Rồng & tăng 2x sát thương trong 5s (CD 90s).',
+        name: 'Long Uy Chấn Lùi',
+        desc: 'Cấp 20: Buff +0,5% tỷ lệ đánh lùi cho toàn quân trên bản đồ trong 3s (CD 100s).',
       };
     case 'PYROMANCER':
-      if (focusBranch === 'FOCUSED') {
-        return {
-          name: 'Diệt Thế Hỏa Cầu',
-          desc: 'Cấp 20: Tăng tỷ lệ kích nổ x5 lên 15% trong 4s (CD 90s).',
-        };
-      }
       return {
-        name: 'Biển Lửa Địa Ngục',
-        desc: 'Cấp 20: Phóng hỏa cầu diện rộng x2 sát thương trong 4s (CD 90s).',
+        name: 'Tường Lửa Hộ Thành',
+        desc: 'Cấp 20: Khi thành mất 1 máu, lập tức chặn Tường Lửa ở phía cổng thành trong 2s (không cộng dồn khi nhiều Hỏa Pháp Sư, CD 200s).',
       };
     case 'MECHANIST':
       return {

@@ -1991,8 +1991,9 @@ function buildWavesForStage(level: number, pathCount: number): TdWaveConfig[] {
     const intraWaveCompounding =
       Math.pow(1.075, Math.min(eqW, 10) - 1) * Math.pow(1.016, Math.max(0, eqW - 10));
     const lateWaveDifficultyBoost = w >= 10 ? Math.pow(1.05, w - 9) : 1.0;
+    const wave10HpBoost = w >= 10 ? 2.5 : 1.0;
     const waveScale =
-      stageHpScale * wave3Boost * tier10HpBoost * intraWaveCompounding * lateWaveDifficultyBoost;
+      stageHpScale * wave3Boost * tier10HpBoost * intraWaveCompounding * lateWaveDifficultyBoost * wave10HpBoost;
 
     // Monotonic per-wave speed, armor, magicResist, and equivalent 100-wave total bounty across 40 waves
     const waveSpeedMult = Number(

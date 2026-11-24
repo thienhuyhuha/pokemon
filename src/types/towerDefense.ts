@@ -640,6 +640,7 @@ export interface TdProjectile {
   canExecuteBelowPct?: number;
   wingsSplashSharePct?: number;
   wingsSplashRadius?: number;
+  knockbackChance?: number;
   sourceTowerId: string;
 }
 

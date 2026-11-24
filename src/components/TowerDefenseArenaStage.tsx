@@ -160,6 +160,7 @@ interface WorldState {
   finished: boolean;
   lootGems: number;
   lootItems: TdEquipmentItem[];
+  gateFirewallTimer: number;
 }
 
 interface SnapshotView {
@@ -175,6 +176,7 @@ interface SnapshotView {
   reinforceCd: number;
   lootGems: number;
   lootItemCount: number;
+  gateFirewallTimer: number;
   towers: TdBuiltTower[];
   enemies: TdEnemyEntity[];
   soldiers: TdSoldierEntity[];
@@ -891,22 +893,9 @@ function getEffectiveTowerStats(
     } else if (tower.type === 'MAGE' && resolvedFocus === 'FOCUSED') {
       damage = Math.round(damage * 2.5);
     } else if (tower.type === 'ASSASSIN') {
-      if (resolvedFocus === 'FOCUSED') {
-        damage = Math.round(damage * 2.5);
-        critChance = 1;
-      } else {
-        effectiveHeavyPoisonChance = Math.max(0.03, effectiveHeavyPoisonChance * 3);
-        cooldown = Math.max(0.035, cooldown / 1.5);
-      }
-    } else if (tower.type === 'KNIGHT_GUARD') {
-      damage = Math.round(damage * 2);
-      soldierDamage = Math.round(soldierDamage * 2);
-    } else if (tower.type === 'PYROMANCER') {
-      if (resolvedFocus === 'FOCUSED') {
-        effectiveDetonateChance = Math.max(effectiveDetonateChance, 0.15);
-      } else {
-        damage = Math.round(damage * 2);
-      }
+      // Cuồng Sát: +3 targets and +100% attack speed for 5s
+      targetCount += 3;
+      cooldown = Math.max(0.035, cooldown / 2);
     } else if (tower.type === 'MECHANIST') {
       cooldown = Math.max(0.035, cooldown / 2);
       armorPiercePct = Math.min(1, armorPiercePct + 0.3);
@@ -1191,6 +1180,7 @@ function createInitialWorld(levelConfig: TdLevelConfig, upgrades: TdUpgrades): W
     finished: false,
     lootGems: 0,
     lootItems: [],
+    gateFirewallTimer: 0,
   };
 }
 
@@ -1208,6 +1198,7 @@ function buildSnapshot(w: WorldState, levelConfig: TdLevelConfig): SnapshotView 
     reinforceCd: w.reinforceCd,
     lootGems: w.lootGems,
     lootItemCount: w.lootItems.length,
+    gateFirewallTimer: w.gateFirewallTimer,
     towers: [...w.towers],
     enemies: [...w.enemies],
     soldiers: [...w.soldiers],
@@ -1473,6 +1464,28 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
       // Cooldowns
       if (w.meteorCd > 0) w.meteorCd = Math.max(0, w.meteorCd - dt);
       if (w.reinforceCd > 0) w.reinforceCd = Math.max(0, w.reinforceCd - dt);
+      if (w.gateFirewallTimer > 0) w.gateFirewallTimer = Math.max(0, w.gateFirewallTimer - dt);
+
+      const getGlobalKnockbackChance = () =>
+        w.towers.some((t) => t.type === 'KNIGHT_GUARD' && (t.ultimateActiveTimer ?? 0) > 0)
+          ? 0.005
+          : 0;
+      const tryApplyGlobalKnockback = (enemy: TdEnemyEntity, chance: number) => {
+        if (chance <= 0 || enemy.hp <= 0 || Math.random() >= chance) return;
+        const pushAmt = enemy.isBoss ? 54 : 84;
+        enemy.knockbackDist = Math.min(240, (enemy.knockbackDist ?? 0) + pushAmt);
+        w.effects.push({
+          id: `fx-${w.idCounter++}`,
+          kind: 'HIT',
+          x: enemy.x,
+          y: enemy.y - 14,
+          radius: 16,
+          label: 'ĐẨY LÙI!',
+          color: '#F97316',
+          ttl: 0.5,
+          maxTtl: 0.5,
+        });
+      };
 
       // Effects TTL
       for (let i = w.effects.length - 1; i >= 0; i--) {
@@ -1685,6 +1698,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
               ttl: 0.24,
               maxTtl: 0.24,
             });
+            const solKbChance = getGlobalKnockbackChance();
             applyDamageToEnemy(
               w,
               targetEnemy,
@@ -1696,6 +1710,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                 trueDamagePct: s.trueDamagePct,
               }
             );
+            tryApplyGlobalKnockback(targetEnemy, solKbChance);
             if (s.slowPct && s.slowPct > 0) {
               targetEnemy.slowPct = Math.max(targetEnemy.slowPct, s.slowPct);
               targetEnemy.slowTimer = Math.max(targetEnemy.slowTimer, 2.2);
@@ -1716,6 +1731,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                       trueDamagePct: s.trueDamagePct,
                     }
                   );
+                  tryApplyGlobalKnockback(nearby, solKbChance);
                   if (s.slowPct && s.slowPct > 0) {
                     nearby.slowPct = Math.max(nearby.slowPct, s.slowPct);
                     nearby.slowTimer = Math.max(nearby.slowTimer, 2.0);
@@ -2134,10 +2150,19 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
 
         // Move freely along path waypoints (or slide backward when knocked back!)
         const path = lvl.paths[e.pathIndex] ?? lvl.paths[0];
+        const gateEndPt = path[path.length - 1];
         const targetWp = path[e.waypointIndex];
         if (!targetWp) {
+          if (w.gateFirewallTimer > 0 && gateEndPt) {
+            e.x = gateEndPt.x;
+            e.y = gateEndPt.y;
+            e.waypointIndex = Math.max(1, path.length - 1);
+            continue;
+          }
           // Reached Castle Gate!
+          const prevLives = w.lives;
           w.lives = Math.max(0, w.lives - e.lifeCost);
+          const lostHp = prevLives - w.lives;
           w.enemies.splice(i, 1);
           sound.playTdLeak();
           if (w.lives <= 0 && !w.finished) {
@@ -2148,6 +2173,57 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
               items: [...w.lootItems],
             });
             return;
+          }
+          // Hỏa Pháp Sư Lv20 (Tường Lửa Hộ Thành): Khi thành mất 1 máu lập tức chặn tường lửa 2s ở cổng thành (không cộng dồn, CD 200s)
+          if (lostHp > 0 && w.lives > 0 && w.gateFirewallTimer <= 0) {
+            const readyPyro = w.towers.find(
+              (tw) =>
+                tw.type === 'PYROMANCER' &&
+                tw.level >= getTowerMaxLevel(tw.type) &&
+                (tw.ultimateCdTimer ?? 0) <= 0 &&
+                (tw.ultimateActiveTimer ?? 0) <= 0
+            );
+            if (readyPyro) {
+              const pyroStats = getEffectiveTowerStats(readyPyro, upg, eqMap);
+              const pyroCdr = Math.max(0.4, 1 - pyroStats.skillCdrPct);
+              w.gateFirewallTimer = 2.0;
+              readyPyro.ultimateActiveTimer = 2.0;
+              readyPyro.ultimateCdTimer = Number((200 * pyroCdr).toFixed(1));
+              w.effects.push({
+                id: `fx-${w.idCounter++}`,
+                kind: 'HIT',
+                x: readyPyro.x,
+                y: readyPyro.y - 26,
+                radius: 26,
+                label: 'TƯỜNG LỬA 2s!',
+                color: '#F97316',
+                ttl: 1.1,
+                maxTtl: 1.1,
+              });
+              if (gateEndPt) {
+                w.effects.push({
+                  id: `fx-${w.idCounter++}`,
+                  kind: 'FIRE_BLAST',
+                  x: gateEndPt.x,
+                  y: gateEndPt.y,
+                  radius: 56,
+                  ttl: 0.65,
+                  maxTtl: 0.65,
+                });
+                w.effects.push({
+                  id: `fx-${w.idCounter++}`,
+                  kind: 'HIT',
+                  x: gateEndPt.x - 16,
+                  y: gateEndPt.y - 34,
+                  radius: 24,
+                  label: 'CHẶN CỔNG 2s!',
+                  color: '#FACC15',
+                  ttl: 1.1,
+                  maxTtl: 1.1,
+                });
+              }
+              sound.playTdMeteor();
+            }
           }
           continue;
         }
@@ -2186,6 +2262,11 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
               break;
             }
           }
+          continue;
+        }
+
+        // Blocked by Pyromancer's 2s Castle Gate Firewall
+        if (w.gateFirewallTimer > 0 && gateEndPt && dist(e.x, e.y, gateEndPt.x, gateEndPt.y) <= 78) {
           continue;
         }
 
@@ -2321,38 +2402,17 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             ultBanner = 'ĐẠI BĂNG PHONG 3s!';
             ultColor = '#7DD3FC';
           }
-        } else if (tw.type === 'ASSASSIN') {
-          if (tw.focusBranch === 'FOCUSED') {
-            if (totalEnemiesOnMap <= 3) {
-              triggered = true;
-              baseCd = 80;
-              activeDur = 3;
-              ultBanner = 'ẢNH SÁT 100% BK!';
-              ultColor = '#FB7185';
-            }
-          } else if (hasEnemyInRange) {
-            triggered = true;
-            baseCd = 90;
-            activeDur = 4;
-            ultBanner = 'BÃO ĐỘC x3!';
-            ultColor = '#4ADE80';
-          }
-        } else if (tw.type === 'KNIGHT_GUARD' && hasEnemyInRange) {
-          for (const sol of w.soldiers) {
-            if (sol.towerId === tw.id && !sol.isDead) {
-              sol.hp = sol.maxHp;
-            }
-          }
+        } else if (tw.type === 'ASSASSIN' && hasEnemyInRange) {
           triggered = true;
-          baseCd = 90;
+          baseCd = 100;
           activeDur = 5;
-          ultBanner = 'LONG HỒN x2!';
-          ultColor = '#F97316';
-        } else if (tw.type === 'PYROMANCER' && hasEnemyInRange) {
+          ultBanner = 'CUỒNG SÁT +3 MT!';
+          ultColor = '#FB7185';
+        } else if (tw.type === 'KNIGHT_GUARD' && hasEnemyInRange) {
           triggered = true;
-          baseCd = 90;
-          activeDur = 4;
-          ultBanner = tw.focusBranch === 'FOCUSED' ? 'KÍCH NỔ 15%!' : 'BIỂN LỬA x2!';
+          baseCd = 100;
+          activeDur = 3;
+          ultBanner = 'TOÀN QUÂN +0.5% ĐẨY LÙI!';
           ultColor = '#F97316';
         } else if (tw.type === 'MECHANIST' && hasEnemyInRange) {
           triggered = true;
@@ -2392,11 +2452,12 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
         }
       }
 
-      // Compute Valkyrie/Chronomancer Attack Speed Haste Auras & Barracks Crit Buff Auras once per tick
+      // Compute Valkyrie/Chronomancer Attack Speed Haste Auras, Barracks Crit Buff Auras, and Knight Guard Global Knockback
       const hasteAuras = w.towers.filter(
         (t) => t.type === 'VALKYRIE' || t.type === 'CHRONOMANCER'
       );
       const critAuras = w.towers.filter((t) => t.type === 'BARRACKS');
+      const globalKbChance = getGlobalKnockbackChance();
 
       // Towers Target Acquisition & Firing
       for (const tw of w.towers) {
@@ -2613,6 +2674,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             const hitSet = new Set<string>([seedTarget.id]);
             let current: TdEnemyEntity = seedTarget;
             applyDamageToEnemy(w, current, chainBaseDmg, chainKind, tw.id, pierceOpts);
+            tryApplyGlobalKnockback(current, globalKbChance);
             if (stats.slowPct > 0) {
               current.slowPct = Math.max(current.slowPct, stats.slowPct);
               current.slowTimer = 2.6;
@@ -2645,6 +2707,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
               if (!nextJump) break;
               hitSet.add(nextJump.id);
               applyDamageToEnemy(w, nextJump, Math.round(chainBaseDmg * 0.8), chainKind, tw.id, pierceOpts);
+              tryApplyGlobalKnockback(nextJump, globalKbChance);
               if (stats.slowPct > 0) {
                 nextJump.slowPct = Math.max(nextJump.slowPct, stats.slowPct);
                 nextJump.slowTimer = 2.4;
@@ -2786,6 +2849,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             canExecuteBelowPct: stats.executeBelowPct,
             wingsSplashSharePct: stats.wingsSplashSharePct,
             wingsSplashRadius: stats.wingsSplashSharePct > 0 ? 72 : 0,
+            knockbackChance: globalKbChance,
             sourceTowerId: tw.id,
           });
         });
@@ -2833,6 +2897,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
               if (d <= p.splashRadius) {
                 const falloff = d < p.splashRadius * 0.45 ? 1 : 0.72;
                 applyDamageToEnemy(w, e, p.damage * falloff, splashKind, p.sourceTowerId, pierceOpts);
+                tryApplyGlobalKnockback(e, p.knockbackChance ?? 0);
                 if (e.hp > 0 && p.stunChance && p.stunChance > 0 && Math.random() < p.stunChance) {
                   e.stunTimer = Math.max(e.stunTimer ?? 0, p.stunDuration ?? 1.2);
                   w.effects.push({
@@ -2889,6 +2954,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
           } else {
             if (liveTarget) {
               applyDamageToEnemy(w, liveTarget, p.damage, p.damageKind, p.sourceTowerId, pierceOpts);
+              tryApplyGlobalKnockback(liveTarget, p.knockbackChance ?? 0);
               if (
                 liveTarget.hp > 0 &&
                 p.stunChance &&
@@ -2916,6 +2982,7 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                   if (nearby.id === liveTarget.id || nearby.hp <= 0) continue;
                   if (dist(liveTarget.x, liveTarget.y, nearby.x, nearby.y) <= wRadius) {
                     applyDamageToEnemy(w, nearby, wSplashDmg, p.damageKind, p.sourceTowerId, pierceOpts);
+                    tryApplyGlobalKnockback(nearby, p.knockbackChance ?? 0);
                   }
                 }
               }
@@ -3749,6 +3816,51 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
             <polygon points="0,-50 15,-44 0,-38" fill="#FACC15" stroke="#0F172A" strokeWidth="1.2" />
           </g>
         </g>
+
+        {/* Pyromancer Lv20 Tường Lửa Hộ Thành (Blocks enemies at gate for 2s) */}
+        {snap.gateFirewallTimer > 0 && (
+          <g transform={`translate(${castleGatePt.x - 14}, ${castleGatePt.y})`} className="pointer-events-none">
+            <circle cx="0" cy="0" r="68" fill="#DC2626" opacity="0.18" />
+            <path
+              d="M-36,-64 Q-14,0 -36,64"
+              fill="none"
+              stroke="#F97316"
+              strokeWidth="12"
+              strokeLinecap="round"
+              opacity="0.72"
+            />
+            <path
+              d="M-36,-62 Q-14,0 -36,62"
+              fill="none"
+              stroke="#FEF08A"
+              strokeWidth="5"
+              strokeLinecap="round"
+              opacity="0.95"
+            />
+            {[-48, -24, 0, 24, 48].map((fy) => (
+              <polygon
+                key={fy}
+                points={`-42,${fy + 10} -22,${fy} -42,${fy - 10} -32,${fy}`}
+                fill="#FACC15"
+                stroke="#EA580C"
+                strokeWidth="1"
+              />
+            ))}
+            <text
+              x="-24"
+              y="-72"
+              textAnchor="middle"
+              fill="#FEF08A"
+              stroke="#450A0A"
+              strokeWidth="3.2"
+              paintOrder="stroke"
+              fontSize="11"
+              fontWeight="900"
+            >
+              🔥 TƯỜNG LỬA {snap.gateFirewallTimer.toFixed(1)}s
+            </text>
+          </g>
+        )}
 
         {/* Selected Tower Range Ring */}
         {selectedTower && (
@@ -4913,7 +5025,9 @@ export const TowerDefenseArenaStage: React.FC<TowerDefenseArenaStageProps> = ({
                     ? `Đang bật (${(selectedTower.ultimateActiveTimer ?? 0).toFixed(1)}s)`
                     : (selectedTower.ultimateCdTimer ?? 0) > 0
                       ? `CD ${Math.ceil(selectedTower.ultimateCdTimer ?? 0)}s`
-                      : 'Sẵn sàng'}
+                      : selectedTower.type === 'PYROMANCER'
+                        ? 'Sẵn sàng (Mất máu)'
+                        : 'Sẵn sàng'}
               </span>
             </div>
 
